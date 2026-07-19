@@ -68,3 +68,36 @@ Fokus auf in Arbeitspaket 1 prüfbare Fälle. Fälle für spätere Fachfunktione
 | AP3-09 | Monteur (zugewiesen) | Verbrauch buchen | Erlaubt (additive RLS 0004); Bestand −Menge |
 | AP3-10 | Bewegungen vorhanden | Materialhistorie filtern | Filter (Material/Lager/Vorgang/Person/Zeit/Typ) wirken |
 | AP3-11 | min_stock gesetzt, Bestand ≤ min | Admin-Dashboard | Karte „Material unter Mindestbestand" zählt korrekt |
+
+## AP4 – Testfälle Bilddokumentation / CSV
+> DB-/RLS-/Trigger-seitig automatisiert verifiziert am 2026-07-19 über
+> `app/supabase/test/12_ap4_smoke.sql` (20/20 OK); CSV-Sicherheit über Node-Test
+> zu `src/lib/csv.ts` (12/12 OK). UI-Fälle (Upload/Vorschau/Download im Browser) manuell abzunehmen.
+
+| ID | Vorbedingung | Schritte | Erwartung |
+|---|---|---|---|
+| AP4-01 | Monteur (zugewiesen) | JPG hochladen | Upload erfolgreich, Bild in Galerie |
+| AP4-02 | Monteur (zugewiesen) | PNG hochladen | Upload erfolgreich |
+| AP4-03 | Berechtigt | Mehrere Bilder gleichzeitig | Alle hochgeladen |
+| AP4-04 | Berechtigt | Datei mit falschem Typ (z. B. .txt/HEIC) | Blockiert (nur JPG/PNG) |
+| AP4-05 | Berechtigt | Datei > Maximalgröße | Blockiert (Client-Hinweis + Storage-Limit) |
+| AP4-06 | — | Upload ohne Vorgang | Blockiert (incident_id Pflicht) |
+| AP4-07 | Monteur (zugewiesen) | Upload | Erfolgreich (RLS) |
+| AP4-08 | Monteur (nicht zugewiesen) | Upload in fremden Vorgang | Blockiert (RLS) |
+| AP4-09 | Kein Login/keine Berechtigung | Direktzugriff auf Objekt ohne signierte URL | Blockiert (privat + Storage-RLS) |
+| AP4-10 | Berechtigt | Bild in Galerie öffnen | Anzeige über signierte URL |
+| AP4-11 | Bild mit EXIF | Upload | Aufnahmedatum/Kamera/GPS/Ausrichtung gespeichert |
+| AP4-12 | Bild ohne EXIF | Upload | Erfolgreich, EXIF-Felder leer |
+| AP4-13 | Bild mit gültigem GPS | Upload | GPS gespeichert, Maps-Link in Großansicht |
+| AP4-14 | Bild mit ungültigem GPS | Upload | GPS verworfen (Validierung + Constraint) |
+| AP4-15 | Vorhandenes Bild | Kategorie ändern | Chronik- + Audit-Eintrag |
+| AP4-16 | Vorhandenes Bild | Beschreibung ändern | Chronik- + Audit-Eintrag |
+| AP4-17 | Vorhandenes Bild | Soft-Delete | Bild aus Galerie ausgeblendet |
+| AP4-18 | Vorhandenes Bild | Soft-Delete | Chronik- + Audit-Eintrag, `deleted_at/by` gesetzt |
+| AP4-19 | — | AP1-Kategorie (z. B. Schadstelle) wählen | Weiterhin gültig |
+| AP4-20 | — | AP4-Kategorie (z. B. Reparatur) wählen | Auswählbar |
+| AP4-21 | Gefilterte Übersicht | CSV-Export | Nur gefilterte Vorgänge enthalten |
+| AP4-22 | Werte mit `;` / `"` / Umbruch | CSV-Export | Korrekt maskiert |
+| AP4-23 | Wert beginnt mit `= + - @` | CSV-Export | Mit Apostroph neutralisiert (keine Formel) |
+| AP4-24 | Admin/Disposition/Monteur | Bilder ansehen | RLS: nur berechtigte Bilder sichtbar |
+| AP4-25 | Bilder heute hochgeladen | Dashboard | Kennzahl zählt nur heutige, nicht gelöschte Bilder |

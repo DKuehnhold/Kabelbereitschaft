@@ -43,7 +43,14 @@ export type ImageCategory =
   | "materialeinsatz"
   | "zustand_nach_arbeit"
   | "restmangel"
-  | "sonstige_dokumentation";
+  | "sonstige_dokumentation"
+  // AP4 additiv:
+  | "schaden"
+  | "detail"
+  | "reparatur"
+  | "abschluss"
+  | "material"
+  | "sonstiges";
 
 export type StorageLocationType =
   | "zentrallager"
@@ -154,6 +161,7 @@ export type IncidentNote = {
   body: string;
   created_at: string;
   created_by: string | null;
+  image_id: string | null;
 };
 
 export type IncidentImage = {
@@ -172,8 +180,12 @@ export type IncidentImage = {
   gps_lon: number | null;
   orientation: number | null;
   camera_model: string | null;
+  width: number | null;
+  height: number | null;
   uploaded_by: string | null;
   uploaded_at: string;
+  deleted_at: string | null;
+  deleted_by: string | null;
 };
 
 export type IncidentLocationCorrection = {

@@ -8,7 +8,7 @@ Alle Primärschlüssel sind **UUID**. Referenzielle Integrität, Indizes und Con
 - `user_role`: admin, disponent, monteur
 - `incident_status`: 16 Werte (neu … abgeschlossen, storniert, fehlalarm)
 - `condition_rating`: 7 Werte (Zustandsbewertung, getrennt vom Status)
-- `image_category`: 9 Bildkategorien
+- `image_category`: 9 Bildkategorien (AP1) → **15 mit AP4** (siehe AP4-Abschnitt)
 - `storage_location_type`: 5 Lagerorttypen
 - `movement_type`: 8 Bewegungstypen
 - `location_correction_status`: vorgeschlagen, akzeptiert, abgelehnt
@@ -67,3 +67,21 @@ Kein Struktur-Umbau. Ergänzt ausschließlich eine RLS-INSERT-Policy
 Alle bestehenden Tabellen, Trigger, Constraints und die View `material_stock` bleiben unverändert.
 Material-/Lager-/Bestands- und Bewegungslogik nutzt die in AP1 angelegten Strukturen
 (`materials`, `storage_locations`, `inventory_movements`, `material_stock`).
+
+## AP4 – Bilddokumentation (Migration `0005_ap4_images.sql`, additiv)
+- **Enum `image_category`**: additiv um 6 Werte erweitert → **15 gesamt**
+  (`schaden, detail, reparatur, abschluss, material, sonstiges`; AP1-Werte unverändert).
+- **`incident_images`** additiv ergänzt: `width`, `height` (jeweils `>0`-Constraint),
+  `deleted_at`, `deleted_by` (Soft-Delete). GPS-Wertebereiche werden weiterhin per Constraint
+  aus 0001 geprüft. Neuer Teilindex `idx_images_incident_active` (WHERE `deleted_at IS NULL`).
+- **`incident_notes`** additiv ergänzt: `image_id` (Bildbezug für die Chronik).
+- **Funktion `image_category_label(text)`**: deutsche Labels (auch für Trigger/Chronik).
+- **Trigger `trg_incident_image_event`** (AFTER INSERT/UPDATE auf `incident_images`): schreibt
+  Bild-Ereignisse (Upload, Kategorie-/Beschreibungsänderung, Soft-Delete) in die bestehende
+  Chronik `incident_notes`. **Keine** parallele Ereignistabelle. Audit läuft unverändert über
+  `trg_audit_images` → `audit_events`.
+- **RLS**: Die bestehenden `incident_images`-Policies (select/insert/update/delete) werden
+  wiederverwendet; Soft-Delete nutzt die UPDATE-Policy (Staff oder Uploader).
+- **Storage**: privater Bucket `incident-images` additiv gehärtet (`file_size_limit` 15 MB,
+  `allowed_mime_types` JPG/PNG); Storage-RLS aus 0002 unverändert. Details siehe `STORAGE.md`.
+- Kein Datenverlust; alle Änderungen idempotent (`ADD VALUE/COLUMN IF NOT EXISTS`, Guards).

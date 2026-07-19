@@ -5,6 +5,8 @@ import Link from "next/link";
 import { StatusBadge } from "./StatusBadge";
 import { PriorityBadge } from "./PriorityBadge";
 import { INCIDENT_STATUS, STATUS_LABELS, type IncidentStatus } from "@/lib/status";
+import { PRIORITY_LABELS } from "@/lib/priority";
+import { buildCsv, CSV_BOM, csvFilename } from "@/lib/csv";
 import type { IncidentRow } from "@/lib/incidents";
 
 type Opt = { id: string; label: string };
@@ -17,6 +19,18 @@ function fmt(dt: string): string {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function fmtCsvDate(dt: string | null): string {
+  return dt
+    ? new Date(dt).toLocaleString("de-DE", {
+        day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit",
+      })
+    : "";
+}
+// Dezimalzahl mit deutschem Komma (für Excel), ohne Trennzeichenkonflikt.
+function deNum(n: number | null): string {
+  return n === null || n === undefined ? "" : String(n).replace(".", ",");
 }
 
 function monteure(row: IncidentRow): string {
@@ -72,6 +86,54 @@ export function IncidentsTable({
     setStatus(""); setStage(""); setMonteur(""); setFrom(""); setTo(""); setQ("");
   };
 
+  // CSV-Export der AKTUELL gefilterten Vorgänge (nicht der gesamten Liste).
+  // RLS gilt bereits serverseitig (die Rohliste ist rollengefiltert geladen).
+  const exportCsv = () => {
+    const headers = [
+      "Vorgangsnummer", "Status", "Priorität", "Baustufe", "Bereitschaftsnummer",
+      "VzG-Streckennummer", "Kilometer von", "Kilometer bis", "Betriebsstelle", "Gleis",
+      "Richtung", "Objektart", "Objektbezeichnung", "Beschreibung", "Zugewiesener Monteur",
+      "DB-Ansprechpartner", "Telefonnummer", "Erstellt am", "Technisch abgeschlossen am",
+      "Administrativ abgeschlossen am", "Letzte Änderung",
+    ];
+    const data = filtered.map((r) => {
+      const m = monteure(r);
+      return [
+        r.incident_no,
+        STATUS_LABELS[r.status],
+        PRIORITY_LABELS[r.priority],
+        r.stage?.name ?? "",
+        r.oncall ? (r.oncall.label ? `${r.oncall.number} – ${r.oncall.label}` : r.oncall.number) : "",
+        r.vzg_line_number,
+        deNum(r.km_from),
+        deNum(r.km_to),
+        r.operating_point ?? "",
+        r.track ?? "",
+        r.direction ?? "",
+        r.object_type ?? "",
+        r.object_designation ?? "",
+        r.description ?? "",
+        m === "—" ? "" : m,
+        r.caller_name ?? "",
+        r.caller_contact ?? "",
+        fmtCsvDate(r.created_at),
+        fmtCsvDate(r.technisch_abgeschlossen_at),
+        fmtCsvDate(r.closed_at),
+        fmtCsvDate(r.updated_at),
+      ];
+    });
+    const content = CSV_BOM + buildCsv(headers, data);
+    const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = csvFilename();
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
   const inputCls =
     "rounded-md border border-slate-300 px-2 py-1.5 text-sm outline-none focus:border-blue-500";
 
@@ -112,9 +174,20 @@ export function IncidentsTable({
         <button type="button" onClick={reset} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100">
           Zurücksetzen
         </button>
+        <button
+          type="button"
+          onClick={exportCsv}
+          disabled={filtered.length === 0}
+          className="rounded-md bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-800 disabled:opacity-50"
+          title="Exportiert die aktuell gefilterten Vorgänge als CSV (UTF-8, Semikolon)"
+        >
+          CSV-Export
+        </button>
       </div>
 
-      <div className="text-xs text-slate-500">{filtered.length} von {rows.length} Vorgängen</div>
+      <div className="text-xs text-slate-500">
+        {filtered.length} von {rows.length} Vorgängen · CSV-Export berücksichtigt die aktuelle Filterung
+      </div>
 
       {/* Desktop-Tabelle */}
       <div className="hidden overflow-x-auto rounded-lg border border-slate-200 bg-white md:block">

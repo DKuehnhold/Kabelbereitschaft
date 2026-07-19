@@ -58,6 +58,20 @@ Offen / als Nächstes:
   Details siehe `05-Umsetzung-Claude/ARBEITSPAKET_3_BERICHT.md`. AP3 committet.
 - [ ] Manuelle UI-Abnahme gegen verbundenes Supabase-Projekt (Stammdaten-CRUD, Bewegungen,
   Monteur-Entnahme/Rückgabe/Verbrauch, Historie-Filter, Low-Stock-Karte).
-- [ ] AP4: Bild-Upload + serverseitige EXIF-Auswertung; CSV-Export der Vorgangsübersicht.
+- [x] AP4: Bild-Upload + serverseitige EXIF-Auswertung; CSV-Export der Vorgangsübersicht (erledigt).
 - [ ] Benutzerverwaltungs-UI.
-- [ ] Timeline um Material-/Bildereignisse erweitern.
+- [x] Timeline um Bildereignisse erweitert (Upload/Kategorie/Beschreibung/Soft-Delete via Chronik).
+
+## Aktualisierung nach AP4 (2026-07-19)
+Umgesetzt und verifiziert (alle Prüfungen PASS – siehe `ARBEITSPAKET_4_BERICHT.md`):
+Privater Mehrfach-Bildupload, EXIF/GPS-Auswertung, Galerie + Großansicht, Kategorie-/
+Beschreibungsänderung, Soft-Delete, Timeline-/Audit-Integration, Dashboard-Kennzahl
+„Heute hochgeladene Bilder", gefilterter CSV-Export mit Formel-Injektionsschutz.
+Migration `0005_ap4_images.sql` (additiv, idempotent, auf leerer und AP3-DB geprüft).
+
+Offen / als Nächstes:
+- [ ] Manuelle UI-Abnahme gegen verbundenes Supabase-Projekt (Upload/Vorschau/signierte URLs im Browser).
+- [ ] Granularer Upload-Fortschritt/Abbruch je Datei (aktuell Sammelanzeige; ggf. Direkt-Upload).
+- [ ] Administrativer Bereinigungsprozess für soft-gelöschte Storage-Objekte (AP5).
+- [ ] Optionale Kartenansicht der GPS-Standorte (Datenstruktur vorbereitet).
+- [ ] Modernisierung `middleware` → `proxy` (Next 16).

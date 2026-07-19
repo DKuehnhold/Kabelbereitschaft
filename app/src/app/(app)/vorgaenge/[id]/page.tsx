@@ -8,6 +8,7 @@ import { Timeline } from "@/components/incidents/Timeline";
 import { IncidentControls } from "@/components/incidents/IncidentControls";
 import { getIncidentMovements, getActiveMaterials, getActiveLocations } from "@/lib/inventory";
 import { IncidentMaterialCard } from "@/components/inventory/IncidentMaterialCard";
+import { IncidentImages } from "@/components/images/IncidentImages";
 import { CONDITION_LABELS } from "@/lib/status";
 
 export const dynamic = "force-dynamic";
@@ -113,6 +114,8 @@ export default async function IncidentDetailPage({
             materials={materials}
             locations={locations}
           />
+
+          <IncidentImages incidentId={i.id} currentUserId={session.userId} isStaff={isStaff} />
         </div>
 
         {/* Timeline (rechts auf Desktop, unten auf Mobile) */}

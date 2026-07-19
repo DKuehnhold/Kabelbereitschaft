@@ -66,3 +66,17 @@ Manuell (mit verbundenem Supabase, noch offen): Stammdaten-CRUD Material/Lager, 
 Admin-Bewegungen (Wareneingang/Umbuchung/Korrektur/Verlust/Beschädigung),
 Monteur-Entnahme/Rückgabe/Verbrauch, Materialhistorie-Filter, Material-im-Vorgang,
 Karte „Material unter Mindestbestand".
+
+## AP4 – Bilddokumentation, EXIF/GPS, CSV (Prüfumfang)
+Automatisch **ausgeführt am 2026-07-19 – alle PASS** (Node v22, PostgreSQL 16 user-space):
+`npm ci`, `npm run lint`, `npx tsc --noEmit`, `next build`, Migration 0001–0005 (leer und auf
+AP3-Datenbestand, idempotent), Smoke-Test `test/12_ap4_smoke.sql` (**20/20 OK**) sowie
+Regression `test/10_smoke_test.sql` und `test/11_ap3_smoke.sql` (**16/16 OK**). CSV-Sicherheit
+über Node-Test (`csv.ts`, **12/12 OK**: Formel-Injektion `= + - @`/Tab, Maskierung, BOM).
+Der Smoke-Test deckt ab: Upload berechtigt/unberechtigt, Upload ohne Vorgang (blockiert),
+EXIF mit/ohne Aufnahmedatum, GPS gültig/ungültig, Kategorie-/Beschreibungsänderung (Chronik),
+Soft-Delete (Ausblenden + Chronik), Audit, RLS Admin/Disposition/Monteur, Storage-RLS,
+Bucket-Härtung, Dashboard-Kennzahl.
+Manuell (mit verbundenem Supabase, noch offen): tatsächlicher Datei-Upload/Vorschau im Browser,
+signierte-URL-Anzeige, Drag-and-drop, HEIC-Ablehnung, Galerie/Großansicht responsiv,
+CSV-Download inkl. Filterwirkung.

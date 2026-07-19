@@ -45,6 +45,8 @@ export type IncidentRow = {
   closed_by: string | null;
   created_at: string;
   updated_at: string;
+  // Frühester Wechsel nach „technisch_abgeschlossen" (für CSV-Export); aus Chronik.
+  technisch_abgeschlossen_at: string | null;
   stage: StageRef;
   oncall: OnCallRef;
   assignments: AssignmentRef[];
@@ -93,7 +95,23 @@ export async function listIncidents(): Promise<IncidentRow[]> {
     .from("incidents")
     .select(INCIDENT_SELECT)
     .order("updated_at", { ascending: false });
-  return (data ?? []) as unknown as IncidentRow[];
+  const rows = (data ?? []) as unknown as IncidentRow[];
+  if (rows.length === 0) return rows;
+
+  // Technischer Abschlusszeitpunkt (frühester Wechsel nach technisch_abgeschlossen).
+  const ids = rows.map((r) => r.id);
+  const { data: hist } = await supabase
+    .from("incident_status_history")
+    .select("incident_id, changed_at")
+    .eq("new_status", "technisch_abgeschlossen")
+    .in("incident_id", ids)
+    .order("changed_at", { ascending: true });
+  const techMap = new Map<string, string>();
+  for (const h of (hist ?? []) as { incident_id: string; changed_at: string }[]) {
+    if (!techMap.has(h.incident_id)) techMap.set(h.incident_id, h.changed_at);
+  }
+  for (const r of rows) r.technisch_abgeschlossen_at = techMap.get(r.id) ?? null;
+  return rows;
 }
 
 export async function getIncidentDetail(id: string): Promise<IncidentDetail | null> {
@@ -117,8 +135,12 @@ export async function getIncidentDetail(id: string): Promise<IncidentDetail | nu
     .eq("incident_id", id)
     .order("created_at", { ascending: true });
 
+  const inc = incident as unknown as IncidentRow;
+  inc.technisch_abgeschlossen_at =
+    (history ?? []).find((h) => h.new_status === "technisch_abgeschlossen")?.changed_at ?? null;
+
   return {
-    incident: incident as unknown as IncidentRow,
+    incident: inc,
     history: (history ?? []) as StatusEvent[],
     notes: (notes ?? []) as NoteEvent[],
   };

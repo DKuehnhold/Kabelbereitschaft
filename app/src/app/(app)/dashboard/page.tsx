@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireSession } from "@/lib/auth";
 import { listIncidents, getStages, getMonteure } from "@/lib/incidents";
 import { getLowStockMaterials, type LowStockRow } from "@/lib/inventory";
+import { getTodaysImageCount } from "@/lib/images-server";
 import { isOpenStatus } from "@/lib/status";
 import { StatCard } from "@/components/incidents/StatCard";
 import { IncidentsTable } from "@/components/incidents/IncidentsTable";
@@ -46,10 +47,11 @@ export default async function DashboardPage() {
 
   // Disposition / Administration
   const isAdmin = session.role === "admin";
-  const [stages, monteure, lowStock] = await Promise.all([
+  const [stages, monteure, lowStock, imagesToday] = await Promise.all([
     getStages(),
     getMonteure(),
     isAdmin ? getLowStockMaterials() : Promise.resolve<LowStockRow[]>([]),
+    getTodaysImageCount(),
   ]);
   const openRows = rows.filter((r) => isOpenStatus(r.status));
   const monteureImEinsatz = new Set(
@@ -84,6 +86,7 @@ export default async function DashboardPage() {
         <StatCard label="Monteure im Einsatz" value={stats.monteure} accent="slate" />
         <StatCard label="Warten auf DB" value={stats.wartenDb} accent="orange" />
         <StatCard label="Warten auf Material" value={stats.wartenMaterial} accent="amber" />
+        <StatCard label="Heute hochgeladene Bilder" value={imagesToday} accent="indigo" />
         {isAdmin ? (
           <StatCard label="Material unter Mindestbestand" value={lowStock.length} accent="red" href="/bestand" />
         ) : null}

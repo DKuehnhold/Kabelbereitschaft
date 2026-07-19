@@ -3,6 +3,15 @@
 Alle nennenswerten Änderungen an diesem Projekt.
 
 ## [Unveröffentlicht]
+### Hinzugefügt
+- **AP4** – Bilddokumentation: privater Mehrfach-Bildupload (JPG/PNG, signierte URLs), serverseitige
+  EXIF-/GPS-Auswertung mit Validierung, Galerie + Großansicht, Kategorie-/Beschreibungsänderung,
+  Soft-Delete, Timeline-/Audit-Integration, Dashboard-Kennzahl „Heute hochgeladene Bilder",
+  gefilterter CSV-Export der Vorgangsübersicht (UTF-8+BOM, Semikolon, Formel-Injektionsschutz).
+  Migration `0005_ap4_images.sql` (additiv, idempotent). 6 zusätzliche Bildkategorien (→ 15).
+  Alle Prüfungen ausgeführt und grün (lint/tsc/build, Migration 0001–0005, Smoke 12_ap4 20/20,
+  Regression 11_ap3 16/16, CSV-Test 12/12). Details: `05-Umsetzung-Claude/ARBEITSPAKET_4_BERICHT.md`.
+
 ### Geändert
 - Eigenständiges Git-Repository eingerichtet: `origin = https://github.com/DKuehnhold/Kabelbereitschaft.git`, Branch `main`. Keine Verbindung zu `ManagementOS-Core`.
 

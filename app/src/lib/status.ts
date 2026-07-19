@@ -72,7 +72,11 @@ export const CONDITION_LABELS: Record<ConditionRating, string> = {
   weitere_pruefung_erforderlich: "Weitere Prüfung erforderlich",
 };
 
+// Bildkategorien: AP1-Bestand (9) bleibt unverändert; AP4 ergänzt additiv 6.
+// Fachlich getrennt: Schadstelle/Schaden, Arbeitsausführung/Reparatur,
+// Materialeinsatz/Material, Sonstige/Sonstiges. Übersicht nicht doppelt.
 export const IMAGE_CATEGORIES = [
+  // Bestehend aus AP1 (Reihenfolge unverändert)
   "uebersicht",
   "zugang",
   "schadstelle",
@@ -82,6 +86,13 @@ export const IMAGE_CATEGORIES = [
   "zustand_nach_arbeit",
   "restmangel",
   "sonstige_dokumentation",
+  // Ergänzt in AP4 (additiv)
+  "schaden",
+  "detail",
+  "reparatur",
+  "abschluss",
+  "material",
+  "sonstiges",
 ] as const;
 
 export type ImageCategory = (typeof IMAGE_CATEGORIES)[number];
@@ -96,6 +107,12 @@ export const IMAGE_CATEGORY_LABELS: Record<ImageCategory, string> = {
   zustand_nach_arbeit: "Zustand nach Arbeit",
   restmangel: "Restmangel",
   sonstige_dokumentation: "Sonstige Dokumentation",
+  schaden: "Schaden",
+  detail: "Detail",
+  reparatur: "Reparatur",
+  abschluss: "Abschluss",
+  material: "Material",
+  sonstiges: "Sonstiges",
 };
 
 export const MOVEMENT_TYPES = [

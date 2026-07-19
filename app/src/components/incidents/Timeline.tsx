@@ -43,7 +43,14 @@ export function Timeline({ detail }: { detail: IncidentDetail }) {
     }),
   );
 
-  notes.forEach((n) => items.push({ at: n.created_at, title: "Notiz", detail: n.body, tone: "slate" }));
+  notes.forEach((n) => {
+    if (n.note_type?.startsWith("bild")) {
+      // Bild-Chronik (Upload/Kategorie/Beschreibung/Soft-Delete) aus AP4.
+      items.push({ at: n.created_at, title: n.body, tone: "amber" });
+    } else {
+      items.push({ at: n.created_at, title: "Notiz", detail: n.body, tone: "slate" });
+    }
+  });
 
   if (incident.closed_at) {
     items.push({
@@ -70,7 +77,8 @@ export function Timeline({ detail }: { detail: IncidentDetail }) {
         ))}
       </ol>
       <p className="mt-4 border-t border-slate-100 pt-3 text-xs text-slate-400">
-        Material- und Bildereignisse erscheinen hier ab AP3/AP4. Die Chronik ist unveränderbar.
+        Bildereignisse (Upload, Kategorie-/Beschreibungsänderung, Löschung) erscheinen in der Chronik.
+        Die Chronik ist unveränderbar.
       </p>
     </div>
   );
