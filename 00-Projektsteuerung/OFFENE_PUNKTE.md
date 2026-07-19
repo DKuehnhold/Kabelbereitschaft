@@ -33,3 +33,15 @@ del ".git\index.lock" ".git\HEAD.lock" ".git\objects\maintenance.lock"
 Danach ist das Repo normal nutzbar (`git status`, `git add`, `git commit`).
 Hinweis: Git in einem OneDrive-Ordner kann zu Sync-Konflikten führen; ggf. Repo später
 in einen lokalen Pfad außerhalb von OneDrive verschieben.
+
+## Aktualisierung nach AP2 (2026-07-19)
+Erledigt in AP2: Dashboards (Disponent/Monteur), Vorgang anlegen/bearbeiten, Monteurzuweisung,
+Statuswechsel (rollenabhängig), Priorität, Timeline/Chronik, responsive Sidebar/Navigation.
+
+Weiterhin offen / als Nächstes:
+- [ ] AP3: Material-/Lager-UI (Bestände, Bewegungen, Monteur-Entnahme/Rückgabe) auf bestehendem Datenmodell.
+- [ ] AP4: Bild-Upload + serverseitige EXIF-Auswertung (Util vorhanden), CSV-Export der Vorgangsübersicht.
+- [ ] Benutzerverwaltungs-UI (aktuell über Supabase Auth-Dashboard + `profiles.role`).
+- [ ] Timeline: Material-/Bildereignisse ergänzen (Platzhalter bereits vorgesehen).
+- [ ] Laufzeittest der Oberfläche gegen ein verbundenes Supabase-Projekt (in AP1/AP2 nur Build/DB geprüft).
+- [ ] Modernisierung `middleware` → `proxy` (Next 16).

@@ -2,28 +2,23 @@
 > Stand: 2026-07-19 · MVP V0.1
 
 ## Aktueller Stand
-**Arbeitspaket 1 abgeschlossen** – Grundgerüst, Dokumentation, Datenmodell, Login und
-rollenbasierte Navigation stehen und sind getestet.
+**Arbeitspaket 2 abgeschlossen** – Vorgangsverwaltung (Dashboards, Anlegen/Bearbeiten,
+Zuweisung, Statuswechsel, Priorität, Timeline) auf Basis von AP1 umgesetzt und getestet.
 
-## Ampel je Bereich
-| Bereich | Status |
+## Fortschritt
+| Arbeitspaket | Status |
 |---|---|
-| Vault-Dokumentation (00–07) | ✅ vorhanden |
-| Next.js/TS/Tailwind-Grundgerüst | ✅ gebaut |
-| Supabase-Integration (Clients, Middleware, .env.example) | ✅ vorbereitet |
-| Datenbankschema als Migration (+ Storage) | ✅ vorliegend, gegen PostgreSQL 18 geprüft |
-| RLS + Trigger (Audit, Chronik, Bestandsschutz) | ✅ umgesetzt + Smoke-Test grün |
-| Loginseite + Branding-Platzhalter | ✅ vorhanden |
-| Rollenbasierte Grundnavigation | ✅ vorhanden |
-| Lint / Typecheck / Produktions-Build | ✅ alle erfolgreich |
-| Fachfunktionen (Vorgänge/Bild/Material/Export) | ⏳ folgende Arbeitspakete |
+| AP1 – Grundgerüst, Datenmodell, Login, Navigation | ✅ abgeschlossen |
+| AP2 – Vorgangsverwaltung (Dashboard + Disposition) | ✅ abgeschlossen |
+| AP3 – Material- und Lagerverwaltung | ⏳ geplant |
+| AP4 – Bild-Upload/EXIF, CSV-Export | ⏳ geplant |
 
-## Prüfungen (tatsächlich ausgeführt)
-- `npm run lint` → 0 Fehler
-- `tsc --noEmit` → 0 Fehler
-- `next build` → erfolgreich (alle Routen erzeugt)
-- DB-Smoke-Test (PostgreSQL 18): Bestand 10→7, Monteur-Sichtbarkeit, Negativbestand blockiert,
-  Fremdanlage blockiert, Monteur-Statusschutz greift, Chronik unveränderbar (2 Einträge), Audit befüllt.
+## Prüfungen (zuletzt, tatsächlich ausgeführt)
+- `npm run lint` → 0 Fehler · `tsc --noEmit` → 0 Fehler · `next build` → erfolgreich.
+- Migration 0001–0003 gegen PostgreSQL 18 fehlerfrei; RLS-/Trigger-/Bestands-/Prioritäts-Smoke-Test grün.
 
 ## Nächster Schritt
-Arbeitspaket 2 – siehe `05-Umsetzung-Claude/ARBEITSPAKET_1_BERICHT.md` (Empfehlung).
+Arbeitspaket 3 – siehe `05-Umsetzung-Claude/ARBEITSPAKET_2_BERICHT.md` (Empfehlung).
+
+## Betrieb
+Lokal: `cd app` → `.env.local` aus `.env.example` → `npm install` → Migrationen in Supabase → `npm run dev`.

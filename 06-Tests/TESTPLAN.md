@@ -38,3 +38,15 @@ Zweistufig: automatisierte technische Prüfungen (Lint, Typecheck, Build, DB-Mig
 ## Testdaten
 
 Seed-Daten für Rollen (je ein admin/disponent/monteur), Baustufen und Stammdaten werden mit der Migration bereitgestellt. Keine echten personenbezogenen Daten in Testumgebungen.
+
+## AP2 – Vorgangsverwaltung (Prüfumfang)
+Automatisch geprüft (ausgeführt): `npm run lint`, `tsc --noEmit`, `next build`,
+Migration 0001–0003 + RLS-/Trigger-Smoke-Test inkl. Prioritätsprüfung gegen PostgreSQL 18.
+
+Manuell zu prüfen (benötigt verbundenes Supabase-Projekt):
+- Dashboard Disponent (Kennzahlen, Tabelle, Filter/Suche) und Monteur (nur eigene Einsätze).
+- Vorgang anlegen (Pflichtfeldvalidierung, Status=Neu, Chronikeintrag).
+- Vorgang bearbeiten (nur Disposition/Admin).
+- Monteur zuweisen / entfernen; Statuswechsel rollenabhängig; Zustandsbewertung; Notiz.
+- Timeline zeigt Ereignisse chronologisch, unveränderbar.
+- Responsiv (Sidebar/Hamburger, Tabellen/Karten).

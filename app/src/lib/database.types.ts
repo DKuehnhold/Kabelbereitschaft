@@ -32,6 +32,8 @@ export type ConditionRating =
   | "sofortiger_handlungsbedarf"
   | "weitere_pruefung_erforderlich";
 
+export type IncidentPriority = "niedrig" | "normal" | "hoch" | "kritisch";
+
 export type ImageCategory =
   | "uebersicht"
   | "zugang"
@@ -100,6 +102,7 @@ export type Incident = {
   incident_no: number;
   status: IncidentStatus;
   condition_rating: ConditionRating | null;
+  priority: IncidentPriority;
   on_call_number_id: string | null;
   call_received_at: string | null;
   call_taken_by: string | null;
@@ -118,6 +121,8 @@ export type Incident = {
   external_reference: string | null;
   title: string | null;
   description: string | null;
+  internal_note: string | null;
+  closing_note: string | null;
   closed_at: string | null;
   closed_by: string | null;
 } & AuditCols;
@@ -271,6 +276,7 @@ export type Database = {
       user_role: UserRole;
       incident_status: IncidentStatus;
       condition_rating: ConditionRating;
+      incident_priority: IncidentPriority;
       image_category: ImageCategory;
       storage_location_type: StorageLocationType;
       movement_type: MovementType;

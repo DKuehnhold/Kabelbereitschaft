@@ -119,3 +119,11 @@ select 'STATUS-CHRONIK Eintraege Vorgang (erwartet >=2)' as pruefung, count(*)
  where incident_id='77777777-7777-7777-7777-777777777777';
 select 'AUDIT-Ereignisse gesamt (erwartet > 0)' as pruefung, count(*)
   from public.audit_events;
+
+-- (6) AP2: Priorität ----------------------------------------------------------
+select 'AP2 Priorität Default (erwartet normal)' as pruefung, priority::text as priority
+  from public.incidents where id='77777777-7777-7777-7777-777777777777';
+update public.incidents set priority='kritisch'
+  where id='77777777-7777-7777-7777-777777777777';
+select 'AP2 Priorität gesetzt (erwartet kritisch)' as pruefung, priority::text as priority
+  from public.incidents where id='77777777-7777-7777-7777-777777777777';

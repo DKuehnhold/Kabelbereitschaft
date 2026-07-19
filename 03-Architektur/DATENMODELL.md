@@ -47,3 +47,15 @@ Journale/Chroniken führen Erstell-/Aktionsfelder und sind nicht änderbar.
 ## Verweise
 Feld- und Constraint-Details: `app/supabase/migrations/0001_init.sql`.
 TypeScript-Typen: `app/src/lib/database.types.ts`.
+
+## AP2-Erweiterung (Migration 0003, additiv)
+Datenerhaltend und idempotent ergänzt:
+
+- Enum `incident_priority`: niedrig, normal, hoch, kritisch.
+- `incidents.priority` (`incident_priority`, NOT NULL, Default `normal`) + Index.
+- `incidents.closing_note` (Abschlussbemerkung) und `incidents.internal_note` (interne Bemerkung).
+
+Wiederverwendet statt neu angelegt (keine Duplikate): `caller_name` = DB-Ansprechpartner,
+`caller_contact` = Telefon, `closed_by` = „Abgeschlossen durch", `closed_at` = Abschlussdatum.
+Die in AP2 als Pflicht gesetzten Maskenfelder bleiben in der DB nullable; die Pflicht wird
+in der Eingabemaske und der Server-Action erzwungen (km bis bleibt optional).

@@ -33,3 +33,18 @@ Fokus auf in Arbeitspaket 1 prüfbare Fälle. Fälle für spätere Fachfunktione
 | T-26 (geplant) | Bestand 0 | Entnahme buchen | Buchung verhindert (kein negativer Bestand) |
 | T-27 (geplant) | Monteur, Vorgang, Lagerort | Entnahme buchen | Bewegung mit `incident_id` + Lagerort |
 | T-28 (geplant) | Vorgänge vorhanden | CSV-Export mit Filter | UTF-8-CSV, gefilterte Zeilen, vereinbarte Spalten |
+
+## AP2 – Testfälle Vorgangsverwaltung
+| ID | Vorbedingung | Schritte | Erwartung |
+|---|---|---|---|
+| AP2-01 | Als Disponent angemeldet | Dashboard öffnen | Kennzahlkarten + Tabelle „Aktuelle Vorgänge" sichtbar |
+| AP2-02 | Vorgänge vorhanden | Filter Status/Baustufe/Monteur/Zeitraum + Suche anwenden | Tabelle filtert entsprechend, Zähler aktualisiert |
+| AP2-03 | Als Disponent | „Vorgang anlegen", Pflichtfeld leer lassen, speichern | Fehlermeldung nennt fehlende Pflichtfelder |
+| AP2-04 | Als Disponent | Vorgang vollständig anlegen | Redirect auf Detail, Status „Neu", Chronikeintrag „Vorgang erstellt" |
+| AP2-05 | Vorgang offen | Monteur zuweisen | Zuweisung sichtbar, Status → „Monteur zugewiesen", Timeline-Eintrag |
+| AP2-06 | Vorgang mit Monteur | Als Disponent Status ändern | Neuer Status + Chronikeintrag, Zeitstempel |
+| AP2-07 | Als Monteur (zugewiesen) | Status auf „Vor Ort" setzen | Erlaubt; Chronikeintrag |
+| AP2-08 | Als Monteur (zugewiesen) | Status „Abgeschlossen" versuchen | Auswahl nicht angeboten; DB-Trigger blockt zusätzlich |
+| AP2-09 | Als Monteur | Fremden Vorgang per URL öffnen | Kein Zugriff (RLS) |
+| AP2-10 | Priorität „Kritisch" gesetzt | Dashboard/Tabelle ansehen | Priorität farbig hervorgehoben |
+| AP2-11 | Detailansicht | Mobil öffnen | Timeline unterhalb, Desktop rechts |

@@ -1,17 +1,34 @@
 import { requireSession } from "@/lib/auth";
-import { Placeholder, NoAccess } from "@/components/Placeholder";
-import type { UserRole } from "@/lib/roles";
+import { NoAccess } from "@/components/Placeholder";
+import { listIncidents } from "@/lib/incidents";
+import { isOpenStatus } from "@/lib/status";
+import { EinsatzListe } from "@/components/incidents/EinsatzListe";
 
-const ALLOWED: UserRole[] = ["monteur"];
+export const dynamic = "force-dynamic";
 
-export default async function Page() {
+export default async function MeineEinsaetzePage() {
   const session = await requireSession();
-  if (!ALLOWED.includes(session.role)) return <NoAccess />;
+  if (session.role !== "monteur" && session.role !== "admin") {
+    // Disponenten nutzen die Vorgangsübersicht
+    return <NoAccess />;
+  }
+  const rows = await listIncidents();
+  const offen = rows.filter((r) => isOpenStatus(r.status));
+  const erledigt = rows.filter((r) => !isOpenStatus(r.status));
+
   return (
-    <Placeholder
-      title="Meine Einsätze"
-      intro="Nur die dem angemeldeten Monteur zugewiesenen Vorgänge – mit Statuswechsel, Zustandsbewertung, Dokumentation, Bildern und Materialbuchungen."
-      planned="Geplant für Arbeitspaket 2/3 (Monteuransicht)."
-    />
+    <div className="space-y-6">
+      <h1 className="text-2xl font-semibold text-slate-900">Meine Einsätze</h1>
+      <div>
+        <h2 className="mb-2 text-lg font-semibold text-slate-800">Offen</h2>
+        <EinsatzListe rows={offen} />
+      </div>
+      {erledigt.length ? (
+        <div>
+          <h2 className="mb-2 text-lg font-semibold text-slate-800">Abgeschlossen</h2>
+          <EinsatzListe rows={erledigt} />
+        </div>
+      ) : null}
+    </div>
   );
 }

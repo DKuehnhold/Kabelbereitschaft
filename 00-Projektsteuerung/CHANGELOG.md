@@ -15,3 +15,15 @@
 ### Geprüft
 - Lint, TypeScript-Prüfung und Produktions-Build erfolgreich.
 - RLS/Trigger/Bestandsschutz gegen PostgreSQL 18 per Smoke-Test verifiziert.
+
+## [0.2.0] – 2026-07-19 – Arbeitspaket 2 (Vorgangsverwaltung)
+### Hinzugefügt
+- Rollenbasierte Dashboards (Disponent/Admin, Monteur) mit Kennzahlen und Übersichten.
+- Vorgang anlegen/bearbeiten, Monteurzuweisung, rollenabhängige Statuswechsel, Zustandsbewertung, Notizen.
+- Priorität (Enum, farbige Darstellung); moderne unveränderbare Timeline.
+- Responsive Sidebar-/Header-Navigation.
+### Geändert
+- Migration `0003_ap2_priority.sql` (additiv): Priorität + Abschluss-/interne Bemerkung.
+- `(app)/layout` auf Sidebar-Shell umgestellt.
+### Geprüft
+- Lint, Typecheck, Build erfolgreich; Migration 0001–0003 + Smoke-Test grün.

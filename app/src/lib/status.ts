@@ -139,3 +139,52 @@ export const STORAGE_LOCATION_TYPE_LABELS: Record<StorageLocationType, string> =
   materialcontainer: "Materialcontainer",
   temporaeres_lager: "Temporäres Lager",
 };
+
+// ---------------------------------------------------------------------
+// AP2: Statusgruppen und Badge-Farben
+// ---------------------------------------------------------------------
+export const TERMINAL_STATUS: IncidentStatus[] = [
+  "abgeschlossen",
+  "storniert",
+  "fehlalarm",
+];
+
+export function isOpenStatus(s: IncidentStatus): boolean {
+  return !TERMINAL_STATUS.includes(s);
+}
+
+// Status, die ein Monteur selbst setzen darf (Rest = Disposition/Admin).
+// Deckungsgleich mit dem DB-Trigger tg_incident_guard.
+export const MONTEUR_STATUS: IncidentStatus[] = [
+  "einsatz_angenommen",
+  "anfahrt",
+  "vor_ort",
+  "zustandsaufnahme",
+  "in_bearbeitung",
+  "warten_auf_material",
+  "warten_auf_db",
+  "uebergabe_erforderlich",
+  "provisorisch_instandgesetzt",
+  "technisch_abgeschlossen",
+  "fehlalarm",
+];
+
+export const STATUS_STYLES: Record<IncidentStatus, string> = {
+  neu: "bg-blue-100 text-blue-800 border-blue-200",
+  monteur_zugewiesen: "bg-indigo-100 text-indigo-800 border-indigo-200",
+  einsatz_angenommen: "bg-indigo-100 text-indigo-800 border-indigo-200",
+  anfahrt: "bg-cyan-100 text-cyan-800 border-cyan-200",
+  vor_ort: "bg-cyan-100 text-cyan-800 border-cyan-200",
+  zustandsaufnahme: "bg-teal-100 text-teal-800 border-teal-200",
+  in_bearbeitung: "bg-amber-100 text-amber-900 border-amber-200",
+  warten_auf_material: "bg-orange-100 text-orange-900 border-orange-200",
+  warten_auf_db: "bg-orange-100 text-orange-900 border-orange-200",
+  uebergabe_erforderlich: "bg-purple-100 text-purple-800 border-purple-200",
+  provisorisch_instandgesetzt: "bg-lime-100 text-lime-800 border-lime-200",
+  technisch_abgeschlossen: "bg-emerald-100 text-emerald-800 border-emerald-200",
+  dokumentation_vollstaendig: "bg-emerald-100 text-emerald-800 border-emerald-200",
+  durch_disposition_geprueft: "bg-green-100 text-green-800 border-green-200",
+  abgeschlossen: "bg-green-200 text-green-900 border-green-300",
+  storniert: "bg-slate-200 text-slate-700 border-slate-300",
+  fehlalarm: "bg-slate-200 text-slate-700 border-slate-300",
+};
