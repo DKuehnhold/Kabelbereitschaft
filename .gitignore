@@ -1,0 +1,21 @@
+# Abhängigkeiten / Build-Artefakte der App
+app/node_modules/
+app/.next/
+app/out/
+app/build/
+app/*.tsbuildinfo
+app/next-env.d.ts
+
+# Secrets / Umgebung (Beispieldateien bleiben versioniert)
+**/.env
+**/.env.local
+**/.env.*.local
+
+# Betriebssystem / Editor
+.DS_Store
+Thumbs.db
+
+# Obsidian (volatile Arbeitsdateien)
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+.obsidian/cache

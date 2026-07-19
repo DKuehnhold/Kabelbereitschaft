@@ -1,0 +1,17 @@
+# Changelog
+
+## [0.1.0] – 2026-07-19 – Arbeitspaket 1
+### Hinzugefügt
+- Vault-Dokumentationsstruktur (00–07, 99) mit Grundlagendokumenten.
+- Next.js 16 / React 19 / TypeScript / Tailwind 4 Grundgerüst im Ordner `app/`.
+- Supabase-Integration: Browser-/Server-/Middleware-Clients (`@supabase/ssr`), `.env.example`.
+- Datenbankschema als Migration `0001_init.sql` (Enums, Tabellen, Constraints, Indizes,
+  Trigger, RLS, Bestands-View) und `0002_storage.sql` (privater Bild-Bucket + Policies).
+- Beispiel-Seed `seed.sql`; lokale Testskripte unter `supabase/test/`.
+- Loginseite mit Branding-Platzhalter; Abmeldung; geschützter Bereich `(app)`.
+- Rollenbasierte Grundnavigation (Administrator, Disponent, Monteur) + Dashboard.
+- Serverseitige EXIF-Hilfsfunktion (`exifr`) vorbereitet.
+
+### Geprüft
+- Lint, TypeScript-Prüfung und Produktions-Build erfolgreich.
+- RLS/Trigger/Bestandsschutz gegen PostgreSQL 18 per Smoke-Test verifiziert.
