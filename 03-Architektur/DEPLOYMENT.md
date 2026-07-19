@@ -46,3 +46,16 @@ npm run dev
 ```
 
 Vorher `.env.local` aus `.env.example` erstellen und mit Supabase-Werten füllen. Migrationen lokal gegen eine Postgres-/Supabase-Instanz anwenden und testen, bevor sie produktiv gepusht werden.
+
+## AP7 – Deployment-Readiness & Checkliste
+- **Voraussetzungen:** Node 22; Umgebungsvariablen (`NEXT_PUBLIC_SUPABASE_URL/ANON_KEY`, optional
+  `NEXT_PUBLIC_MAX_IMAGE_MB`, `NEXT_PUBLIC_APP_VERSION`); Supabase-Projekt mit Bucket `incident-images`.
+- **Checkliste:** Build grün · Migrationen 0001–0006 angewendet · RLS aktiv · Storage-Bucket privat ·
+  HTTPS + Auth-Redirect-URLs · Service Worker erreichbar (`/sw.js`) · Header/CSP geprüft · CORS (Supabase) ·
+  Health-Check (`/api/health`) · Logging/Monitoring aktiv · Rollback-Pfad bereit.
+- **Migrationen im Deployment:** Reihenfolge `0001`→`0006`; Vorabprüfung + Backup vor Anwendung;
+  Verifikation via Smokes; Fehlerfall → Forward-Fix bevorzugt (additive Migrationen; kein destruktives Rollback).
+  Bewertung je Migration: additiv, idempotent (soweit vorgesehen), geringes Sperr-/Datenvolumen-Risiko.
+- **Rollback:** App-Deploy auf vorherigen Tag; DB additiv → i. d. R. vorwärtskompatibel; Storage unverändert.
+- **Plattform:** noch nicht endgültig festgelegt; keine spekulative Voraussetzung. (Falls Vercel gemäß
+  bestehender Doku: entsprechende Env/Domain/Callback-Konfiguration verwenden.)

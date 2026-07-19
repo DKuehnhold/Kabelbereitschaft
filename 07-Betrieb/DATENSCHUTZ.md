@@ -38,3 +38,17 @@ Es werden keine über den Einsatzzweck hinausgehenden Personendaten erhoben.
 - Supabase ist Auftragsverarbeiter (DB, Auth, Storage). Ein Auftragsverarbeitungsvertrag (AVV) ist abzuschließen.
 - **Region beachten:** Supabase-Projektregion so wählen, dass Daten innerhalb der EU verarbeitet werden.
 - Auch Vercel als Hosting-Anbieter ist entsprechend zu bewerten (Region/AVV).
+
+## AP7 – Technische Datenschutzbewertung (keine juristische Freigabe)
+- **Datenminimierung/Zweckbindung:** Erfasst werden nur für die Vorgangsdokumentation nötige Daten;
+  Bilder/GPS dienen der Nachweisführung am Einsatzort. Zugriffskreis über RLS begrenzt (Staff/zugewiesener Monteur).
+- **GPS/Bild:** fachlich notwendig; Aufbewahrung an Vorgang gekoppelt; Export über CSV/Bilder nur für Berechtigte;
+  Missbrauchsrisiko durch private Speicherung + signierte URLs (Ablauf) reduziert.
+- **Speicherdauer/Löschung:** Soft-Delete (AP4) + geplante physische Bereinigung (Konzept); **Fristen offen**
+  (nicht erfunden) – vom Auftraggeber festzulegen. Audit-Aufbewahrung ≥ gesetzliche Frist (offen).
+- **Lokale Offline-Daten (IndexedDB):** nur fachliche Daten + eigene Warteschlangen, benutzergetrennt (`ownerId`);
+  keine Tokens/Secrets. Service-Worker-Cache: nur Same-Origin-GET, keine `/api`/`/auth`/Supabase-Antworten.
+- **Benutzerwechsel/Logout:** fremde Offline-Daten nicht sichtbar; nicht synchronisierte Änderungen werden
+  nicht still gelöscht. Browserprüfung des Benutzerwechsels offen (kein Browser in dieser Umgebung).
+- **Server-Logs/CI/Testdaten:** keine personenbezogenen/produktiven Daten in CI; Testbilder neutral generiert.
+- Einstufung: **technische** Bewertung; eine juristische Prüfung/Freigabe hat nicht stattgefunden.

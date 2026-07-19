@@ -36,13 +36,18 @@ jobs:
         env:
           NEXT_TELEMETRY_DISABLED: "1"
 
+      # Supply-Chain-Audit: bricht nur bei hoch/kritisch ab (moderate = dokumentiertes Risiko,
+      # aktuell postcss build-time via Next; siehe SICHERHEIT.md).
+      - name: Audit (high/critical als Gate)
+        run: npm audit --audit-level=high
+
       - name: Install Playwright (Chromium)
         run: npx playwright install --with-deps chromium
 
-      # @public-E2E (ohne Supabase). Vollständige @app-E2E benötigen Test-Supabase-Secrets
-      # (siehe E2E_TESTS.md); ohne diese werden @app-Tests automatisch übersprungen.
-      - name: E2E (öffentliche PWA-/Guard-Tests)
-        run: npx playwright test public.spec.ts
+      # @public-E2E (ohne Supabase) inkl. Accessibility (axe). Vollständige @app-E2E benötigen
+      # Test-Supabase-Secrets (siehe E2E_TESTS.md); ohne diese werden @app-Tests übersprungen.
+      - name: E2E + a11y (öffentliche Tests)
+        run: npx playwright test --grep @public
         env:
           NEXT_TELEMETRY_DISABLED: "1"
           # Für vollständige App-E2E in CI zusätzlich als GitHub Secrets bereitstellen:

@@ -30,3 +30,10 @@ Service-Worker-/Online-Status und letzten erfolgreichen Synchronisationszeitpunk
 ## Sicherheit
 Keine Tokens/Secrets in IndexedDB; Sync nutzt die Session-Cookies des Nutzers; alle Mutationen
 laufen serverseitig über RLS (und DB-Trigger, z. B. Statusschutz für Monteure).
+
+## AP7 – Hinweis Transaktionssicherheit
+Die Dedup-Kompensation (`sync_actions`-Marker setzen → Mutation → bei Fehler Marker löschen) läuft
+über getrennte Supabase-JS-Aufrufe, nicht in einer DB-Transaktion. Restrisiko: Absturz zwischen
+Storage-Upload und Metadatensatz kann ein verwaistes Storage-Objekt hinterlassen. Bewertung: gering
+(Retry ist idempotent über die Client-Action-ID; kein Datenverlust, keine Dublette). Maßnahme:
+Bereinigung verwaister Storage-Objekte als Betriebsaufgabe (siehe Lösch-/Aufbewahrungskonzept).

@@ -4,7 +4,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, isSupabaseConfigured } from "./config"
 
 const PUBLIC_PREFIXES = ["/login", "/auth", "/branding", "/_next", "/icons", "/offline"];
 // PWA-Ressourcen müssen ohne Session abrufbar sein (auch offline).
-const PUBLIC_EXACT = ["/favicon.ico", "/manifest.webmanifest", "/sw.js"];
+const PUBLIC_EXACT = ["/favicon.ico", "/manifest.webmanifest", "/sw.js", "/api/health"];
 
 function isPublic(path: string): boolean {
   if (PUBLIC_EXACT.includes(path)) return true;

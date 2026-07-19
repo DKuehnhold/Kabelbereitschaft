@@ -3,6 +3,16 @@
 Alle nennenswerten Änderungen an diesem Projekt.
 
 ## [Unveröffentlicht]
+### Sicherheit / Release (AP7)
+- Release Readiness & Security Review: HTTP-Sicherheitsheader (`next.config.ts`; CSP zunächst
+  Report-Only), Health-Check `/api/health`, Accessibility-Tests (`@axe-core/playwright`),
+  E2E-Ergänzung (Health/Header), CI-Härtung (`npm audit --audit-level=high`, `@public`+a11y),
+  `.env.example` erweitert. Supply-Chain: 2 moderate (postcss build-time via Next) – akzeptiert,
+  Behebung mit Next-Update. Umfangreiche Betriebs-/Release-Doku (Backup/Recovery, Monitoring,
+  Deployment, Releaseprozess, Gates, RC1-Notes, PROJEKT_WISSEN). Keine neue Migration.
+  Geprüft: lint/tsc/build/audit, Migration 0001–0006 (leer+AP6-Bestand), Smokes 10–13, CSV 12/12,
+  SW-Syntax, Playwright `--list` 26 + `@public` request-basiert 6/9. Details: `ARBEITSPAKET_7_BERICHT.md`.
+
 ### Hinzugefügt
 - **AP6** – E2E-Tests, Offline-Verifikation & Synchronisationshärtung: Playwright-E2E-Struktur
   (22 Tests, Chromium; `@public` ohne Supabase, `@app` mit Test-Supabase), Idempotenz/Dedup über

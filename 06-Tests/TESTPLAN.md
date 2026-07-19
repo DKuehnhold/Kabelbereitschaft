@@ -104,3 +104,13 @@ CSV-Sicherheitstest (12/12), `playwright test --list` (22 Tests), `playwright te
 **Nicht ausführbar in der Build-Umgebung (nicht als bestanden gewertet):** seitenbasierte
 Browser-E2E (Chromium-Systembibliotheken fehlen, kein root) und `@app`-E2E (benötigen Test-Supabase).
 Siehe `06-Tests/E2E_TESTS.md`.
+
+## AP7 – Release-Prüfungen (Prüfumfang)
+Automatisch **ausgeführt am 2026-07-19**: `npm ci`, `npm run lint` (0), `npx tsc --noEmit` (0),
+`npm run build` (PASS), `npm audit` (2 moderate/0 hoch – akzeptiert, postcss build-time via Next),
+Migration `0001–0006` (leer + AP6-Bestand, idempotent), Smokes `10`–`13`, `node --check sw.js`,
+CSV-Test 12/12, `playwright test --list` (26), `playwright test public.spec.ts` (6/9 – request-basiert
+grün inkl. Health-Check und Sicherheitsheader). Accessibility (`@axe-core/playwright`) als `@public`-Test
+vorhanden; **Browserlauf in der Build-Umgebung nicht möglich** (Chromium-Systembibliotheken).
+**Nicht ausführbar/offen (nicht als bestanden gewertet):** seitenbasierte Browser-E2E, `@app`-E2E,
+a11y-Browserlauf, PWA-Installation/SW-Update-Runtime, Performance-Messung, Deployment-/Recovery-Test.

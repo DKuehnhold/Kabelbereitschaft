@@ -142,3 +142,17 @@ Fokus auf in Arbeitspaket 1 prüfbare Fälle. Fälle für spätere Fachfunktione
 | AP6-09 | Idempotenz (DB `13`) | gleiche Client-Action-ID dedupliziert; RLS trennt Benutzer |
 | AP6-10 | Konflikt (@app) | Serveränderung erkannt; keine stille Überschreibung; Auflösung |
 | AP6-11 | Datenschutz (@app) | keine Tokens/Secrets in IndexedDB |
+
+## AP7 – Release-/Security-Testfälle
+| ID | Bereich | Erwartung | Ausführung |
+|---|---|---|---|
+| AP7-01 | Health-Check `/api/health` | Status ok, Version/Zeit, keine Secrets | automatisiert (bestanden) |
+| AP7-02 | Sicherheitsheader | nosniff, Referrer/Frame/Permissions gesetzt | automatisiert (bestanden) |
+| AP7-03 | Supply-Chain-Audit | keine hoch/kritisch | automatisiert (bestanden) |
+| AP7-04 | Secrets-Scan | keine Secrets/.env im Repo | ausgeführt (bestanden) |
+| AP7-05 | RLS/Storage-Matrix | Zugriffe rollen-/besitzergerecht | DB-Smokes 10–13 (bestanden) |
+| AP7-06 | Idempotenz/Race | keine Dublette bei Retry | Smoke 13 (bestanden); Browser-Parallelität offen |
+| AP7-07 | Accessibility (axe) | keine kritischen Verstöße (/login, /offline) | Struktur vorhanden; Browserlauf offen |
+| AP7-08 | CSP durchsetzend | keine Funktion blockiert | offen (Report-Only, Browser-Verifikation) |
+| AP7-09 | Benutzerwechsel offline | keine fremden Daten, keine stille Löschung | Logik vorhanden; Browserprüfung offen |
+| AP7-10 | Recovery-Test | Wiederherstellung mit Testdaten | offen (Zielinfrastruktur) |

@@ -89,3 +89,18 @@ Offen / als Nächstes:
 - [ ] Browser-Systembibliotheken in der Ausführungsumgebung (`playwright install --with-deps chromium`).
 - [ ] Middleware→Proxy-Migration inkl. voller E2E-Abnahme (bewusst nicht spekulativ umgesetzt).
 - [ ] Optional: Lighthouse-PWA-Audit (nur wenn stabil reproduzierbar), Background-Sync/Push.
+
+## Aktualisierung nach AP7 (2026-07-19)
+Umgesetzt: Sicherheitsheader (CSP Report-Only), Health-Check, a11y-Tests, CI-Audit-Gate,
+Betriebs-/Release-Doku, PROJEKT_WISSEN. Geprüft: lint/tsc/build/audit, Migration 0001–0006,
+Smokes 10–13, CSV, SW-Syntax, Playwright `@public` (request-basiert).
+
+Offen / als Nächstes:
+- [ ] **Push AP4–AP7 nach GitHub** (Zugangsdaten; `origin/main` = `8d83371`).
+- [ ] CSP von Report-Only auf durchsetzend umstellen (nach Browser-Verifikation).
+- [ ] Vollständige Browser-/`@app`-E2E, a11y-Browserlauf, PWA-/SW-Update-Runtime, Benutzerwechsel im Browser.
+- [ ] Deployment- und Recovery-Test (Zielinfrastruktur), Performance-Messungen.
+- [ ] Rate Limiting auf Plattform-/Proxy-Ebene festlegen.
+- [ ] Aufbewahrungsfristen (Soft-Delete/Audit) fachlich/juristisch festlegen.
+- [ ] postcss-Behebung via Next-Update; Middleware→Proxy-Migration.
+- [ ] Git-Tag/Release `v1.0.0-rc.1` NUR nach ausdrücklicher Nutzerfreigabe.

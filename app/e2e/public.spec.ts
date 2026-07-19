@@ -54,4 +54,25 @@ test.describe("@public PWA & Auth-Guard", () => {
       expect(res.status(), p).toBeLessThan(400);
     }
   });
+
+  test("Health-Check liefert minimalen Status ohne Secrets", async ({ request, baseURL }) => {
+    const res = await request.get(`${baseURL}/api/health`);
+    expect(res.ok()).toBeTruthy();
+    const h = await res.json();
+    expect(h.status).toBe("ok");
+    expect(h).toHaveProperty("version");
+    const raw = JSON.stringify(h).toLowerCase();
+    for (const bad of ["service_role", "anon", "password", "token", "secret", "supabase"]) {
+      expect(raw.includes(bad), `Health-Check darf '${bad}' nicht enthalten`).toBeFalsy();
+    }
+  });
+
+  test("Sicherheitsheader gesetzt", async ({ request, baseURL }) => {
+    const res = await request.get(`${baseURL}/login`);
+    const h = res.headers();
+    expect(h["x-content-type-options"]).toBe("nosniff");
+    expect(h["referrer-policy"]).toBeTruthy();
+    expect(h["x-frame-options"]).toBeTruthy();
+    expect(h["permissions-policy"]).toBeTruthy();
+  });
 });

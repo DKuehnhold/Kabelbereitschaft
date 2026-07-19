@@ -38,3 +38,8 @@ bzw. GitHub Secrets.
 ## Bekannte Umgebungsanforderungen für Tests
 - Browser-E2E: `playwright install --with-deps chromium` (Systembibliotheken erforderlich).
 - App-E2E: Test-Supabase-Instanz + Testbenutzer.
+
+## AP7-Ergänzung
+Health-Check `/api/health`; HTTP-Sicherheitsheader (SICHERHEIT.md); Release-/Betriebskonzepte:
+`BACKUP_UND_RECOVERY.md`, `MONITORING.md`, `00-Projektsteuerung/RELEASEPROZESS.md`,
+`RELEASE_CHECKLISTE.md`, `RELEASE_NOTES_RC1.md`. Release-Gates siehe RELEASE_CHECKLISTE.md.

@@ -41,3 +41,11 @@ npx playwright test                            # @public läuft; @app nur mit E2
 `.github/workflows/ci.yml`: install → lint → tsc → build → `playwright install --with-deps chromium`
 → `playwright test public.spec.ts`. Vollständige `@app`-E2E benötigen Test-Supabase-Secrets
 (als GitHub Secrets), sonst werden sie übersprungen.
+
+## AP7-Ergänzung
+- Neue `@public`-Tests (request-basiert, ausführbar): Health-Check (`/api/health`) und
+  Sicherheitsheader. Accessibility via `@axe-core/playwright` (`e2e/a11y.spec.ts`, `@public`;
+  Browserlauf benötigt Systembibliotheken).
+- CI führt `npx playwright test --grep @public` aus (inkl. a11y) sowie `npm audit --audit-level=high`.
+- Ausgeführt am 2026-07-19: `playwright test --list` = 26 Tests; `public.spec.ts` = 6/9 bestanden
+  (request-basiert grün inkl. Health/Header; 3 seitenbasierte scheitern am Chromium-Start in der Sandbox).
