@@ -19,8 +19,10 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/vorgaenge", label: "Vorgänge", roles: ["admin", "disponent"] },
   { href: "/vorgaenge/neu", label: "Vorgang anlegen", roles: ["admin", "disponent"] },
   { href: "/meine-einsaetze", label: "Meine Einsätze", roles: ["monteur"] },
-  { href: "/material", label: "Material", roles: ["admin", "disponent", "monteur"] },
+  { href: "/bestand", label: "Bestand", roles: ["admin", "disponent", "monteur"] },
+  { href: "/material", label: "Material", roles: ["admin"] },
   { href: "/lager", label: "Lagerorte", roles: ["admin"] },
+  { href: "/materialhistorie", label: "Materialhistorie", roles: ["admin", "disponent"] },
   { href: "/benutzer", label: "Benutzer", roles: ["admin"] },
   { href: "/export", label: "Export", roles: ["admin"] },
 ];

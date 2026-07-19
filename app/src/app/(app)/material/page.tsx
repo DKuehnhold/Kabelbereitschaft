@@ -1,17 +1,20 @@
 import { requireSession } from "@/lib/auth";
-import { Placeholder, NoAccess } from "@/components/Placeholder";
-import type { UserRole } from "@/lib/roles";
+import { NoAccess } from "@/components/Placeholder";
+import { listMaterials } from "@/lib/inventory";
+import { MaterialsClient } from "@/components/inventory/MaterialsClient";
 
-const ALLOWED: UserRole[] = ["admin", "disponent", "monteur"];
+export const dynamic = "force-dynamic";
 
-export default async function Page() {
+export default async function MaterialPage() {
   const session = await requireSession();
-  if (!ALLOWED.includes(session.role)) return <NoAccess />;
+  if (session.role !== "admin") return <NoAccess />;
+
+  const materials = await listMaterials();
+
   return (
-    <Placeholder
-      title="Material"
-      intro="Materialstammdaten und Bestände. Monteure entnehmen/geben Material vorgangs- und lagerbezogen zurück; Bestände nur über Bewegungen."
-      planned="Geplant für Arbeitspaket 3 (Material & Bestände)."
-    />
+    <div className="space-y-4">
+      <h1 className="text-2xl font-semibold text-slate-900">Materialstammdaten</h1>
+      <MaterialsClient materials={materials} />
+    </div>
   );
 }

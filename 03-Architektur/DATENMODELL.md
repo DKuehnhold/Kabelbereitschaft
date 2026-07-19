@@ -59,3 +59,11 @@ Wiederverwendet statt neu angelegt (keine Duplikate): `caller_name` = DB-Ansprec
 `caller_contact` = Telefon, `closed_by` = „Abgeschlossen durch", `closed_at` = Abschlussdatum.
 Die in AP2 als Pflicht gesetzten Maskenfelder bleiben in der DB nullable; die Pflicht wird
 in der Eingabemaske und der Server-Action erzwungen (km bis bleibt optional).
+
+## AP3-Erweiterung (Migration 0004, additiv)
+Kein Struktur-Umbau. Ergänzt ausschließlich eine RLS-INSERT-Policy
+`movements_insert_monteur_verbrauch`, damit Monteure den Bewegungstyp `verbrauch`
+(mit Vorgangs- und Quelllagerbezug, nur für zugewiesene Vorgänge) buchen dürfen.
+Alle bestehenden Tabellen, Trigger, Constraints und die View `material_stock` bleiben unverändert.
+Material-/Lager-/Bestands- und Bewegungslogik nutzt die in AP1 angelegten Strukturen
+(`materials`, `storage_locations`, `inventory_movements`, `material_stock`).

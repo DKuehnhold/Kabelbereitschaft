@@ -1,17 +1,20 @@
 import { requireSession } from "@/lib/auth";
-import { Placeholder, NoAccess } from "@/components/Placeholder";
-import type { UserRole } from "@/lib/roles";
+import { NoAccess } from "@/components/Placeholder";
+import { listLocations } from "@/lib/inventory";
+import { LocationsClient } from "@/components/inventory/LocationsClient";
 
-const ALLOWED: UserRole[] = ["admin"];
+export const dynamic = "force-dynamic";
 
-export default async function Page() {
+export default async function LagerPage() {
   const session = await requireSession();
-  if (!ALLOWED.includes(session.role)) return <NoAccess />;
+  if (session.role !== "admin") return <NoAccess />;
+
+  const locations = await listLocations();
+
   return (
-    <Placeholder
-      title="Lagerorte"
-      intro="Verwaltung der Lagerorte (Zentrallager, Fahrzeuglager, Baustellenlager, Materialcontainer, temporäres Lager) inkl. Anfangsbeständen und Korrekturbuchungen."
-      planned="Geplant für Arbeitspaket 3 (Lagerverwaltung)."
-    />
+    <div className="space-y-4">
+      <h1 className="text-2xl font-semibold text-slate-900">Lagerorte</h1>
+      <LocationsClient locations={locations} />
+    </div>
   );
 }

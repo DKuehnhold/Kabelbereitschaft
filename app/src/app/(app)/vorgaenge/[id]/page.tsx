@@ -6,6 +6,8 @@ import { StatusBadge } from "@/components/incidents/StatusBadge";
 import { PriorityBadge } from "@/components/incidents/PriorityBadge";
 import { Timeline } from "@/components/incidents/Timeline";
 import { IncidentControls } from "@/components/incidents/IncidentControls";
+import { getIncidentMovements, getActiveMaterials, getActiveLocations } from "@/lib/inventory";
+import { IncidentMaterialCard } from "@/components/inventory/IncidentMaterialCard";
 import { CONDITION_LABELS } from "@/lib/status";
 
 export const dynamic = "force-dynamic";
@@ -35,7 +37,12 @@ export default async function IncidentDetailPage({
 
   const i = detail.incident;
   const isStaff = session.role !== "monteur";
-  const monteure = isStaff ? await getMonteure() : [];
+  const [monteure, movements, materials, locations] = await Promise.all([
+    isStaff ? getMonteure() : Promise.resolve([] as { id: string; full_name: string | null }[]),
+    getIncidentMovements(id),
+    getActiveMaterials(),
+    getActiveLocations(),
+  ]);
 
   return (
     <div className="space-y-5">
@@ -98,6 +105,14 @@ export default async function IncidentDetailPage({
           </section>
 
           <IncidentControls incident={i} role={session.role} monteure={monteure} />
+
+          <IncidentMaterialCard
+            incidentId={i.id}
+            movements={movements}
+            canBook={true}
+            materials={materials}
+            locations={locations}
+          />
         </div>
 
         {/* Timeline (rechts auf Desktop, unten auf Mobile) */}

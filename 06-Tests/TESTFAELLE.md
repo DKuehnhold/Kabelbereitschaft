@@ -48,3 +48,23 @@ Fokus auf in Arbeitspaket 1 prüfbare Fälle. Fälle für spätere Fachfunktione
 | AP2-09 | Als Monteur | Fremden Vorgang per URL öffnen | Kein Zugriff (RLS) |
 | AP2-10 | Priorität „Kritisch" gesetzt | Dashboard/Tabelle ansehen | Priorität farbig hervorgehoben |
 | AP2-11 | Detailansicht | Mobil öffnen | Timeline unterhalb, Desktop rechts |
+
+## AP3 – Testfälle Material/Lager
+> DB-/RLS-seitig automatisiert verifiziert am 2026-07-19 über `app/supabase/test/11_ap3_smoke.sql`
+> (alle Szenarien PASS). AP3-06 (Rückgabe > Restmenge) wird auf App-Ebene via
+> `returnableQuantity` erzwungen und im Smoke-Test über dieselbe Rechenregel geprüft.
+> AP3-01/02/03/10/11 zusätzlich manuell in der UI abzunehmen.
+
+| ID | Vorbedingung | Schritte | Erwartung |
+|---|---|---|---|
+| AP3-01 | Als Admin | Material anlegen/bearbeiten/deaktivieren | Liste aktualisiert; kein Löschen möglich |
+| AP3-02 | Als Admin | Lagerort anlegen/deaktivieren | Liste aktualisiert |
+| AP3-03 | Bewegungen vorhanden | Bestandsübersicht öffnen | Istbestand je Material/Lager aus `material_stock` |
+| AP3-04 | Als Admin | Wareneingang +10 buchen | Bestand steigt um 10 |
+| AP3-05 | Monteur (zugewiesen) | Entnahme 3 mit Vorgang+Lager | Bestand −3; Bewegung im Vorgang sichtbar |
+| AP3-06 | Entnahme vorhanden | Rückgabe > Restmenge versuchen | Fehler „größer als entnommene Restmenge" |
+| AP3-07 | Bestand 7 | Entnahme 100 versuchen | Blockiert (kein negativer Bestand) |
+| AP3-08 | Monteur | Entnahme ohne Vorgang | Nicht möglich (Vorgang erforderlich) |
+| AP3-09 | Monteur (zugewiesen) | Verbrauch buchen | Erlaubt (additive RLS 0004); Bestand −Menge |
+| AP3-10 | Bewegungen vorhanden | Materialhistorie filtern | Filter (Material/Lager/Vorgang/Person/Zeit/Typ) wirken |
+| AP3-11 | min_stock gesetzt, Bestand ≤ min | Admin-Dashboard | Karte „Material unter Mindestbestand" zählt korrekt |

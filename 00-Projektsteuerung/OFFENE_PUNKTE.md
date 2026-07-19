@@ -45,3 +45,19 @@ Weiterhin offen / als Nächstes:
 - [ ] Timeline: Material-/Bildereignisse ergänzen (Platzhalter bereits vorgesehen).
 - [ ] Laufzeittest der Oberfläche gegen ein verbundenes Supabase-Projekt (in AP1/AP2 nur Build/DB geprüft).
 - [ ] Modernisierung `middleware` → `proxy` (Next 16).
+
+## Aktualisierung nach AP3 (2026-07-19)
+Umgesetzt (Code im Vault): Materialstammdaten, Lagerorte, Bestandsübersicht, Materialbewegungen,
+Entnahme/Rückgabe/Verbrauch, Materialhistorie, Material im Vorgang, Karte „Material unter
+Mindestbestand" (additive Migration 0004 für Monteur-Verbrauch).
+
+Offen / als Nächstes:
+- [x] **AP3-Verifikation ausgeführt (2026-07-19):** `npm run lint`, `npx tsc --noEmit`,
+  `next build`, Migration 0001–0004 (inkl. Idempotenz 0003/0004) sowie Smoke-Tests
+  `10_smoke_test.sql` und neu `11_ap3_smoke.sql` (11 Szenarien) – **alle PASS**.
+  Details siehe `05-Umsetzung-Claude/ARBEITSPAKET_3_BERICHT.md`. AP3 committet.
+- [ ] Manuelle UI-Abnahme gegen verbundenes Supabase-Projekt (Stammdaten-CRUD, Bewegungen,
+  Monteur-Entnahme/Rückgabe/Verbrauch, Historie-Filter, Low-Stock-Karte).
+- [ ] AP4: Bild-Upload + serverseitige EXIF-Auswertung; CSV-Export der Vorgangsübersicht.
+- [ ] Benutzerverwaltungs-UI.
+- [ ] Timeline um Material-/Bildereignisse erweitern.
