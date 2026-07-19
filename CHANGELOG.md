@@ -3,6 +3,15 @@
 Alle nennenswerten Änderungen an diesem Projekt.
 
 ## [Unveröffentlicht]
+### GUI/UX (AP8)
+- GUI-/UX-Finalisierung ohne neue Fachfunktionen: zentrales **Designsystem** (Tokens/Farben/Typografie/
+  Statusfarben in `globals.css`, Primitive in `components/ui/`), **Dark Mode** (Light/Dark/System via
+  `data-theme` + `prefers-color-scheme`, Umschalter, No-FOUC-Init), theme-fähiges App-Chrome (AppShell),
+  Route-**Skeleton**-Ladezustände, Accessibility (sichtbarer Fokus, aria, Touch-Ziele ≥ 40 px,
+  `prefers-reduced-motion`), Safe-Area-Insets. Keine Fachfunktion geändert. Geprüft: lint/tsc/build (grün).
+  Einschränkung: App-Screenshots/visuelle Feinabnahme benötigen Browser + Test-Supabase (offen).
+  Details: `04-UI-UX/GUI.md`, `04-UI-UX/DESIGNSYSTEM.md`.
+
 ### Sicherheit / Release (AP7)
 - Release Readiness & Security Review: HTTP-Sicherheitsheader (`next.config.ts`; CSP zunächst
   Report-Only), Health-Check `/api/health`, Accessibility-Tests (`@axe-core/playwright`),

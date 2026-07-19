@@ -1,14 +1,86 @@
 @import "tailwindcss";
 
+/* Dark-Mode-Variante an data-theme koppeln (zusätzlich zu prefers-color-scheme).
+   Damit funktionieren künftige `dark:`-Utilities auch bei explizitem Theme. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* =====================================================================
+   Designsystem – Tokens (AP8). Ein zentraler Satz für die gesamte App.
+   ===================================================================== */
 :root {
-  --background: #f8fafc;
+  /* Flächen & Text */
+  --background: #eef2f6;
+  --surface: #ffffff;
+  --surface-2: #f8fafc;
   --foreground: #0f172a;
+  --muted: #64748b;
+  --border: #e2e8f0;
+
+  /* Marke & Interaktion */
   --brand: #1e3a8a;
+  --brand-hover: #1d4ed8;
+  --brand-fg: #ffffff;
+  --ring: #2563eb;
+
+  /* Statusfarben (Hintergrund/Text) */
+  --info: #1d4ed8;      --info-bg: #dbeafe;
+  --success: #15803d;   --success-bg: #dcfce7;
+  --warning: #b45309;   --warning-bg: #fef3c7;
+  --danger: #b91c1c;    --danger-bg: #fee2e2;
+
+  /* Radius & Elevation */
+  --radius: 0.5rem;
+  --shadow-sm: 0 1px 2px 0 rgb(15 23 42 / 0.06);
+  --shadow: 0 4px 12px -2px rgb(15 23 42 / 0.10);
 }
 
+/* Explizit dunkles Theme (Toggle) */
+[data-theme="dark"] {
+  --background: #0b1220;
+  --surface: #111827;
+  --surface-2: #0f172a;
+  --foreground: #e5e7eb;
+  --muted: #94a3b8;
+  --border: #1f2a3a;
+  --brand: #3b82f6;
+  --brand-hover: #60a5fa;
+  --brand-fg: #0b1220;
+  --ring: #60a5fa;
+  --info: #93c5fd;      --info-bg: #1e3a5f;
+  --success: #86efac;   --success-bg: #14532d;
+  --warning: #fcd34d;   --warning-bg: #4d3908;
+  --danger: #fca5a5;    --danger-bg: #4c1d1d;
+}
+
+/* Systempräferenz, solange KEIN explizites Theme gesetzt ist */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --background: #0b1220;
+    --surface: #111827;
+    --surface-2: #0f172a;
+    --foreground: #e5e7eb;
+    --muted: #94a3b8;
+    --border: #1f2a3a;
+    --brand: #3b82f6;
+    --brand-hover: #60a5fa;
+    --brand-fg: #0b1220;
+    --ring: #60a5fa;
+    --info: #93c5fd;      --info-bg: #1e3a5f;
+    --success: #86efac;   --success-bg: #14532d;
+    --warning: #fcd34d;   --warning-bg: #4d3908;
+    --danger: #fca5a5;    --danger-bg: #4c1d1d;
+  }
+}
+
+/* Tokens für Tailwind-Utilities verfügbar machen (bg-surface, text-muted, …) */
 @theme inline {
   --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
   --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-brand: var(--brand);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -17,4 +89,75 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Sichtbarer, konsistenter Fokus (Accessibility, Tastaturbedienung) */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Dezente Übergänge – respektieren „reduzierte Bewegung" */
+@media (prefers-reduced-motion: no-preference) {
+  a, button, .card, [data-transition] {
+    transition: background-color .15s ease, border-color .15s ease, box-shadow .15s ease,
+                color .15s ease, transform .15s ease, opacity .15s ease;
+  }
+  .fade-in { animation: kb-fade-in .18s ease both; }
+  @keyframes kb-fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+}
+
+/* Safe-Area-Insets (Mobile, Notch/Home-Indicator) */
+.safe-t { padding-top: env(safe-area-inset-top); }
+.safe-b { padding-bottom: env(safe-area-inset-bottom); }
+.safe-x { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+
+/* =====================================================================
+   Komponentenklassen – additiv nutzbar, theme-fähig
+   ===================================================================== */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+  border-radius: var(--radius); padding: .5rem .9rem; font-size: .875rem; font-weight: 600;
+  min-height: 2.5rem; /* >=40px Touch-Ziel */ cursor: pointer;
+  border: 1px solid transparent;
+}
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn-primary { background: var(--brand); color: var(--brand-fg); }
+.btn-primary:hover:not(:disabled) { background: var(--brand-hover); }
+.btn-outline { background: var(--surface); color: var(--foreground); border-color: var(--border); }
+.btn-outline:hover:not(:disabled) { background: var(--surface-2); }
+.input {
+  width: 100%; background: var(--surface); color: var(--foreground);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  padding: .5rem .75rem; font-size: .875rem; min-height: 2.5rem;
+}
+.badge {
+  display: inline-flex; align-items: center; gap: .25rem;
+  border-radius: 9999px; padding: .125rem .5rem; font-size: .75rem; font-weight: 600;
+  border: 1px solid transparent;
+}
+.badge-info { background: var(--info-bg); color: var(--info); }
+.badge-success { background: var(--success-bg); color: var(--success); }
+.badge-warning { background: var(--warning-bg); color: var(--warning); }
+.badge-danger { background: var(--danger-bg); color: var(--danger); }
+
+/* Skeleton-Ladezustand */
+.skeleton {
+  background: linear-gradient(90deg, var(--surface-2) 25%, var(--border) 37%, var(--surface-2) 63%);
+  background-size: 400% 100%; border-radius: var(--radius);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .skeleton { animation: kb-shimmer 1.4s ease infinite; }
+  @keyframes kb-shimmer { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
 }

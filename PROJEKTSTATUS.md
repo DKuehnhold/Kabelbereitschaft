@@ -44,3 +44,10 @@ Geprüft (ausführbar): lint/tsc/build, `npm audit` (2 moderate/0 hoch – akzep
 0001–0006 (leer+AP6-Bestand), Smokes 10–13, CSV 12/12, SW-Syntax, Playwright `--list` 26 +
 `@public` request-basiert 6/9. Status: **AP7 freigabefähig** im Rahmen der ausführbaren Prüfungen;
 Release/Tag/Push benötigen Nutzerfreigabe bzw. Zugangsdaten. Empfohlene Version: `v1.0.0-rc.1`.
+
+## AP8 – GUI-/UX-Finalisierung (2026-07-19)
+Umgesetzt (additiv, ohne Fachfunktionsänderung): zentrales Designsystem (Tokens/Primitive),
+Dark Mode (Light/Dark/System), theme-fähiges App-Chrome, Skeleton-Ladezustände, Accessibility
+(Fokus/aria/Touch/reduced-motion), Safe-Area. Geprüft: lint (0), tsc (0), build (PASS);
+AP1–AP7-Regression unverändert grün. Offen: App-Screenshots + visuelle/Screenreader-Feinabnahme
+(benötigen Browser + Test-Supabase). Details: `04-UI-UX/GUI.md`, `04-UI-UX/DESIGNSYSTEM.md`.

@@ -43,3 +43,12 @@ CSV-Export, Offlinebetrieb mit Synchronisation und Konfliktbehandlung.
 - postcss-Schwachstelle (moderate, build-time) – mit Next-Update beheben.
 - Middleware→Proxy-Migration (Next 16 Deprecation).
 - Aufbewahrungsfristen für Soft-Delete/Audit (fachlich/juristisch festzulegen – nicht erfunden).
+
+## Nachtrag AP8 (2026-07-19)
+- **GUI/UX:** zentrales Designsystem in `globals.css` (Tokens) + `components/ui/`-Primitive;
+  Dark Mode (Light/Dark/System) über `data-theme` + `prefers-color-scheme`, Umschalter in der
+  Seitenleiste, No-FOUC-Init. App-Chrome (AppShell) theme-fähig; Skeleton-Ladezustände; Fokus/A11y/
+  Safe-Area verbessert. Keine Fachfunktion geändert.
+- **Entscheidung:** Politur bewusst konservativ und buildsicher; volle `dark:`-Ausgestaltung aller
+  Altscreens + App-Screenshots/visuelle Feinabnahme sind Folgeausbau (Browser + Test-Supabase nötig).
+- Commit AP8: siehe CHANGELOG. Push weiterhin offen (Zugangsdaten).
