@@ -34,3 +34,8 @@ Damit PWA-Ressourcen ohne Session/offline laden: `/sw.js`, `/manifest.webmanifes
 ## Grenzen / Browser-QA
 Installations-Prompt, SW-Registrierung/-Update und Cache-Invalidierung sind manuell im Browser
 abzunehmen (in der Build-Umgebung ohne Browser nicht ausführbar).
+
+## AP6-Ergänzung
+E2E-Absicherung (Playwright), Idempotenz/Dedup (`sync_actions`, Migration 0006),
+kontrollierte Konfliktauflösung und Service-Worker-Update-Anzeige. Details:
+`06-Tests/E2E_TESTS.md`, `03-Architektur/SYNCHRONISATION.md`, `03-Architektur/KONFLIKTBEHANDLUNG.md`.

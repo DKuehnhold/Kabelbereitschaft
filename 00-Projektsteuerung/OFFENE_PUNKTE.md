@@ -75,3 +75,17 @@ Offen / als Nächstes:
 - [ ] Administrativer Bereinigungsprozess für soft-gelöschte Storage-Objekte (AP5).
 - [ ] Optionale Kartenansicht der GPS-Standorte (Datenstruktur vorbereitet).
 - [ ] Modernisierung `middleware` → `proxy` (Next 16).
+
+## Aktualisierung nach AP6 (2026-07-19)
+Umgesetzt: Playwright-E2E-Struktur (22 Tests), Idempotenz/Dedup (Migration `0006`, `sync_actions`),
+kontrollierte Konfliktauflösung, Service-Worker-Update-Anzeige, Benutzertrennung der Offline-Daten,
+Dashboard-Diagnose, CI-Workflow. Geprüft (ausführbar): lint/tsc/build, Migration 0001–0006
+(leer + AP5-Bestand, idempotent), Smokes 10–13, CSV 12/12, SW-Syntax, Playwright `--list` (22)
++ `@public` request-basiert (4/7 gegen Prod-Server).
+
+Offen / als Nächstes:
+- [ ] **Push von AP4/AP5/AP6 nach GitHub** (Zugangsdaten erforderlich; `origin/main` = `8d83371`).
+- [ ] Test-Supabase-Instanz + Testbenutzer für vollständige `@app`-E2E.
+- [ ] Browser-Systembibliotheken in der Ausführungsumgebung (`playwright install --with-deps chromium`).
+- [ ] Middleware→Proxy-Migration inkl. voller E2E-Abnahme (bewusst nicht spekulativ umgesetzt).
+- [ ] Optional: Lighthouse-PWA-Audit (nur wenn stabil reproduzierbar), Background-Sync/Push.

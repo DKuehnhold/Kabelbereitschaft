@@ -93,3 +93,14 @@ Offline-Start, Offline-Dashboard, Offline-Incident, Offline-Timeline, Offline-No
 Offline-Statusänderung, Upload-Warteschlange (Fortschritt/Abbruch/Retry), Wiederverbindung,
 Konfliktfall, Synchronisation, PWA-Installation, Service-Worker-Registrierung/-Update,
 Cache-Invalidierung. Erwartetes Verhalten siehe OFFLINE.md/PWA.md.
+
+## AP6 – E2E, Idempotenz, Konflikt (Prüfumfang)
+Automatisch **ausgeführt am 2026-07-19** (Node v22, PostgreSQL 16 user-space):
+`npm ci`, `npm run lint` (0), `npx tsc --noEmit` (0, inkl. E2E-Specs), `next build` (PASS),
+Migration `0001–0006` (leer + auf AP5-Bestand, idempotent), Smoke-Tests `10`–`13`
+(Idempotenz `13` 5/5, AP3 `11` 16/16, AP4 `12` 20/20, AP1/AP2 `10` 0 Fehler), `node --check sw.js`,
+CSV-Sicherheitstest (12/12), `playwright test --list` (22 Tests), `playwright test public.spec.ts`
+(4/7 gegen Prod-Server bestanden – request-basiert).
+**Nicht ausführbar in der Build-Umgebung (nicht als bestanden gewertet):** seitenbasierte
+Browser-E2E (Chromium-Systembibliotheken fehlen, kein root) und `@app`-E2E (benötigen Test-Supabase).
+Siehe `06-Tests/E2E_TESTS.md`.

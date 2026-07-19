@@ -4,6 +4,16 @@ Alle nennenswerten Änderungen an diesem Projekt.
 
 ## [Unveröffentlicht]
 ### Hinzugefügt
+- **AP6** – E2E-Tests, Offline-Verifikation & Synchronisationshärtung: Playwright-E2E-Struktur
+  (22 Tests, Chromium; `@public` ohne Supabase, `@app` mit Test-Supabase), Idempotenz/Dedup über
+  Migration `0006` (`sync_actions`, Client-Action-IDs, Server-Dedup in `/api/sync` und
+  `/api/images/upload`), kontrollierte Konfliktauflösung (Serverstand übernehmen / erneut anwenden /
+  verwerfen), Service-Worker-Update-Anzeige, Benutzertrennung der Offline-Daten (`ownerId`),
+  Dashboard-Diagnose, Barrierefreiheit, CI-Workflow. Route `/api/incidents/[id]/meta` (neu).
+  Geprüft: lint/tsc/build, Migration 0001–0006 (leer + AP5-Bestand, idempotent), Smokes 10–13
+  (Idempotenz 5/5, AP3 16/16, AP4 20/20, AP1/AP2 0 Fehler), SW-Syntax, CSV 12/12,
+  Playwright `--list` 22 Tests + `@public` 4/7 gegen Prod-Server (3 seitenbasierte in der Sandbox
+  nicht lauffähig: Chromium-Systembibliotheken fehlen). Details: `05-Umsetzung-Claude/ARBEITSPAKET_6_BERICHT.md`.
 - **AP5** – Offlinefähigkeit (PWA) & Synchronisation: Web-App-Manifest + Icons + Service Worker
   (Cache-Strategien, Offline-Fallback, Cache-Invalidierung), Installierbarkeit; IndexedDB-Outbox
   für Notizen/Statusänderungen und Upload-Warteschlange (Fortschritt/Abbruch/Retry); automatische

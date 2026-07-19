@@ -15,7 +15,7 @@ export default async function AppLayout({
       <AppShell role={session.role} fullName={session.fullName}>
         {children}
       </AppShell>
-      <OfflineBar />
+      <OfflineBar userId={session.userId} />
     </>
   );
 }

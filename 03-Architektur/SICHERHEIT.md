@@ -42,3 +42,16 @@ fehlende EXIF/GPS führen nicht zum Fehler. GPS ausschließlich aus Bildmetadate
 RLS, Trigger und Bestandsschutz wurden gegen PostgreSQL 18 mit einem Smoke-Test geprüft
 (`app/supabase/test/`): korrekte Sichtbarkeit, Blockade von Fremdanlage, Statusschutz,
 Bestandsguard und unveränderbare Chronik.
+
+## AP6 – Offline/Sync-Sicherheit (Ergänzung)
+- **Keine Secrets offline/clientseitig:** IndexedDB (`kb-offline`) enthält nur fachliche Daten und
+  eigene Warteschlangen; keine Tokens/Passwörter/Supabase-/Service-Role-Schlüssel/Auth-Cookies.
+  (Automatisiert prüfbar über `@app`-E2E „keine Tokens in IndexedDB".)
+- **Service-Worker-Cache:** ausschließlich Same-Origin-GET; `/api`, `/auth` und Cross-Origin
+  (Supabase) werden nie gecacht.
+- **Benutzertrennung:** Offline-Aktionen tragen `ownerId`; Ansicht/Synchronisation strikt pro
+  Benutzer; nicht synchronisierte Aktionen werden bei Benutzerwechsel nicht still gelöscht.
+- **Idempotenz/Dedup:** `sync_actions` mit `unique(actor, client_action_id)` + RLS (`actor = auth.uid()`);
+  Retry erzeugt keine Dublette; Anwendung ausschließlich serverseitig unter RLS.
+- **Konflikte:** keine stille Überschreibung (Vergleich `updated_at`); Auflösung serverseitig validiert.
+- **Secrets im Betrieb/CI:** nur über Umgebungsvariablen bzw. GitHub Secrets; keine produktiven Daten in CI.

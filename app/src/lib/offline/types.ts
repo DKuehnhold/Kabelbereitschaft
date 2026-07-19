@@ -1,9 +1,12 @@
 // Client-sichere Typen für Offline-Betrieb (IndexedDB-Outbox, Upload-Queue, Konflikte).
+// Jede Aktion trägt eine stabile `id` (= Idempotenz-/Client-Action-ID) und einen `ownerId`
+// (Benutzertrennung auf gemeinsam genutzten Geräten).
 
 export type OutboxKind = "note" | "status";
 
 export type OutboxItem = {
-  id: string;
+  id: string; // stabile Idempotenz-ID
+  ownerId: string; // Benutzertrennung
   kind: OutboxKind;
   incidentId: string;
   incidentNo: number | null;
@@ -18,7 +21,8 @@ export type OutboxItem = {
 export type UploadStatus = "pending" | "uploading" | "error";
 
 export type UploadItem = {
-  id: string;
+  id: string; // stabile Idempotenz-ID
+  ownerId: string;
   incidentId: string;
   incidentNo: number | null;
   category: string;
@@ -36,8 +40,11 @@ export type UploadItem = {
 
 export type Conflict = {
   id: string;
+  ownerId: string;
   incidentId: string;
   incidentNo: number | null;
+  kind: OutboxKind;
+  attemptedStatus: string | null; // lokaler Wert (bei Statuskonflikt)
   message: string;
   serverUpdatedAt: string | null;
   createdAt: number;
@@ -48,6 +55,8 @@ export type OfflineState = {
   syncing: boolean;
   pending: number; // Outbox (Notizen/Status)
   uploads: number; // Upload-Warteschlange
+  failed: number; // fehlgeschlagene Aktionen (Retry nötig)
   conflicts: number;
   lastSync: number | null;
+  swActive: boolean; // Service Worker kontrolliert die Seite
 };

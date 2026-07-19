@@ -124,3 +124,21 @@ Fokus auf in Arbeitspaket 1 prüfbare Fälle. Fälle für spätere Fachfunktione
 | AP5-14 | Neue Version (CACHE_VERSION) | SW aktiviert | Alte Caches gelöscht (Invalidierung) |
 | AP5-15 | Offline | Dashboard-Kennzahlen | „Offline vorgemerkt/Wartende Uploads/Letzte Sync" korrekt |
 | AP5-16 | — | Sicherheit | Keine Tokens/Secrets in IndexedDB/Cache |
+
+## AP6 – E2E / Idempotenz / Konflikt (automatisiert, Playwright + DB)
+> Ausführung: DB/Idempotenz automatisiert verifiziert; `@public`-E2E teils gegen Prod-Server
+> ausgeführt; seitenbasierte/`@app`-E2E benötigen Browser-Systembibliotheken bzw. Test-Supabase.
+
+| ID | Bereich | Erwartung |
+|---|---|---|
+| AP6-01 | Manifest (@public) | erreichbar, korrekte Metadaten/Icons |
+| AP6-02 | Service Worker (@public) | ausgeliefert, versioniert (`CACHE_VERSION`) |
+| AP6-03 | Offline-Seite/Guard (@public) | Offline-Fallback erreichbar; geschützte Route → /login |
+| AP6-04 | Auth (@app) | Login gültig/ungültig, Logout, Rollen-Nav, API/URL-Schutz |
+| AP6-05 | Vorgänge/CSV (@app) | Übersicht/Filter/Detail/Timeline/Notiz, gefilterter CSV-Download |
+| AP6-06 | Bilder (@app) | Upload erscheint in Galerie; Fremdzugriff blockiert |
+| AP6-07 | Offline (@app) | Erkennung, Notiz/Status/Upload-Queue, Persistenz nach Reload |
+| AP6-08 | Sync (@app) | Reconnect-Flush, Retry, keine Dubletten, letzter Sync-Zeitpunkt |
+| AP6-09 | Idempotenz (DB `13`) | gleiche Client-Action-ID dedupliziert; RLS trennt Benutzer |
+| AP6-10 | Konflikt (@app) | Serveränderung erkannt; keine stille Überschreibung; Auflösung |
+| AP6-11 | Datenschutz (@app) | keine Tokens/Secrets in IndexedDB |

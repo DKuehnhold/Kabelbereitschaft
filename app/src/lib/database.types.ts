@@ -256,6 +256,16 @@ export type MaterialStock = {
   quantity: number;
 };
 
+// AP6: Deduplizierung/Idempotenz der Offline-Synchronisation.
+export type SyncAction = {
+  id: string;
+  actor: string;
+  client_action_id: string;
+  kind: string;
+  incident_id: string | null;
+  applied_at: string;
+};
+
 type Table<Row, Insert = Partial<Row>, Update = Partial<Row>> = {
   Row: Row;
   Insert: Insert;
@@ -279,6 +289,7 @@ export type Database = {
       storage_locations: Table<StorageLocation>;
       inventory_movements: Table<InventoryMovement>;
       audit_events: Table<AuditEvent>;
+      sync_actions: Table<SyncAction>;
     };
     Views: {
       material_stock: { Row: MaterialStock; Relationships: [] };

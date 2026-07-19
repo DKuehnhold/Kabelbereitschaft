@@ -47,3 +47,8 @@ Abbruch, erneuter Versuch. Wiederaufnahme bei Reconnect automatisch.
 Synchronisation nutzt die Session des Nutzers; alle Anwendungen von Mutationen laufen serverseitig
 über RLS (und DB-Trigger, z. B. Statusschutz für Monteure). Offline-Vormerkungen setzen keine
 Berechtigungen außer Kraft.
+
+## AP6-Ergänzung
+E2E-Absicherung (Playwright), Idempotenz/Dedup (`sync_actions`, Migration 0006),
+kontrollierte Konfliktauflösung und Service-Worker-Update-Anzeige. Details:
+`06-Tests/E2E_TESTS.md`, `03-Architektur/SYNCHRONISATION.md`, `03-Architektur/KONFLIKTBEHANDLUNG.md`.

@@ -20,8 +20,17 @@
   10/11/12). Manifest/Icons/Service Worker, IndexedDB-Outbox + Upload-Queue, `/api/sync` +
   `/api/images/upload`, Konflikterkennung, Offline-Leiste/Dashboard-Kennzahlen. Keine neue Migration.
   Offline-Runtime als manuelle Browser-QA offen.
-- **AP6** – Vorschläge: Playwright-E2E inkl. Offline/PWA, SW-Background-Sync + Push, optionale
-  WebCrypto-Verschlüsselung der Offline-Daten, `middleware`→`proxy`-Migration.
+- **AP6** – E2E-Tests, Offline-Verifikation, Synchronisationshärtung: umgesetzt und (soweit in der
+  Build-Umgebung ausführbar) verifiziert. Playwright-Struktur (22 Tests), Idempotenz/Dedup
+  (Migration `0006`), Konfliktauflösung, SW-Update, Benutzertrennung, Diagnose, CI-Workflow.
+  Geprüft: lint/tsc/build, Migration 0001–0006 (leer + AP5-Bestand), Smokes 10–13, CSV 12/12,
+  SW-Syntax; Playwright `--list` 22 Tests + `@public` 4/7 (Rest browser-/Supabase-abhängig).
+- **AP7** – Vorschläge: CI mit Test-Supabase scharfschalten, Middleware→Proxy mit E2E, Push/Release,
+  WebCrypto/Background-Sync.
+
+## Git / Push
+Lokaler `main` ist Remote (`origin/main` = `8d83371`) voraus: **AP4, AP5, AP6 sind noch nicht
+gepusht** (kein Git-Zugang in der Build-Umgebung). Push durch den Nutzer erforderlich.
 
 ## Offen
 - Manuelle UI-/Browser-Abnahme gegen ein verbundenes Supabase-Projekt (Upload/Vorschau/signierte URLs,

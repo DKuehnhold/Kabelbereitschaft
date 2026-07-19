@@ -31,3 +31,8 @@
 2. Bei Verbindung: `manager.flush()` → `/api/sync` (Notizen/Status) + `/api/images/upload` (Bilder).
 3. Serverseitig: Auth + RLS + Konfliktprüfung; Ergebnis zurück an den Client.
 4. Erfolg → lokalen Eintrag entfernen; Konflikt → dokumentieren und anzeigen; Fehler → erneut versuchen.
+
+## AP6-Ergänzung
+E2E-Absicherung (Playwright), Idempotenz/Dedup (`sync_actions`, Migration 0006),
+kontrollierte Konfliktauflösung und Service-Worker-Update-Anzeige. Details:
+`06-Tests/E2E_TESTS.md`, `03-Architektur/SYNCHRONISATION.md`, `03-Architektur/KONFLIKTBEHANDLUNG.md`.
