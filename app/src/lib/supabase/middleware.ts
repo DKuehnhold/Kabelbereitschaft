@@ -2,10 +2,12 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { SUPABASE_URL, SUPABASE_ANON_KEY, isSupabaseConfigured } from "./config";
 
-const PUBLIC_PREFIXES = ["/login", "/auth", "/branding", "/_next"];
+const PUBLIC_PREFIXES = ["/login", "/auth", "/branding", "/_next", "/icons", "/offline"];
+// PWA-Ressourcen müssen ohne Session abrufbar sein (auch offline).
+const PUBLIC_EXACT = ["/favicon.ico", "/manifest.webmanifest", "/sw.js"];
 
 function isPublic(path: string): boolean {
-  if (path === "/favicon.ico") return true;
+  if (PUBLIC_EXACT.includes(path)) return true;
   return PUBLIC_PREFIXES.some((p) => path === p || path.startsWith(p + "/") || path.startsWith(p));
 }
 

@@ -101,3 +101,26 @@ Fokus auf in Arbeitspaket 1 prüfbare Fälle. Fälle für spätere Fachfunktione
 | AP4-23 | Wert beginnt mit `= + - @` | CSV-Export | Mit Apostroph neutralisiert (keine Formel) |
 | AP4-24 | Admin/Disposition/Monteur | Bilder ansehen | RLS: nur berechtigte Bilder sichtbar |
 | AP4-25 | Bilder heute hochgeladen | Dashboard | Kennzahl zählt nur heutige, nicht gelöschte Bilder |
+
+## AP5 – Testfälle Offline / PWA
+> Build-/Typ-/SW-/Migrations-Regression automatisch verifiziert (2026-07-19). Die Runtime-Fälle
+> (offline im Browser) sind manuelle QA – erwartetes Verhalten siehe OFFLINE.md / PWA.md.
+
+| ID | Vorbedingung | Schritte | Erwartung |
+|---|---|---|---|
+| AP5-01 | App online besucht | Netzwerk trennen, App neu laden | Offline-Start: Shell/Offline-Seite lädt |
+| AP5-02 | Dashboard zuvor geöffnet | Offline Dashboard aufrufen | Aus Cache lesbar |
+| AP5-03 | Vorgang zuvor geöffnet | Offline Vorgang öffnen | Detail + Timeline aus Cache lesbar |
+| AP5-04 | Offline | Notiz erfassen | Vorgemerkt (Outbox), kein Verlust |
+| AP5-05 | Offline | Statusänderung vormerken | In Outbox gespeichert |
+| AP5-06 | Offline | Bild zur Warteschlange | Upload-Queue-Eintrag angelegt |
+| AP5-07 | Offene Outbox | Verbindung wiederherstellen | Automatische Synchronisation |
+| AP5-08 | Wartende Uploads | Reconnect | Upload mit Fortschritt, dann entfernt |
+| AP5-09 | Upload läuft | Abbrechen | Upload gestoppt, Eintrag entfernt |
+| AP5-10 | Fehlgeschlagener Sync | „Jetzt synchronisieren" | Erneuter Versuch |
+| AP5-11 | Vorgang serverseitig geändert | Offline-Status synchronisieren | Konflikt gemeldet, keine Überschreibung |
+| AP5-12 | — | App installieren | Installierbar (Manifest/Icons/Theme) |
+| AP5-13 | — | Service Worker | Registriert, cacht Shell/Assets |
+| AP5-14 | Neue Version (CACHE_VERSION) | SW aktiviert | Alte Caches gelöscht (Invalidierung) |
+| AP5-15 | Offline | Dashboard-Kennzahlen | „Offline vorgemerkt/Wartende Uploads/Letzte Sync" korrekt |
+| AP5-16 | — | Sicherheit | Keine Tokens/Secrets in IndexedDB/Cache |

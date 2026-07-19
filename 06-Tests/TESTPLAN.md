@@ -80,3 +80,16 @@ Bucket-Härtung, Dashboard-Kennzahl.
 Manuell (mit verbundenem Supabase, noch offen): tatsächlicher Datei-Upload/Vorschau im Browser,
 signierte-URL-Anzeige, Drag-and-drop, HEIC-Ablehnung, Galerie/Großansicht responsiv,
 CSV-Download inkl. Filterwirkung.
+
+## AP5 – Offlinefähigkeit (PWA), Synchronisation (Prüfumfang)
+Automatisch **ausgeführt am 2026-07-19 – alle PASS** (Node v22, PostgreSQL 16 user-space):
+`npm ci`, `npm run lint` (0), `npx tsc --noEmit` (0), `next build` (neue Routen `/api/sync`,
+`/api/images/upload`, `/manifest.webmanifest`, `/offline`), `node --check public/sw.js` (gültig),
+CSV-Sicherheitstest (12/12). Regression Migration 0001–0005 + Smokes 10/11/12 erneut grün.
+Keine neue Migration (Konflikt über vorhandenes `updated_at`).
+
+**Manuelle Browser-QA (in der Build-Umgebung ohne Browser nicht ausführbar):**
+Offline-Start, Offline-Dashboard, Offline-Incident, Offline-Timeline, Offline-Notiz,
+Offline-Statusänderung, Upload-Warteschlange (Fortschritt/Abbruch/Retry), Wiederverbindung,
+Konfliktfall, Synchronisation, PWA-Installation, Service-Worker-Registrierung/-Update,
+Cache-Invalidierung. Erwartetes Verhalten siehe OFFLINE.md/PWA.md.

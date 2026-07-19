@@ -9,6 +9,7 @@ import { IncidentControls } from "@/components/incidents/IncidentControls";
 import { getIncidentMovements, getActiveMaterials, getActiveLocations } from "@/lib/inventory";
 import { IncidentMaterialCard } from "@/components/inventory/IncidentMaterialCard";
 import { IncidentImages } from "@/components/images/IncidentImages";
+import { OfflineIncidentActions } from "@/components/offline/OfflineIncidentActions";
 import { CONDITION_LABELS } from "@/lib/status";
 
 export const dynamic = "force-dynamic";
@@ -106,6 +107,14 @@ export default async function IncidentDetailPage({
           </section>
 
           <IncidentControls incident={i} role={session.role} monteure={monteure} />
+
+          <OfflineIncidentActions
+            incidentId={i.id}
+            incidentNo={i.incident_no}
+            currentStatus={i.status}
+            updatedAt={i.updated_at}
+            role={session.role}
+          />
 
           <IncidentMaterialCard
             incidentId={i.id}

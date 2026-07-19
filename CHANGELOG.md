@@ -4,6 +4,14 @@ Alle nennenswerten Änderungen an diesem Projekt.
 
 ## [Unveröffentlicht]
 ### Hinzugefügt
+- **AP5** – Offlinefähigkeit (PWA) & Synchronisation: Web-App-Manifest + Icons + Service Worker
+  (Cache-Strategien, Offline-Fallback, Cache-Invalidierung), Installierbarkeit; IndexedDB-Outbox
+  für Notizen/Statusänderungen und Upload-Warteschlange (Fortschritt/Abbruch/Retry); automatische
+  Synchronisation bei Reconnect über `/api/sync` und `/api/images/upload` (gemeinsame Upload-Kernlogik
+  `image-upload-core`); Konflikterkennung über `updated_at` ohne stille Überschreibung; Offline-Leiste,
+  offline-fähige Erfassung im Vorgang, Dashboard-Kennzahlen (offline vorgemerkt/wartende Uploads/letzte
+  Sync). Keine neue Migration. Geprüft: lint/tsc/build, SW-Syntax, CSV 12/12, Regression 0001–0005 +
+  Smokes 10/11/12. Offline-Runtime als manuelle Browser-QA. Details: `05-Umsetzung-Claude/ARBEITSPAKET_5_BERICHT.md`.
 - **AP4** – Bilddokumentation: privater Mehrfach-Bildupload (JPG/PNG, signierte URLs), serverseitige
   EXIF-/GPS-Auswertung mit Validierung, Galerie + Großansicht, Kategorie-/Beschreibungsänderung,
   Soft-Delete, Timeline-/Audit-Integration, Dashboard-Kennzahl „Heute hochgeladene Bilder",

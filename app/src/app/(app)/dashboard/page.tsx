@@ -7,6 +7,7 @@ import { isOpenStatus } from "@/lib/status";
 import { StatCard } from "@/components/incidents/StatCard";
 import { IncidentsTable } from "@/components/incidents/IncidentsTable";
 import { EinsatzListe } from "@/components/incidents/EinsatzListe";
+import { OfflineDashboardCards } from "@/components/offline/OfflineDashboardCards";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +37,10 @@ export default async function DashboardPage() {
           <StatCard label="Meine offenen Einsätze" value={offen.length} accent="blue" />
           <StatCard label="Technisch abgeschlossen" value={technisch.length} accent="green" />
           <StatCard label="Heute übernommen" value={heute.length} accent="indigo" />
+        </div>
+        <div>
+          <h2 className="mb-2 text-lg font-semibold text-slate-800">Offline &amp; Synchronisation</h2>
+          <OfflineDashboardCards />
         </div>
         <div>
           <h2 className="mb-2 text-lg font-semibold text-slate-800">Meine Einsätze</h2>
@@ -90,6 +95,11 @@ export default async function DashboardPage() {
         {isAdmin ? (
           <StatCard label="Material unter Mindestbestand" value={lowStock.length} accent="red" href="/bestand" />
         ) : null}
+      </div>
+
+      <div>
+        <h2 className="mb-2 text-lg font-semibold text-slate-800">Offline &amp; Synchronisation</h2>
+        <OfflineDashboardCards />
       </div>
 
       <div>
