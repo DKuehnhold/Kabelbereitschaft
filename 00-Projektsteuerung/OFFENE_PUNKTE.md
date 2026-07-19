@@ -21,3 +21,15 @@
 
 ## Hinweise
 - `app/supabase/test/*` nur für lokale Prüfung – NICHT in Supabase ausführen.
+
+## Git-Hinweis (einmalig)
+Das Repository wurde in einer OneDrive-synchronisierten Umgebung angelegt; dabei sind
+verwaiste Sperrdateien verblieben. Vor der ersten eigenen Git-Aktion bitte löschen:
+
+```powershell
+del ".git\index.lock" ".git\HEAD.lock" ".git\objects\maintenance.lock"
+```
+
+Danach ist das Repo normal nutzbar (`git status`, `git add`, `git commit`).
+Hinweis: Git in einem OneDrive-Ordner kann zu Sync-Konflikten führen; ggf. Repo später
+in einen lokalen Pfad außerhalb von OneDrive verschieben.
