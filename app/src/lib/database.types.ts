@@ -74,11 +74,20 @@ export type LocationCorrectionStatus =
   | "akzeptiert"
   | "abgelehnt";
 
+// AP9: Telefonnummerntyp (Ansprechpartner).
+export type PhoneType = "mobil" | "festnetz" | "leitstelle" | "sonstige";
+
 type AuditCols = {
   created_at: string;
   created_by: string | null;
   updated_at: string;
   updated_by: string | null;
+};
+
+// AP9: Verknüpfungstabellen werden nicht aktualisiert (nur angelegt/entfernt).
+type CreateCols = {
+  created_at: string;
+  created_by: string | null;
 };
 
 export type Profile = {
@@ -95,6 +104,9 @@ export type ConstructionStage = {
   name: string;
   description: string | null;
   is_active: boolean;
+  // AP9 additiv:
+  wus_bst: string | null;
+  default_on_call_number_id: string | null;
 } & AuditCols;
 
 export type OnCallNumber = {
@@ -256,6 +268,81 @@ export type MaterialStock = {
   quantity: number;
 };
 
+// =====================================================================
+// AP9: Stammdaten & Einstellungen
+// =====================================================================
+export type Customer = {
+  id: string;
+  name: string;
+  erp_id: string | null;
+  is_active: boolean;
+} & AuditCols;
+
+export type VzgLine = {
+  id: string;
+  line_number: string;
+  description: string | null;
+  construction_stage_id: string;
+  is_active: boolean;
+} & AuditCols;
+
+export type Contact = {
+  id: string;
+  customer_id: string;
+  name: string;
+  function: string | null;
+  email: string | null;
+  is_active: boolean;
+} & AuditCols;
+
+export type ContactPhoneNumber = {
+  id: string;
+  contact_id: string;
+  phone: string;
+  phone_type: PhoneType;
+  sort_order: number;
+} & AuditCols;
+
+export type ConstructionStageContact = {
+  id: string;
+  construction_stage_id: string;
+  contact_id: string;
+} & CreateCols;
+
+export type Technician = {
+  id: string;
+  first_name: string;
+  last_name: string;
+  profile_id: string | null;
+  is_active: boolean;
+} & AuditCols;
+
+export type Team = {
+  id: string;
+  name: string;
+  is_active: boolean;
+} & AuditCols;
+
+export type TeamMember = {
+  id: string;
+  team_id: string;
+  technician_id: string;
+} & CreateCols;
+
+export type CableType = {
+  id: string;
+  code: string;
+  name: string;
+  sort_order: number;
+  is_active: boolean;
+} & AuditCols;
+
+export type AppSettings = {
+  id: number;
+  default_customer_id: string | null;
+  default_on_call_number_id: string | null;
+} & AuditCols;
+
 // AP6: Deduplizierung/Idempotenz der Offline-Synchronisation.
 export type SyncAction = {
   id: string;
@@ -290,6 +377,17 @@ export type Database = {
       inventory_movements: Table<InventoryMovement>;
       audit_events: Table<AuditEvent>;
       sync_actions: Table<SyncAction>;
+      // AP9
+      customers: Table<Customer>;
+      vzg_lines: Table<VzgLine>;
+      contacts: Table<Contact>;
+      contact_phone_numbers: Table<ContactPhoneNumber>;
+      construction_stage_contacts: Table<ConstructionStageContact>;
+      technicians: Table<Technician>;
+      teams: Table<Team>;
+      team_members: Table<TeamMember>;
+      cable_types: Table<CableType>;
+      app_settings: Table<AppSettings>;
     };
     Views: {
       material_stock: { Row: MaterialStock; Relationships: [] };
@@ -304,6 +402,7 @@ export type Database = {
       storage_location_type: StorageLocationType;
       movement_type: MovementType;
       location_correction_status: LocationCorrectionStatus;
+      phone_type: PhoneType;
     };
     CompositeTypes: Record<string, never>;
   };

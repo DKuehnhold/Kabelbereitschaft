@@ -27,3 +27,9 @@
 - `(app)/layout` auf Sidebar-Shell umgestellt.
 ### Geprüft
 - Lint, Typecheck, Build erfolgreich; Migration 0001–0003 + Smoke-Test grün.
+
+## AP9 – Stammdaten & Einstellungen
+feat: implement master data management (AP9)
+- Migration 0007 (additiv): 10 neue Tabellen + construction_stages erweitert + Enum phone_type.
+- RLS (is_staff), feldgenaues Audit (tg_audit erweitert), 8 Stammdaten-Seiten, Monteur-CSV-Import.
+- Verifikation: lint/tsc/build ok; AP9-Smoke 26/26; Bestandssmokes grün; CSV-Unittest 14/14.

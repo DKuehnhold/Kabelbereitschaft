@@ -104,3 +104,12 @@ Offen / als Nächstes:
 - [ ] Aufbewahrungsfristen (Soft-Delete/Audit) fachlich/juristisch festlegen.
 - [ ] postcss-Behebung via Next-Update; Middleware→Proxy-Migration.
 - [ ] Git-Tag/Release `v1.0.0-rc.1` NUR nach ausdrücklicher Nutzerfreigabe.
+
+## Nachtrag AP9
+- Pflegeoberfläche für Bereitschaftsnummern (`on_call_numbers`) existiert nicht; in AP9 nur
+  Auswahl (Bauabschnitt/Einstellungen). Bewusst außerhalb des freigegebenen AP9-Seitenumfangs.
+- Anbindung der Stammdaten (Kunde/Bauabschnitt/VzG/Kabelart/Ansprechpartner/Monteure/Teams)
+  an die Vorgangserfassung, Einsätze und das Dashboard → AP10 ff.
+- `technicians` vs. `profiles`/`incident_assignments`: Verknüpfung Monteur↔Benutzerkonto
+  (`profile_id`) vorbereitet; SSO/Login-Kopplung erst in einem späteren AP.
+- Push AP9 (und AP4–AP8) nach GitHub durch den Nutzer (in der Sandbox nicht verifizierbar).

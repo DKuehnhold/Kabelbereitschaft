@@ -114,3 +114,14 @@ grün inkl. Health-Check und Sicherheitsheader). Accessibility (`@axe-core/playw
 vorhanden; **Browserlauf in der Build-Umgebung nicht möglich** (Chromium-Systembibliotheken).
 **Nicht ausführbar/offen (nicht als bestanden gewertet):** seitenbasierte Browser-E2E, `@app`-E2E,
 a11y-Browserlauf, PWA-Installation/SW-Update-Runtime, Performance-Messung, Deployment-/Recovery-Test.
+
+## Nachtrag AP9 – Stammdaten
+- `supabase/test/14_ap9_smoke.sql`: CRUD, RLS (admin/disponent/monteur), feldgenaues Audit
+  (Insert/Update/Aktiv/M:N), Constraints (VzG-Format & Unique je Bauabschnitt, erp_id,
+  profile_id, M:N-Unique, app_settings-Singleton), Seeds. Ergebnis lokal: 26/26 OK.
+- Migration 0007 auf leerer DB und auf 0001–0006 angewendet; zweite Anwendung idempotent.
+- Rückwärtskompatibilität `tg_audit`: bestehende Smokes 10/11/12/13 weiterhin grün.
+- CSV-Import: Parser/Classifier-Unittest (BOM, `;`/`,`, Quotes, Header-Aliase, Validierung,
+  Datei-/DB-/Profil-Dublette) – 14/14 OK.
+- `npm run lint`, `tsc --noEmit`, `npm run build`: fehlerfrei.
+- Nicht ausführbar in der Sandbox: Browser-E2E, Push (privates Repo).

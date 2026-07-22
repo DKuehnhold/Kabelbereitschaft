@@ -158,6 +158,19 @@ export const STORAGE_LOCATION_TYPE_LABELS: Record<StorageLocationType, string> =
 };
 
 // ---------------------------------------------------------------------
+// AP9: Telefonnummerntypen (Ansprechpartner)
+// ---------------------------------------------------------------------
+export const PHONE_TYPES = ["mobil", "festnetz", "leitstelle", "sonstige"] as const;
+export type PhoneType = (typeof PHONE_TYPES)[number];
+
+export const PHONE_TYPE_LABELS: Record<PhoneType, string> = {
+  mobil: "Mobil",
+  festnetz: "Festnetz",
+  leitstelle: "Leitstelle",
+  sonstige: "Sonstige",
+};
+
+// ---------------------------------------------------------------------
 // AP2: Statusgruppen und Badge-Farben
 // ---------------------------------------------------------------------
 export const TERMINAL_STATUS: IncidentStatus[] = [

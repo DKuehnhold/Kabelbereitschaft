@@ -85,3 +85,16 @@ Material-/Lager-/Bestands- und Bewegungslogik nutzt die in AP1 angelegten Strukt
 - **Storage**: privater Bucket `incident-images` additiv gehärtet (`file_size_limit` 15 MB,
   `allowed_mime_types` JPG/PNG); Storage-RLS aus 0002 unverändert. Details siehe `STORAGE.md`.
 - Kein Datenverlust; alle Änderungen idempotent (`ADD VALUE/COLUMN IF NOT EXISTS`, Guards).
+
+## Nachtrag AP9 – Stammdaten (Migration 0007, additiv)
+Neue Tabellen: `customers`, `vzg_lines` (VzG 4-stellig, unique je Bauabschnitt),
+`contacts` + `contact_phone_numbers` (typisiert, mehrere je Kontakt) + M:N
+`construction_stage_contacts`, `technicians` (optional `profile_id`), `teams` + M:N
+`team_members` (Mehrfachmitgliedschaft), `cable_types` (Referenz, geseedet), `app_settings`
+(Singleton `CHECK id=1`). Neues Enum `phone_type`. `construction_stages` additiv erweitert:
+`wus_bst`, `default_on_call_number_id` (FK → `on_call_numbers`). M:N-Tabellen mit eigener
+`id` (UUID) + Unique-Paar (audittauglich).
+RLS: lesen alle Angemeldeten, schreiben `is_staff()` (admin+disponent); `construction_stages`
+von `is_admin()` auf `is_staff()` erweitert. Löschen fachlich nur über `is_active`.
+Audit: `tg_audit` feldgenau erweitert (`detail.op` bleibt; UPDATE→`changes{feld:{old,new}}`,
+INSERT→`new`, DELETE→`old`); Trigger an allen neuen Tabellen + `construction_stages`.

@@ -52,3 +52,15 @@ CSV-Export, Offlinebetrieb mit Synchronisation und Konfliktbehandlung.
 - **Entscheidung:** Politur bewusst konservativ und buildsicher; volle `dark:`-Ausgestaltung aller
   Altscreens + App-Screenshots/visuelle Feinabnahme sind Folgeausbau (Browser + Test-Supabase nötig).
 - Commit AP8: siehe CHANGELOG. Push weiterhin offen (Zugangsdaten).
+
+## Nachtrag AP9 (Stammdaten & Einstellungen)
+- Migration `0007_ap9_master_data.sql` (additiv): customers, vzg_lines, contacts (+Telefonnummern,
+  +M:N Bauabschnitte), technicians, teams (+M:N Mitglieder), cable_types (Seed), app_settings
+  (Singleton); `construction_stages` um `wus_bst`/`default_on_call_number_id` erweitert; Enum
+  `phone_type`. RLS `is_staff()` (admin+disponent), Monteur nur lesend; `construction_stages`
+  auf `is_staff()` erweitert. Löschen fachlich nur über `is_active`.
+- `tg_audit` feldgenau (CREATE OR REPLACE, `detail.op` erhalten) – eine Auditlösung.
+- UI: Navigationsgruppe „Stammdaten" + 8 token-basierte, responsive CRUD-Seiten; Monteur-CSV-Import
+  (Vorschau/Validierung/Dublettenerkennung, keine stille Überschreibung).
+- Verifiziert lokal: lint/tsc/build grün; AP9-Smoke 26/26; Bestandssmokes 10/11/12/13 grün; CSV-Test 14/14.
+- Commit `feat: implement master data management (AP9)`. AP8.1-Branding nicht Teil des Commits.

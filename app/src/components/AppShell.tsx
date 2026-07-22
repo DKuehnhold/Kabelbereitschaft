@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Logo } from "@/components/Logo";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
-import { navFor, ROLE_LABELS, type UserRole } from "@/lib/roles";
+import { navFor, navGroupsFor, ROLE_LABELS, type UserRole } from "@/lib/roles";
 
 export function AppShell({
   role,
@@ -19,29 +19,36 @@ export function AppShell({
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   const items = navFor(role);
+  const groups = navGroupsFor(role);
+
+  const isActive = (href: string) =>
+    pathname === href || (href !== "/dashboard" && pathname.startsWith(href + "/"));
+
+  const renderLink = (href: string, label: string) => (
+    <Link
+      key={href}
+      href={href}
+      aria-current={isActive(href) ? "page" : undefined}
+      onClick={() => setOpen(false)}
+      className={`block rounded-md px-3 py-2 text-sm font-medium ${
+        isActive(href) ? "bg-brand text-white" : "text-foreground hover:bg-surface-2"
+      }`}
+    >
+      {label}
+    </Link>
+  );
 
   const nav = (
     <nav className="flex-1 space-y-1 px-2" aria-label="Hauptnavigation">
-      {items.map((item) => {
-        const active =
-          pathname === item.href ||
-          (item.href !== "/dashboard" && pathname.startsWith(item.href + "/"));
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            aria-current={active ? "page" : undefined}
-            onClick={() => setOpen(false)}
-            className={`block rounded-md px-3 py-2 text-sm font-medium ${
-              active
-                ? "bg-brand text-white"
-                : "text-foreground hover:bg-surface-2"
-            }`}
-          >
-            {item.label}
-          </Link>
-        );
-      })}
+      {items.map((item) => renderLink(item.href, item.label))}
+      {groups.map((group) => (
+        <div key={group.label} className="pt-3">
+          <div className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-muted">
+            {group.label}
+          </div>
+          {group.items.map((item) => renderLink(item.href, item.label))}
+        </div>
+      ))}
     </nav>
   );
 
