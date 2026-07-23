@@ -40,3 +40,11 @@ feat: integrate master data into incident creation (AP10)
   incident_cable_positions (positionsbezogene Kabelart), transaktionale RPCs, Backfill.
 - Erfassungs-/Bearbeitungsmaske token-basiert mit abhängigen Dropdowns; Detail/Listen ergänzt.
 - Verifikation: lint/tsc/build ok; AP10-Smoke 12/12; Backfill ok; Regression 11/13/14 grün.
+
+## AP11 – Operative Vorgangsliste
+feat: implement operational incident list (AP11)
+- Migration 0009: RLS-konforme View incident_list_view (security_invoker) mit Aggregaten/Suchtext.
+- /vorgaenge: serverseitige Suche/Filter/Mehrfachsortierung/Pagination, Desktop-Tabelle + Mobile-Karten,
+  Kabelart-Chips, Monteure, offene Hinweise, Auswahl + vorbereitete Massenaktionen, CSV-Export (gefiltert).
+- StatusBadge/PriorityBadge auf AP8-Badge-Primitive umgestellt.
+- Verifikation: lint/tsc/build ok; AP11-Smoke 8/8; Performance (600) ok; Regression 11/13/14/15 grün.

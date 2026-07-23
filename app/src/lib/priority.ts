@@ -17,6 +17,14 @@ export const PRIORITY_STYLES: Record<Priority, string> = {
   kritisch: "bg-red-100 text-red-800 border-red-300",
 };
 
+// AP11: Priorität → AP8-Badge-Tone.
+export const PRIORITY_TONE: Record<Priority, "info" | "success" | "warning" | "danger"> = {
+  niedrig: "info",
+  normal: "info",
+  hoch: "warning",
+  kritisch: "danger",
+};
+
 // Sortierreihenfolge (kritisch zuerst).
 export const PRIORITY_ORDER: Record<Priority, number> = {
   kritisch: 0,

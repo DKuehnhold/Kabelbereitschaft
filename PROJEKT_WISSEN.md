@@ -73,3 +73,14 @@ CSV-Export, Offlinebetrieb mit Synchronisation und Konfliktbehandlung.
 - Offline-Neuanlage NICHT Teil von AP10; Bilder zweiphasig; AP9-Kontakte noch nicht verknüpft.
 - Verifiziert lokal: lint/tsc/build; AP10-Smoke 12/12; Backfill ok; Regression 11/13/14 grün.
 - Commit `feat: integrate master data into incident creation (AP10)`; AP8.1-Branding nicht im Commit.
+
+## Nachtrag AP11 (Operative Vorgangsliste)
+- Migration `0009`: View `incident_list_view` (`security_invoker`) für RLS-konforme, serverseitige
+  Suche/Filter/Sortierung/Pagination inkl. Aggregaten (Bilder/Kabelarten/Monteure) + `search_text` +
+  `created_date_local`. Reads `listIncidentsPaged`/`listIncidentsForExport`; Typen/Helfer in `incident-list.ts`.
+- `/vorgaenge` = zentrale operative Liste (staff-only), URL als Zustandsquelle; Desktop-Tabelle (Sticky) +
+  Mobile-Karten; Auswahl + vorbereitete (deaktivierte) Massenaktionen; CSV-Export der gefilterten Menge (Cap 5.000).
+- StatusBadge/PriorityBadge nutzen jetzt das AP8-Badge-Primitive (Tones). Dashboard bis AP15 unverändert.
+- Offene Hinweise abgeleitet (kein Aufgabenmodell); keine Offline-Liste; kein Audit durch die Liste.
+- Verifiziert lokal: lint/tsc/build; AP11-Smoke 8/8; Performance 600; Regression 11/13/14/15 grün.
+- Commit `feat: implement operational incident list (AP11)`; AP8.1-Branding nicht im Commit.

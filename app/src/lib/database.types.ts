@@ -271,6 +271,41 @@ export type MaterialStock = {
   quantity: number;
 };
 
+// AP11: Flache Sicht für die operative Vorgangsliste (View, security_invoker).
+export type IncidentListView = {
+  id: string;
+  incident_no: number;
+  status: IncidentStatus;
+  priority: IncidentPriority;
+  customer_id: string | null;
+  customer_name: string | null;
+  construction_stage_id: string | null;
+  stage_code: string | null;
+  stage_name: string | null;
+  vzg_line_id: string | null;
+  vzg_line_number: string | null;
+  vzg_line_ref: string | null;
+  on_call_number_id: string | null;
+  on_call_number: string | null;
+  on_call_label: string | null;
+  operating_point: string | null;
+  km_from: number | null;
+  km_to: number | null;
+  created_at: string;
+  created_by: string | null;
+  updated_at: string;
+  created_date_local: string;
+  image_count: number;
+  cable_arts: string[];
+  monteur_names: string[];
+  monteur_ids: string[];
+  no_monteur: boolean;
+  no_images: boolean;
+  no_cable: boolean;
+  historic_vzg: boolean;
+  search_text: string;
+};
+
 // =====================================================================
 // AP9: Stammdaten & Einstellungen
 // =====================================================================
@@ -428,6 +463,7 @@ export type Database = {
     };
     Views: {
       material_stock: { Row: MaterialStock; Relationships: [] };
+      incident_list_view: { Row: IncidentListView; Relationships: [] };
     };
     Functions: {
       create_incident_ap10: { Args: CreateIncidentAp10Args; Returns: string };

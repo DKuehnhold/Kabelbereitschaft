@@ -199,6 +199,28 @@ export const MONTEUR_STATUS: IncidentStatus[] = [
   "fehlalarm",
 ];
 
+// AP11: Status → AP8-Badge-Tone (info/success/warning/danger). Keine Farbklassen.
+export type BadgeTone = "info" | "success" | "warning" | "danger";
+export const STATUS_TONE: Record<IncidentStatus, BadgeTone> = {
+  neu: "info",
+  monteur_zugewiesen: "info",
+  einsatz_angenommen: "info",
+  anfahrt: "info",
+  vor_ort: "info",
+  zustandsaufnahme: "info",
+  in_bearbeitung: "warning",
+  warten_auf_material: "warning",
+  warten_auf_db: "warning",
+  uebergabe_erforderlich: "warning",
+  provisorisch_instandgesetzt: "warning",
+  technisch_abgeschlossen: "success",
+  dokumentation_vollstaendig: "success",
+  durch_disposition_geprueft: "success",
+  abgeschlossen: "success",
+  storniert: "danger",
+  fehlalarm: "danger",
+};
+
 export const STATUS_STYLES: Record<IncidentStatus, string> = {
   neu: "bg-blue-100 text-blue-800 border-blue-200",
   monteur_zugewiesen: "bg-indigo-100 text-indigo-800 border-indigo-200",

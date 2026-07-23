@@ -8,7 +8,19 @@ import {
   getActiveOnCallOptions,
   listCableTypes,
   getAppSettings,
+  listProfileOptions,
 } from "@/lib/masterdata";
+import {
+  INCIDENT_PAGE_SIZES,
+  INCIDENT_EXPORT_CAP,
+  type IncidentListFilters,
+  type IncidentListSort,
+  type IncidentListSortField,
+  type IncidentListQuery,
+  type IncidentListResult,
+  type IncidentListRow,
+  type IncidentListFilterOptions,
+} from "@/lib/incident-list";
 
 // Sichtmodelle (View-Types) – bewusst entkoppelt von den generischen
 // Supabase-Embed-Typen; Ergebnisse werden gecastet.
@@ -253,5 +265,116 @@ export async function getIncidentFormOptions(): Promise<IncidentFormOptions> {
     onCall,
     cableTypes: cableTypes.filter((t) => t.is_active).map((t) => ({ id: t.id, code: t.code, name: t.name })),
     defaults: { customer_id: settings.default_customer_id, on_call_number_id: settings.default_on_call_number_id },
+  };
+}
+
+// =====================================================================
+// AP11: Operative Vorgangsliste (serverseitig, RLS über View security_invoker).
+// Typen/Helfer in @/lib/incident-list; hier nur die DB-Reads.
+// =====================================================================
+const LIST_SELECT =
+  "id, incident_no, status, priority, customer_id, customer_name, construction_stage_id, stage_code, stage_name, " +
+  "vzg_line_id, vzg_line_number, vzg_line_ref, on_call_number_id, on_call_number, on_call_label, operating_point, " +
+  "km_from, km_to, created_at, created_by, updated_at, image_count, cable_arts, monteur_names, monteur_ids, " +
+  "no_monteur, no_images, no_cable, historic_vzg";
+
+const SORT_COLUMN: Record<IncidentListSortField, string> = {
+  incident_no: "incident_no",
+  priority: "priority",
+  status: "status",
+  customer: "customer_name",
+  construction_stage: "stage_name",
+  created_at: "created_at",
+  updated_at: "updated_at",
+};
+
+function escapeLike(term: string): string {
+  return term.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
+}
+
+function sortOrders(sort: IncidentListSort): [string, boolean][] {
+  return [
+    ...sort.map((s) => [SORT_COLUMN[s.field], s.dir === "asc"] as [string, boolean]),
+    // Stabile Standard-/Tiebreaker-Sortierung
+    ["updated_at", false],
+    ["incident_no", false],
+  ];
+}
+
+async function fetchList(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  filters: IncidentListFilters,
+  sort: IncidentListSort,
+  from: number,
+  to: number,
+) {
+  const f = filters;
+  let q = supabase.from("incident_list_view").select(LIST_SELECT, { count: "exact" });
+  if (f.status) q = q.eq("status", f.status);
+  else if (f.activity === "active") q = q.not("status", "in", "(abgeschlossen,storniert)");
+  else if (f.activity === "closed") q = q.eq("status", "abgeschlossen");
+  if (f.priority) q = q.eq("priority", f.priority);
+  if (f.customer_id) q = q.eq("customer_id", f.customer_id);
+  if (f.stage_id) q = q.eq("construction_stage_id", f.stage_id);
+  if (f.vzg_line_id) q = q.eq("vzg_line_id", f.vzg_line_id);
+  if (f.on_call_number_id) q = q.eq("on_call_number_id", f.on_call_number_id);
+  if (f.created_by) q = q.eq("created_by", f.created_by);
+  if (f.monteur_id) q = q.contains("monteur_ids", [f.monteur_id]);
+  if (f.images === "with") q = q.gt("image_count", 0);
+  else if (f.images === "without") q = q.eq("image_count", 0);
+  if (f.date_from) q = q.gte("created_date_local", f.date_from);
+  if (f.date_to) q = q.lte("created_date_local", f.date_to);
+  const term = (f.q ?? "").trim();
+  if (term) q = q.ilike("search_text", `%${escapeLike(term.toLowerCase())}%`);
+
+  const orders = sortOrders(sort);
+  let t = q.order(orders[0][0], { ascending: orders[0][1] });
+  for (let k = 1; k < orders.length; k++) t = t.order(orders[k][0], { ascending: orders[k][1] });
+  return t.range(from, to);
+}
+
+export async function listIncidentsPaged(query: IncidentListQuery): Promise<IncidentListResult> {
+  const supabase = await createClient();
+  const pageSize = (INCIDENT_PAGE_SIZES as readonly number[]).includes(query.pageSize) ? query.pageSize : 50;
+  let page = Math.max(1, Math.trunc(query.page) || 1);
+
+  let from = (page - 1) * pageSize;
+  let res = await fetchList(supabase, query.filters, query.sort, from, from + pageSize - 1);
+  let total = res.count ?? 0;
+
+  // Ungültige Seite auf gültigen Bereich normalisieren.
+  const lastPage = Math.max(1, Math.ceil(total / pageSize));
+  if (total > 0 && page > lastPage) {
+    page = lastPage;
+    from = (page - 1) * pageSize;
+    res = await fetchList(supabase, query.filters, query.sort, from, from + pageSize - 1);
+    total = res.count ?? total;
+  }
+
+  return { rows: (res.data ?? []) as unknown as IncidentListRow[], total, page, pageSize };
+}
+
+export async function listIncidentsForExport(
+  query: IncidentListQuery,
+): Promise<{ rows: IncidentListRow[]; total: number; capped: boolean }> {
+  const supabase = await createClient();
+  const res = await fetchList(supabase, query.filters, query.sort, 0, INCIDENT_EXPORT_CAP - 1);
+  const total = res.count ?? 0;
+  return { rows: (res.data ?? []) as unknown as IncidentListRow[], total, capped: total > INCIDENT_EXPORT_CAP };
+}
+
+export async function getIncidentListFilterOptions(): Promise<IncidentListFilterOptions> {
+  const [opts, monteure, creators] = await Promise.all([
+    getIncidentFormOptions(),
+    getMonteure(),
+    listProfileOptions(),
+  ]);
+  return {
+    customers: opts.customers.map((c) => ({ id: c.id, label: c.name })),
+    stages: opts.stages.map((s) => ({ id: s.id, label: s.label })),
+    vzgLines: opts.vzgLines.map((v) => ({ id: v.id, label: v.line_number, construction_stage_id: v.construction_stage_id })),
+    onCall: opts.onCall,
+    monteure: monteure.map((m) => ({ id: m.id, label: m.full_name ?? "—" })),
+    creators,
   };
 }

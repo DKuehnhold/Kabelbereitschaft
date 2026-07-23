@@ -123,3 +123,12 @@ Offen / als Nächstes:
 - Bestandsvorgänge ohne eindeutigen VzG-Treffer bleiben ohne `vzg_line_id` (Snapshot weiterhin lesbar).
 - Mehrere Kabelpositionen sowie Menge/Zustand je Position → spätere Arbeitspakete.
 - Push AP4–AP10 durch den Nutzer (in der Sandbox nicht verifizierbar).
+
+## Nachtrag AP11
+- `/vorgaenge` ist die zentrale operative Liste; Pagination/Filter/Suche/Sortierung serverseitig.
+- Dashboard bleibt bis AP15 unverändert (nutzt weiterhin die bestehende Tabelle; Badges technisch mit umgestellt).
+- „Offene Hinweise" sind abgeleitet (kein Aufgabenmodell, keine Mutation/Audit).
+- Massenaktionen (Status ändern / Monteur zuweisen) sind nur vorbereitet/deaktiviert (spätere APs).
+- Offline-Liste ist nicht Bestandteil von AP11 (bestehende Offline-Funktionen unverändert).
+- CSV exportiert die vollständige gefilterte Treffermenge (Obergrenze 5.000, mit Hinweis).
+- Push AP4–AP11 durch den Nutzer.

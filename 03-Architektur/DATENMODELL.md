@@ -109,3 +109,12 @@ Indizes auf beide FKs. Transaktionale RPCs `create_incident_ap10`/`update_incide
 und setzen den VzG-Snapshot aus der DB. RLS `incident_cable_positions`: Zugriff folgt dem Vorgang
 (`is_staff()` oder `is_assigned_to_incident`). Audit über bestehendes `tg_audit`. Backfill: `vzg_line_id`
 bei eindeutigem Treffer, `customer_id`=Standardkunde (falls gesetzt); Bestand ohne Treffer bleibt NULL.
+
+## Nachtrag AP11 – Operative Vorgangsliste (Migration 0009, read-only)
+View `incident_list_view` mit `security_invoker = true` (RLS der Basistabellen greift für den
+aufrufenden Benutzer, keine Service-Role). Flache Vorgangsfelder + Aggregate: `image_count`
+(nur nicht gelöschte Bilder), `cable_arts`/`monteur_names`/`monteur_ids` (aggregiert), abgeleitete
+Booleans `no_monteur/no_images/no_cable/historic_vzg`, `created_date_local` (Europe/Berlin, tz-korrekte
+Datumsfilter) und `search_text` (kombinierte Suche). Reads: `listIncidentsPaged` (Filter/Sort/
+Pagination + exakter Count) und `listIncidentsForExport` (Cap 5.000) in `incidents.ts`; reine
+Typen/Helfer in `incident-list.ts`, URL-Abbildung in `incident-list-url.ts`. Keine Mutation, kein Audit.

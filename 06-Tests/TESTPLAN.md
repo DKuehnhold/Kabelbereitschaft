@@ -134,3 +134,10 @@ a11y-Browserlauf, PWA-Installation/SW-Update-Runtime, Performance-Messung, Deplo
 - Backfill: eindeutiger VzG-Treffer gesetzt, Nicht-Treffer NULL, Standardkunde gesetzt, 0 Positionen.
 - Regression: Smokes 11/13/14 grün (tg_audit/Incident-Writes unverändert lauffähig).
 - lint/tsc/build fehlerfrei. Nicht ausführbar in der Sandbox: Browser-E2E, Push.
+
+## Nachtrag AP11 – Operative Vorgangsliste
+- `supabase/test/16_ap11_list.sql`: RLS (staff/monteur) über `incident_list_view`, Aggregate,
+  abgeleitete Hinweise, Suchtext, Aktivitätsfilter, lokales Erstelldatum. Ergebnis lokal: 8/8 OK.
+- Performance: 600 Vorgänge – Seitenabfrage (50) ~97 ms, Count ~15 ms, Suche funktionsfähig.
+- Regression: Smokes 11/13/14/15 grün.
+- lint/tsc/build fehlerfrei. Nicht ausführbar in der Sandbox: Browser-E2E, Push.
