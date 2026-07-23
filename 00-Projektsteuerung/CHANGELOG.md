@@ -33,3 +33,10 @@ feat: implement master data management (AP9)
 - Migration 0007 (additiv): 10 neue Tabellen + construction_stages erweitert + Enum phone_type.
 - RLS (is_staff), feldgenaues Audit (tg_audit erweitert), 8 Stammdaten-Seiten, Monteur-CSV-Import.
 - Verifikation: lint/tsc/build ok; AP9-Smoke 26/26; Bestandssmokes grün; CSV-Unittest 14/14.
+
+## AP10 – Vorgangserfassung
+feat: integrate master data into incident creation (AP10)
+- Migration 0008 (additiv): incidents.customer_id/vzg_line_id, NOT-NULL-Lockerung km_from/vzg_line_number,
+  incident_cable_positions (positionsbezogene Kabelart), transaktionale RPCs, Backfill.
+- Erfassungs-/Bearbeitungsmaske token-basiert mit abhängigen Dropdowns; Detail/Listen ergänzt.
+- Verifikation: lint/tsc/build ok; AP10-Smoke 12/12; Backfill ok; Regression 11/13/14 grün.

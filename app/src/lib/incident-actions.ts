@@ -36,79 +36,139 @@ function revalidateAll(id?: string) {
   if (id) revalidatePath(`/vorgaenge/${id}`);
 }
 
-// ---------- Vorgang anlegen (Disposition/Admin) ----------
-export async function createIncident(
-  _prev: FormState,
-  fd: FormData,
-): Promise<FormState> {
+// ---------- AP10-Helfer: serverseitige Referenzprüfung + Fehlerabbildung ----------
+type RefInput = {
+  customer_id: string;
+  construction_stage_id: string;
+  vzg_line_id: string;
+  cable_type_id: string;
+  on_call_number_id: string | null;
+};
+
+async function validateRefs(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  r: RefInput,
+  requireActive: boolean,
+): Promise<string | null> {
+  const [cust, stage, vzg, cable, oncall] = await Promise.all([
+    supabase.from("customers").select("id, is_active").eq("id", r.customer_id).maybeSingle(),
+    supabase.from("construction_stages").select("id, is_active").eq("id", r.construction_stage_id).maybeSingle(),
+    supabase.from("vzg_lines").select("id, is_active, construction_stage_id").eq("id", r.vzg_line_id).maybeSingle(),
+    supabase.from("cable_types").select("id, is_active").eq("id", r.cable_type_id).maybeSingle(),
+    r.on_call_number_id
+      ? supabase.from("on_call_numbers").select("id, is_active").eq("id", r.on_call_number_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+  const c = cust.data as { is_active: boolean } | null;
+  const s = stage.data as { is_active: boolean } | null;
+  const v = vzg.data as { is_active: boolean; construction_stage_id: string } | null;
+  const k = cable.data as { is_active: boolean } | null;
+  const o = (oncall as { data: { is_active: boolean } | null }).data;
+
+  if (!c) return "Kunde nicht gefunden.";
+  if (requireActive && !c.is_active) return "Der gewählte Kunde ist inaktiv.";
+  if (!s) return "Bauabschnitt nicht gefunden.";
+  if (requireActive && !s.is_active) return "Der gewählte Bauabschnitt ist inaktiv.";
+  if (!v) return "VzG-Strecke nicht gefunden.";
+  if (requireActive && !v.is_active) return "Die gewählte VzG-Strecke ist inaktiv.";
+  if (v.construction_stage_id !== r.construction_stage_id)
+    return "Die VzG-Strecke gehört nicht zum gewählten Bauabschnitt.";
+  if (!k) return "Kabelart nicht gefunden.";
+  if (requireActive && !k.is_active) return "Die gewählte Kabelart ist inaktiv.";
+  if (r.on_call_number_id) {
+    if (!o) return "Bereitschaftsnummer nicht gefunden.";
+    if (requireActive && !o.is_active) return "Die gewählte Bereitschaftsnummer ist inaktiv.";
+  }
+  return null;
+}
+
+function mapDbError(msg?: string): string {
+  if (!msg) return "Speichern fehlgeschlagen.";
+  if (/Pflichtfelder fehlen/i.test(msg)) return "Pflichtfelder fehlen.";
+  if (/gehört nicht|construction_stage/i.test(msg)) return "Die VzG-Strecke passt nicht zum Bauabschnitt.";
+  if (/row-level security|permission denied|42501/i.test(msg)) return "Keine Berechtigung für diese Aktion.";
+  if (/nicht gefunden|23503|foreign key/i.test(msg)) return "Referenzierte Stammdaten wurden nicht gefunden.";
+  return "Speichern fehlgeschlagen. Bitte Eingaben prüfen.";
+}
+
+function readIncidentFields(fd: FormData) {
+  return {
+    customer_id: strOrNull(fd, "customer_id"),
+    construction_stage_id: strOrNull(fd, "construction_stage_id"),
+    vzg_line_id: strOrNull(fd, "vzg_line_id"),
+    on_call_number_id: strOrNull(fd, "on_call_number_id"),
+    priority: str(fd, "priority") as Priority,
+    description: strOrNull(fd, "description"),
+    cable_type_id: strOrNull(fd, "cable_type_id"),
+  };
+}
+
+function missingRequired(f: ReturnType<typeof readIncidentFields>): string[] {
+  return ([
+    ["Kunde", f.customer_id],
+    ["Bauabschnitt", f.construction_stage_id],
+    ["VzG-Strecke", f.vzg_line_id],
+    ["Beschreibung", f.description],
+    ["Kabelart", f.cable_type_id],
+  ] as [string, unknown][])
+    .filter(([, v]) => v === null || v === "")
+    .map(([l]) => l);
+}
+
+// ---------- Vorgang anlegen (Disposition/Admin) – Stammdatenbasiert ----------
+export async function createIncident(_prev: FormState, fd: FormData): Promise<FormState> {
   const session = await getSessionProfile();
   if (!session) return { ok: false, error: "Nicht angemeldet." };
   if (session.role === "monteur")
     return { ok: false, error: "Nur Disposition/Administration darf Vorgänge anlegen." };
 
-  const construction_stage_id = strOrNull(fd, "construction_stage_id");
-  const on_call_number_id = strOrNull(fd, "on_call_number_id");
-  const vzg_line_number = str(fd, "vzg_line_number");
-  const km_from = num(fd, "km_from");
-  const priority = str(fd, "priority") as Priority;
-
-  // AP2-Pflichtfelder (km_to bleibt optional)
-  const required: [string, unknown][] = [
-    ["Baustufe", construction_stage_id],
-    ["Bereitschaftsnummer", on_call_number_id],
-    ["VzG-Streckennummer", vzg_line_number],
-    ["Kilometer von", km_from],
-    ["Betriebsstelle", strOrNull(fd, "operating_point")],
-    ["Gleis", strOrNull(fd, "track")],
-    ["Richtung", strOrNull(fd, "direction")],
-    ["Objektart", strOrNull(fd, "object_type")],
-    ["Objektbezeichnung", strOrNull(fd, "object_designation")],
-    ["Ortsbeschreibung", strOrNull(fd, "location_description")],
-    ["Beschreibung", strOrNull(fd, "description")],
-    ["DB-Ansprechpartner", strOrNull(fd, "caller_name")],
-    ["Telefon", strOrNull(fd, "caller_contact")],
-    ["Bemerkung", strOrNull(fd, "internal_note")],
-  ];
-  const missing = required.filter(([, v]) => v === null || v === "").map(([l]) => l);
+  const f = readIncidentFields(fd);
+  const missing = missingRequired(f);
   if (missing.length) return { ok: false, error: `Pflichtfelder fehlen: ${missing.join(", ")}.` };
-  if (!PRIORITIES.includes(priority)) return { ok: false, error: "Ungültige Priorität." };
+  if (!PRIORITIES.includes(f.priority)) return { ok: false, error: "Ungültige Priorität." };
 
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("incidents")
-    .insert({
-      construction_stage_id: construction_stage_id!,
-      on_call_number_id,
-      vzg_line_number,
-      km_from: km_from!,
-      km_to: num(fd, "km_to"),
-      operating_point: strOrNull(fd, "operating_point"),
-      track: strOrNull(fd, "track"),
-      direction: strOrNull(fd, "direction"),
-      object_type: strOrNull(fd, "object_type"),
-      object_designation: strOrNull(fd, "object_designation"),
-      location_description: strOrNull(fd, "location_description"),
-      priority,
-      description: strOrNull(fd, "description"),
-      caller_name: strOrNull(fd, "caller_name"),
-      caller_contact: strOrNull(fd, "caller_contact"),
-      internal_note: strOrNull(fd, "internal_note"),
-      call_received_at: new Date().toISOString(),
-      status: "neu",
-    })
-    .select("id")
-    .single();
+  const refErr = await validateRefs(
+    supabase,
+    {
+      customer_id: f.customer_id!,
+      construction_stage_id: f.construction_stage_id!,
+      vzg_line_id: f.vzg_line_id!,
+      cable_type_id: f.cable_type_id!,
+      on_call_number_id: f.on_call_number_id,
+    },
+    true, // Neuanlage: nur aktive Stammdaten
+  );
+  if (refErr) return { ok: false, error: refErr };
 
-  if (error || !data) return { ok: false, error: `Speichern fehlgeschlagen: ${error?.message ?? "unbekannt"}` };
+  const { data, error } = await supabase.rpc("create_incident_ap10", {
+    p_customer_id: f.customer_id!,
+    p_construction_stage_id: f.construction_stage_id!,
+    p_vzg_line_id: f.vzg_line_id!,
+    p_on_call_number_id: f.on_call_number_id,
+    p_priority: f.priority,
+    p_description: f.description!,
+    p_operating_point: strOrNull(fd, "operating_point"),
+    p_track: strOrNull(fd, "track"),
+    p_direction: strOrNull(fd, "direction"),
+    p_object_type: strOrNull(fd, "object_type"),
+    p_object_designation: strOrNull(fd, "object_designation"),
+    p_location_description: strOrNull(fd, "location_description"),
+    p_external_reference: strOrNull(fd, "external_reference"),
+    p_km_from: num(fd, "km_from"),
+    p_km_to: num(fd, "km_to"),
+    p_caller_name: strOrNull(fd, "caller_name"),
+    p_caller_contact: strOrNull(fd, "caller_contact"),
+    p_internal_note: strOrNull(fd, "internal_note"),
+    p_cable_type_id: f.cable_type_id!,
+  });
+  if (error || !data) return { ok: false, error: mapDbError(error?.message) };
   revalidateAll();
-  redirect(`/vorgaenge/${data.id}`);
+  redirect(`/vorgaenge/${data}`);
 }
 
-// ---------- Vorgang bearbeiten (Disposition/Admin) ----------
-export async function updateIncident(
-  _prev: FormState,
-  fd: FormData,
-): Promise<FormState> {
+// ---------- Vorgang bearbeiten (Disposition/Admin) – Stammdatenbasiert ----------
+export async function updateIncident(_prev: FormState, fd: FormData): Promise<FormState> {
   const session = await getSessionProfile();
   if (!session) return { ok: false, error: "Nicht angemeldet." };
   if (session.role === "monteur")
@@ -116,36 +176,51 @@ export async function updateIncident(
 
   const id = str(fd, "id");
   if (!id) return { ok: false, error: "Kein Vorgang angegeben." };
-  const priority = str(fd, "priority") as Priority;
-  if (!PRIORITIES.includes(priority)) return { ok: false, error: "Ungültige Priorität." };
-  const km_from = num(fd, "km_from");
-  if (km_from === null) return { ok: false, error: "Kilometer von ist erforderlich." };
+
+  const f = readIncidentFields(fd);
+  const missing = missingRequired(f);
+  if (missing.length) return { ok: false, error: `Pflichtfelder fehlen: ${missing.join(", ")}.` };
+  if (!PRIORITIES.includes(f.priority)) return { ok: false, error: "Ungültige Priorität." };
 
   const supabase = await createClient();
-  const { error } = await supabase
-    .from("incidents")
-    .update({
-      construction_stage_id: strOrNull(fd, "construction_stage_id") ?? undefined,
-      on_call_number_id: strOrNull(fd, "on_call_number_id"),
-      vzg_line_number: str(fd, "vzg_line_number"),
-      km_from,
-      km_to: num(fd, "km_to"),
-      operating_point: strOrNull(fd, "operating_point"),
-      track: strOrNull(fd, "track"),
-      direction: strOrNull(fd, "direction"),
-      object_type: strOrNull(fd, "object_type"),
-      object_designation: strOrNull(fd, "object_designation"),
-      location_description: strOrNull(fd, "location_description"),
-      external_reference: strOrNull(fd, "external_reference"),
-      priority,
-      description: strOrNull(fd, "description"),
-      internal_note: strOrNull(fd, "internal_note"),
-      caller_name: strOrNull(fd, "caller_name"),
-      caller_contact: strOrNull(fd, "caller_contact"),
-    })
-    .eq("id", id);
+  // Bearbeitung: bereits gespeicherte, ggf. inaktive Referenzen zulassen (Bestand),
+  // aber Existenz und VzG-Zugehörigkeit zum Bauabschnitt weiterhin prüfen.
+  const refErr = await validateRefs(
+    supabase,
+    {
+      customer_id: f.customer_id!,
+      construction_stage_id: f.construction_stage_id!,
+      vzg_line_id: f.vzg_line_id!,
+      cable_type_id: f.cable_type_id!,
+      on_call_number_id: f.on_call_number_id,
+    },
+    false,
+  );
+  if (refErr) return { ok: false, error: refErr };
 
-  if (error) return { ok: false, error: `Speichern fehlgeschlagen: ${error.message}` };
+  const { error } = await supabase.rpc("update_incident_ap10", {
+    p_id: id,
+    p_customer_id: f.customer_id!,
+    p_construction_stage_id: f.construction_stage_id!,
+    p_vzg_line_id: f.vzg_line_id!,
+    p_on_call_number_id: f.on_call_number_id,
+    p_priority: f.priority,
+    p_description: f.description!,
+    p_operating_point: strOrNull(fd, "operating_point"),
+    p_track: strOrNull(fd, "track"),
+    p_direction: strOrNull(fd, "direction"),
+    p_object_type: strOrNull(fd, "object_type"),
+    p_object_designation: strOrNull(fd, "object_designation"),
+    p_location_description: strOrNull(fd, "location_description"),
+    p_external_reference: strOrNull(fd, "external_reference"),
+    p_km_from: num(fd, "km_from"),
+    p_km_to: num(fd, "km_to"),
+    p_caller_name: strOrNull(fd, "caller_name"),
+    p_caller_contact: strOrNull(fd, "caller_contact"),
+    p_internal_note: strOrNull(fd, "internal_note"),
+    p_cable_type_id: f.cable_type_id!,
+  });
+  if (error) return { ok: false, error: mapDbError(error.message) };
   revalidateAll(id);
   redirect(`/vorgaenge/${id}`);
 }

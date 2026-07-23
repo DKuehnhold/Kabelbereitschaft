@@ -51,3 +51,13 @@ Die Zuordnung Monteur ↔ Vorgang erfolgt über `incident_assignments`. Der Lese
 | Allgemeine Audit-Ereignisse | `audit_events` |
 
 Alle Chronikeinträge sind unveränderbar (nur Anfügen).
+
+## Nachtrag AP10 – Vorgangserfassung auf Stammdatenbasis
+Neue Vorgänge nutzen Stammdaten (AP9): Kunde, Bauabschnitt, VzG-Strecke (4-stellig, je Bauabschnitt),
+Bereitschaftsnummer, Kabelart (positionsbezogen). Pflicht: Kunde, Bauabschnitt, VzG, Priorität,
+Beschreibung, mindestens eine Kabelposition. Optional: Bereitschaftsnummer, Betriebsstelle, Gleis,
+Kilometer von/bis, Richtung, Objektart/-bezeichnung, Ortsbeschreibung, externe Referenz, Anrufer/
+Kontakt (Freitext-Snapshot), interne Bemerkung. Abhängige Auswahl (Bauabschnitt→VzG), Vorbelegung von
+Standardkunde/Bereitschaftsnummer. Bilder werden zweiphasig nach dem Speichern auf der Vorgangsseite
+ergänzt (bestehende Uploadlogik). AP9-Ansprechpartner sind in AP10 noch nicht verknüpft. Kein
+Offline-Neuanlegen von Vorgängen in AP10.

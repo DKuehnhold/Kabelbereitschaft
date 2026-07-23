@@ -113,3 +113,13 @@ Offen / als Nächstes:
 - `technicians` vs. `profiles`/`incident_assignments`: Verknüpfung Monteur↔Benutzerkonto
   (`profile_id`) vorbereitet; SSO/Login-Kopplung erst in einem späteren AP.
 - Push AP9 (und AP4–AP8) nach GitHub durch den Nutzer (in der Sandbox nicht verifizierbar).
+
+## Nachtrag AP10
+- Kabelart wird positionsbezogen (`incident_cable_positions`) gespeichert; **kein** `incidents.cable_type_id`.
+- Offline-Neuanlage vollständiger Vorgänge ist NICHT Bestandteil von AP10 (nur Regressionssicherheit
+  bestehender Offline-Funktionen).
+- Bilder werden zweiphasig nach der Vorgangsanlage ergänzt (bestehende Uploadlogik, `/api/images/upload`).
+- AP9-Ansprechpartner (`contacts`) sind in AP10 noch nicht mit Vorgängen verknüpft (Freitext-Snapshot bleibt).
+- Bestandsvorgänge ohne eindeutigen VzG-Treffer bleiben ohne `vzg_line_id` (Snapshot weiterhin lesbar).
+- Mehrere Kabelpositionen sowie Menge/Zustand je Position → spätere Arbeitspakete.
+- Push AP4–AP10 durch den Nutzer (in der Sandbox nicht verifizierbar).

@@ -125,3 +125,12 @@ a11y-Browserlauf, PWA-Installation/SW-Update-Runtime, Performance-Messung, Deplo
   Datei-/DB-/Profil-Dublette) – 14/14 OK.
 - `npm run lint`, `tsc --noEmit`, `npm run build`: fehlerfrei.
 - Nicht ausführbar in der Sandbox: Browser-E2E, Push (privates Repo).
+
+## Nachtrag AP10 – Vorgangserfassung
+- `supabase/test/15_ap10_smoke.sql`: transaktionale Anlage (Incident + Pflicht-Kabelposition),
+  VzG-Snapshot, RLS (admin/disponent/monteur), VzG↔Bauabschnitt, km optional, Update-Snapshot/Kabelart,
+  sort_order-Unique, Kabelpositions-RLS, feldgenaues Audit. Ergebnis lokal: 12/12 OK.
+- Migration 0008 auf leerer DB (nach 0001–0007), auf Bestand und Zweitanwendung (idempotent).
+- Backfill: eindeutiger VzG-Treffer gesetzt, Nicht-Treffer NULL, Standardkunde gesetzt, 0 Positionen.
+- Regression: Smokes 11/13/14 grün (tg_audit/Incident-Writes unverändert lauffähig).
+- lint/tsc/build fehlerfrei. Nicht ausführbar in der Sandbox: Browser-E2E, Push.

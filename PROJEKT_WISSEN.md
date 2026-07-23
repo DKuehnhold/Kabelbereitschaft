@@ -64,3 +64,12 @@ CSV-Export, Offlinebetrieb mit Synchronisation und Konfliktbehandlung.
   (Vorschau/Validierung/Dublettenerkennung, keine stille Überschreibung).
 - Verifiziert lokal: lint/tsc/build grün; AP9-Smoke 26/26; Bestandssmokes 10/11/12/13 grün; CSV-Test 14/14.
 - Commit `feat: implement master data management (AP9)`. AP8.1-Branding nicht Teil des Commits.
+
+## Nachtrag AP10 (Vorgangserfassung auf Stammdatenbasis)
+- Migration `0008`: incidents.customer_id/vzg_line_id (FK, nullable), NOT-NULL auf km_from/vzg_line_number
+  gelöst; `incident_cable_positions` (Kabelart positionsbezogen, kein incidents.cable_type_id);
+  transaktionale RPCs `create_incident_ap10`/`update_incident_ap10` (SECURITY INVOKER); Backfill vzg/customer.
+- Erfassungs-/Bearbeitungsmaske neu (AP8-Tokens, abhängige Dropdowns, Pflicht ≥1 Kabelposition).
+- Offline-Neuanlage NICHT Teil von AP10; Bilder zweiphasig; AP9-Kontakte noch nicht verknüpft.
+- Verifiziert lokal: lint/tsc/build; AP10-Smoke 12/12; Backfill ok; Regression 11/13/14 grün.
+- Commit `feat: integrate master data into incident creation (AP10)`; AP8.1-Branding nicht im Commit.

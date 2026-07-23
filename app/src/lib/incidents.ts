@@ -1,6 +1,14 @@
 import { createClient } from "@/lib/supabase/server";
 import type { IncidentStatus, ConditionRating } from "@/lib/status";
 import type { Priority } from "@/lib/priority";
+import {
+  getActiveCustomers,
+  listStages,
+  listVzgLines,
+  getActiveOnCallOptions,
+  listCableTypes,
+  getAppSettings,
+} from "@/lib/masterdata";
 
 // Sichtmodelle (View-Types) – bewusst entkoppelt von den generischen
 // Supabase-Embed-Typen; Ergebnisse werden gecastet.
@@ -16,14 +24,27 @@ export type AssignmentRef = {
   monteur: MonteurRef;
 };
 
+// AP10-Referenzen
+export type CustomerRef = { id: string; name: string } | null;
+export type VzgRef = { id: string; line_number: string } | null;
+export type CableTypeRefMini = { id: string; code: string; name: string } | null;
+export type CablePositionRef = {
+  id: string;
+  cable_type_id: string;
+  sort_order: number;
+  cable_type: CableTypeRefMini;
+};
+
 export type IncidentRow = {
   id: string;
   incident_no: number;
   status: IncidentStatus;
   priority: Priority;
   condition_rating: ConditionRating | null;
-  vzg_line_number: string;
-  km_from: number;
+  customer_id: string | null;
+  vzg_line_id: string | null;
+  vzg_line_number: string | null;
+  km_from: number | null;
   km_to: number | null;
   operating_point: string | null;
   track: string | null;
@@ -49,6 +70,9 @@ export type IncidentRow = {
   technisch_abgeschlossen_at: string | null;
   stage: StageRef;
   oncall: OnCallRef;
+  customer: CustomerRef;
+  vzgline: VzgRef;
+  cable_positions: CablePositionRef[];
   assignments: AssignmentRef[];
 };
 
@@ -77,13 +101,16 @@ export type IncidentDetail = {
 
 const INCIDENT_SELECT = `
   id, incident_no, status, priority, condition_rating,
-  vzg_line_number, km_from, km_to, operating_point, track, direction,
+  customer_id, vzg_line_id, vzg_line_number, km_from, km_to, operating_point, track, direction,
   object_type, object_designation, location_description, external_reference,
   caller_name, caller_contact, title, description, internal_note, closing_note,
   on_call_number_id, call_received_at, construction_stage_id,
   closed_at, closed_by, created_at, updated_at,
   stage:construction_stages(id, name, code),
   oncall:on_call_numbers(id, number, label),
+  customer:customers(id, name),
+  vzgline:vzg_lines(id, line_number),
+  cable_positions:incident_cable_positions(id, cable_type_id, sort_order, cable_type:cable_types(id, code, name)),
   assignments:incident_assignments(id, monteur_id, is_active, assigned_at, monteur:profiles(id, full_name))
 `;
 
@@ -185,3 +212,46 @@ export function activeMonteurNames(row: IncidentRow): string[] {
 }
 
 export type FormState = { ok: boolean; error: string | null };
+
+// ---------------------------------------------------------------------
+// AP10: Optionen für Erfassungs-/Bearbeitungsmaske (nur aktive Stammdaten).
+// Nutzt die AP9-Reads – keine parallele Incident-Datenzugriffsschicht.
+// ---------------------------------------------------------------------
+export type IncidentFormStage = { id: string; label: string; default_on_call_number_id: string | null };
+export type IncidentFormVzg = { id: string; line_number: string; construction_stage_id: string };
+export type IncidentFormOption = { id: string; label: string };
+export type IncidentFormOptions = {
+  customers: { id: string; name: string }[];
+  stages: IncidentFormStage[];
+  vzgLines: IncidentFormVzg[];
+  onCall: IncidentFormOption[];
+  cableTypes: { id: string; code: string; name: string }[];
+  defaults: { customer_id: string | null; on_call_number_id: string | null };
+};
+
+export async function getIncidentFormOptions(): Promise<IncidentFormOptions> {
+  const [customers, stages, vzg, onCall, cableTypes, settings] = await Promise.all([
+    getActiveCustomers(),
+    listStages(),
+    listVzgLines(),
+    getActiveOnCallOptions(),
+    listCableTypes(),
+    getAppSettings(),
+  ]);
+  return {
+    customers: customers.map((c) => ({ id: c.id, name: c.name })),
+    stages: stages
+      .filter((s) => s.is_active)
+      .map((s) => ({
+        id: s.id,
+        label: s.code ? `${s.code} – ${s.name}` : s.name,
+        default_on_call_number_id: s.default_on_call_number_id,
+      })),
+    vzgLines: vzg
+      .filter((v) => v.is_active)
+      .map((v) => ({ id: v.id, line_number: v.line_number, construction_stage_id: v.construction_stage_id })),
+    onCall,
+    cableTypes: cableTypes.filter((t) => t.is_active).map((t) => ({ id: t.id, code: t.code, name: t.name })),
+    defaults: { customer_id: settings.default_customer_id, on_call_number_id: settings.default_on_call_number_id },
+  };
+}

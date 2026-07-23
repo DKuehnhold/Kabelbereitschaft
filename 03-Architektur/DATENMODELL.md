@@ -98,3 +98,14 @@ RLS: lesen alle Angemeldeten, schreiben `is_staff()` (admin+disponent); `constru
 von `is_admin()` auf `is_staff()` erweitert. Löschen fachlich nur über `is_active`.
 Audit: `tg_audit` feldgenau erweitert (`detail.op` bleibt; UPDATE→`changes{feld:{old,new}}`,
 INSERT→`new`, DELETE→`old`); Trigger an allen neuen Tabellen + `construction_stages`.
+
+## Nachtrag AP10 – Stammdaten in Vorgängen (Migration 0008, additiv)
+`incidents` erhält `customer_id` (FK `customers`) und `vzg_line_id` (FK `vzg_lines`), beide nullable;
+NOT-NULL auf `km_from`/`vzg_line_number` gelöst (Legacy erhalten; `vzg_line_number` = serverseitiger
+VzG-Snapshot). Neue Tabelle `incident_cable_positions(id, incident_id, cable_type_id, sort_order, audit)`
+für die **positionsbezogene** Kabelart (kein `incidents.cable_type_id`), `UNIQUE(incident_id, sort_order)`,
+Indizes auf beide FKs. Transaktionale RPCs `create_incident_ap10`/`update_incident_ap10`
+(SECURITY INVOKER: RLS/Trigger bleiben maßgeblich) legen Incident + Pflicht-Kabelposition atomar an/um
+und setzen den VzG-Snapshot aus der DB. RLS `incident_cable_positions`: Zugriff folgt dem Vorgang
+(`is_staff()` oder `is_assigned_to_incident`). Audit über bestehendes `tg_audit`. Backfill: `vzg_line_id`
+bei eindeutigem Treffer, `customer_id`=Standardkunde (falls gesetzt); Bestand ohne Treffer bleibt NULL.

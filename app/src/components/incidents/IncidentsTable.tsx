@@ -238,7 +238,9 @@ export function IncidentsTable({
             </div>
             <div className="mt-1"><StatusBadge status={r.status as IncidentStatus} /></div>
             <div className="mt-2 text-sm text-slate-600">
-              {r.stage?.name ?? "—"} · VzG {r.vzg_line_number} · km {r.km_from}
+              {r.customer?.name ? `${r.customer.name} · ` : ""}
+              {r.stage?.name ?? "—"} · VzG {r.vzgline?.line_number ?? r.vzg_line_number ?? "—"}
+              {r.km_from != null ? ` · km ${r.km_from}` : ""}
             </div>
             <div className="text-xs text-slate-500">Monteur: {monteure(r)} · {fmt(r.updated_at)}</div>
           </Link>

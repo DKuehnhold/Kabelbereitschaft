@@ -34,8 +34,9 @@ export function EinsatzListe({ rows }: { rows: IncidentRow[] }) {
             </div>
           </div>
           <div className="mt-2 text-sm text-slate-700">
-            {r.stage?.name ?? "—"} · VzG {r.vzg_line_number} · km {r.km_from}
-            {r.km_to != null ? `–${r.km_to}` : ""}
+            {r.customer?.name ? `${r.customer.name} · ` : ""}
+            {r.stage?.name ?? "—"} · VzG {r.vzgline?.line_number ?? r.vzg_line_number ?? "—"}
+            {r.km_from != null ? ` · km ${r.km_from}${r.km_to != null ? `–${r.km_to}` : ""}` : ""}
           </div>
           {r.operating_point || r.object_designation ? (
             <div className="text-sm text-slate-500">

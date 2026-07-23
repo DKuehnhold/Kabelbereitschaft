@@ -128,8 +128,11 @@ export type Incident = {
   caller_name: string | null;
   caller_contact: string | null;
   construction_stage_id: string;
-  vzg_line_number: string;
-  km_from: number;
+  // AP10: fachliche Referenzen (Legacy-Snapshotfelder bleiben erhalten)
+  customer_id: string | null;
+  vzg_line_id: string | null;
+  vzg_line_number: string | null;
+  km_from: number | null;
   km_to: number | null;
   operating_point: string | null;
   track: string | null;
@@ -343,6 +346,38 @@ export type AppSettings = {
   default_on_call_number_id: string | null;
 } & AuditCols;
 
+// AP10: Kabelpositionen je Vorgang (Kabelart positionsbezogen).
+export type IncidentCablePosition = {
+  id: string;
+  incident_id: string;
+  cable_type_id: string;
+  sort_order: number;
+} & AuditCols;
+
+// AP10: Argumente der transaktionalen RPCs (Incident + Pflicht-Kabelposition).
+export type CreateIncidentAp10Args = {
+  p_customer_id: string;
+  p_construction_stage_id: string;
+  p_vzg_line_id: string;
+  p_on_call_number_id: string | null;
+  p_priority: IncidentPriority;
+  p_description: string;
+  p_operating_point: string | null;
+  p_track: string | null;
+  p_direction: string | null;
+  p_object_type: string | null;
+  p_object_designation: string | null;
+  p_location_description: string | null;
+  p_external_reference: string | null;
+  p_km_from: number | null;
+  p_km_to: number | null;
+  p_caller_name: string | null;
+  p_caller_contact: string | null;
+  p_internal_note: string | null;
+  p_cable_type_id: string;
+};
+export type UpdateIncidentAp10Args = { p_id: string } & CreateIncidentAp10Args;
+
 // AP6: Deduplizierung/Idempotenz der Offline-Synchronisation.
 export type SyncAction = {
   id: string;
@@ -388,11 +423,16 @@ export type Database = {
       team_members: Table<TeamMember>;
       cable_types: Table<CableType>;
       app_settings: Table<AppSettings>;
+      // AP10
+      incident_cable_positions: Table<IncidentCablePosition>;
     };
     Views: {
       material_stock: { Row: MaterialStock; Relationships: [] };
     };
-    Functions: Record<string, never>;
+    Functions: {
+      create_incident_ap10: { Args: CreateIncidentAp10Args; Returns: string };
+      update_incident_ap10: { Args: UpdateIncidentAp10Args; Returns: undefined };
+    };
     Enums: {
       user_role: UserRole;
       incident_status: IncidentStatus;

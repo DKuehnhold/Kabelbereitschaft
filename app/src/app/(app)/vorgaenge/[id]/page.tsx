@@ -72,9 +72,13 @@ export default async function IncidentDetailPage({
           <section className="rounded-lg border border-slate-200 bg-white p-4">
             <h2 className="mb-2 text-sm font-semibold uppercase text-slate-500">Standort</h2>
             <dl>
+              <Row label="Kunde" value={i.customer?.name} />
               <Row label="Baustufe" value={i.stage?.name} />
-              <Row label="VzG-Streckennummer" value={i.vzg_line_number} />
-              <Row label="Streckenkilometer" value={`${i.km_from}${i.km_to != null ? " – " + i.km_to : ""}`} />
+              <Row label="VzG-Streckennummer" value={i.vzgline?.line_number ?? i.vzg_line_number} />
+              <Row
+                label="Streckenkilometer"
+                value={i.km_from != null ? `${i.km_from}${i.km_to != null ? " – " + i.km_to : ""}` : "—"}
+              />
               <Row label="Betriebsstelle" value={i.operating_point} />
               <Row label="Gleis" value={i.track} />
               <Row label="Richtung" value={i.direction} />
@@ -92,6 +96,14 @@ export default async function IncidentDetailPage({
               <Row label="Anrufzeitpunkt" value={fmt(i.call_received_at)} />
               <Row label="DB-Ansprechpartner" value={i.caller_name} />
               <Row label="Telefon" value={i.caller_contact} />
+              <Row
+                label="Kabelart"
+                value={
+                  i.cable_positions?.length
+                    ? i.cable_positions.map((p) => p.cable_type?.name ?? "—").join(", ")
+                    : "—"
+                }
+              />
               <Row label="Beschreibung" value={i.description} />
             </dl>
           </section>
