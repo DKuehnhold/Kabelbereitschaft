@@ -63,8 +63,9 @@ AP1–AP7-Regression unverändert grün. Offen: App-Screenshots + visuelle/Scree
 - **AP9** – Stammdatenverwaltung: abgeschlossen, Commit `008f648`.
 - **AP10** – Stammdaten in die Vorgangsanlage integriert: abgeschlossen, Commit `156e43f`.
 - **AP11** – Operative Vorgangsliste: abgeschlossen, Commit `1b8d071`.
-- **Git:** AP9–AP11 wurden am 2026-07-26 nach GitHub gepusht; `main` und `origin/main`
-  stehen identisch auf `1b8d071`.
+- **Git:** AP9–AP11 wurden am 2026-07-26 nach GitHub gepusht; funktionaler AP11-Stand ist
+  `1b8d071`. `main` und `origin/main` sind synchron und enthalten zusätzlich die
+  nachfolgenden Dokumentations-Commits.
 - **Sicherung:** vollständige, hashidentisch geprüfte Dateisystemkopie unter
   `C:\Backup\Kabelbereitschaft_2026-07-25_191847`; verifiziertes Git-Bundle unter
   `C:\Backup\kabelbereitschaft_main_2026-07-26.bundle`.
@@ -78,5 +79,11 @@ AP1–AP7-Regression unverändert grün. Offen: App-Screenshots + visuelle/Scree
   Implementierung freigegeben.
 - **Produktionssperre:** V1 (Aufbewahrungsfristen für Personen-, EXIF-/GPS- und Auditdaten)
   ist offen. Bis zur Entscheidung sind ausschließlich synthetische Stage-/Testdaten zulässig.
-- **Noch offen vor AP12:** Branding separat prüfen und versionieren sowie einen frischen
-  Arbeits-Clone außerhalb OneDrive verifizieren.
+- **Branding:** AP8.1 ist separat als Commit `04253a2` auf
+  `feat/ap8.1-branding` gesichert und nach erfolgreicher TypeScript-, ESLint- und
+  Produktions-Build-Prüfung nach GitHub gepusht.
+- **Arbeits-Repository:** Der frische Clone unter `C:\dev\Kabelbereitschaft` ist verifiziert
+  und für weitere Git-/Entwicklungsarbeit führend. Der bisherige OneDrive-Ordner bleibt wegen
+  des aktiven Obsidian-Vaults unverändert als Sicherungs-/Vault-Kopie erhalten.
+- **AP12-Start:** Alle acht technischen Punkte der Checkliste B.8 sind erledigt. AP12 bleibt
+  dennoch gesperrt, bis Dennis die Implementierung ausdrücklich freigibt.

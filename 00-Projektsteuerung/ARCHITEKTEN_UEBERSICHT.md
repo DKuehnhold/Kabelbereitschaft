@@ -57,28 +57,17 @@ Bewusst **nicht** eingesetzt: `next-pwa` (Service Worker ist handgeschrieben,
 | Merkmal | Wert |
 |---|---|
 | Remote | `https://github.com/DKuehnhold/Kabelbereitschaft.git` (privat), Branch `main` |
-| Letzter Commit | `1b8d071` — *feat: implement operational incident list (AP11)*, 2026-07-23 13:22 |
-| `origin/main` | `1b8d071` — *feat: implement operational incident list (AP11)* |
+| Letzter funktionaler Commit auf `main` | `1b8d071` — *feat: implement operational incident list (AP11)*, 2026-07-23 13:22 |
+| `origin/main` | synchron mit lokalem `main`; enthält AP11 und die nachfolgenden Dokumentations-Commits |
 | **Nicht gepusht** | **keine Commits; AP9–AP11 wurden am 2026-07-26 gepusht** |
-| Nicht committet | 6 geänderte Dateien + 1 neue Datei (siehe unten) |
+| Nicht committet | keine Dateien im neuen Arbeits-Clone |
 | Tag / Release | keiner |
 | ManagementOS-Verbindung | keine (eigenständiges Repository) |
 
-**Uncommittete Arbeitskopie** — das ist der bewusst zurückgehaltene „AP8.1-Branding"-Stand:
-
-```
-M  Willkommen.md
-M  app/src/app/globals.css
-M  app/src/app/layout.tsx
-M  app/src/app/login/page.tsx
-M  app/src/app/manifest.ts
-M  app/src/components/Logo.tsx
-?? app/public/branding/wus-technik.svg
-```
-
-Diese Änderungen wurden in den Berichten zu AP9, AP10 und AP11 jeweils ausdrücklich als „nicht Teil
-des Commits" ausgewiesen. Sie liegen seit mehreren Arbeitspaketen unversioniert im Arbeitsverzeichnis
-— **Klärungsbedarf: einchecken, verwerfen oder als eigenes AP führen.**
+**AP8.1-Branding:** Der zuvor uncommittete Stand ist inzwischen separat als Commit `04253a2`
+auf `feat/ap8.1-branding` gesichert und nach GitHub gepusht. TypeScript, ESLint und
+Next.js-Produktions-Build wurden im frischen Clone erfolgreich geprüft. Der Branch ist noch
+nicht nach `main` gemergt; die Zusammenführung bleibt eine eigene Freigabeentscheidung.
 
 ---
 
@@ -234,9 +223,9 @@ Diese Punkte sind im Projekt dokumentiert offen und liegen fachlich/architektoni
 | Risiko | Bewertung | Hinweis |
 |---|---|---|
 | Keine Abnahme gegen echte Umgebung | **hoch** | Blockiert eine belastbare Freigabe; braucht Supabase-Projekt + Testbenutzer |
-| Git-Repository in OneDrive, ~15 verwaiste Lock-/Trash-Dateien in `.git` | **hoch** | Reproduzierbares Korruptionsrisiko; in `OFFENE_PUNKTE.md` als zu bereinigen vermerkt |
+| Git-Repository in OneDrive, ~15 verwaiste Lock-/Trash-Dateien in `.git` | **entschärft** | Neuer führender Arbeits-Clone unter `C:\dev\Kabelbereitschaft`; OneDrive-Fassung bleibt Sicherungs-/Vault-Kopie |
 | AP9–AP11 nur lokal vorhanden | **erledigt** | Am 2026-07-26 nach GitHub gepusht; zusätzlich vollständiges Git-Bundle außerhalb OneDrive verifiziert |
-| Uncommittete Branding-Änderungen über mehrere APs | **mittel** | Nicht versioniert, nicht in CI geprüft, geht bei einem Reset verloren |
+| Uncommittete Branding-Änderungen über mehrere APs | **erledigt** | Separater Branch `feat/ap8.1-branding`, Commit `04253a2`, TypeScript/Lint/Produktions-Build grün und nach GitHub gepusht |
 | CSP nur Report-Only | **mittel** | Schutzwirkung derzeit nicht aktiv |
 | `middleware`-Deprecation (Next 16) | **mittel** | Funktioniert, aber auf Zeit; betrifft die Auth-Session-Weitergabe |
 | postcss-Schwachstelle (moderate, build-time) | **gering** | Nur Build; Behebung mit Next-Update |
@@ -252,7 +241,7 @@ Diese Punkte sollte der Architekt kennen, weil die Projektdokumentation an mehre
 
 1. **Push-Stand wurde korrigiert.** Der am 2026-07-25 festgestellte Dokumentationsstand
    (`origin/main = 8d83371` bzw. `1cac409`) ist überholt. AP9–AP11 wurden am 2026-07-26
-   gepusht; `main` und `origin/main` stehen identisch auf `1b8d071`.
+   gepusht; der funktionale AP11-Stand ist `1b8d071`, danach folgten Dokumentations-Commits.
 2. **Zwei `PROJEKTSTATUS.md`.** Die Fassung im Wurzelverzeichnis ist aktuell (bis AP8, mit AP9–AP11
    in `PROJEKT_WISSEN.md`); `00-Projektsteuerung/PROJEKTSTATUS.md` endet bei **AP2** und führt AP3/AP4
    noch als „geplant". Für einen Neueinsteiger ist das die irreführendste Datei im Projekt.
@@ -271,15 +260,18 @@ Diese Punkte sollte der Architekt kennen, weil die Projektdokumentation an mehre
 
 Vorschlag zur Priorisierung — die Entscheidung liegt beim Architekten bzw. bei der Projektleitung:
 
-**Sofort, ohne fachliche Abhängigkeit:**
+**Repository-Stabilisierung abgeschlossen:**
 
-1. `.git`-Sperrdateien bereinigen und Repository aus OneDrive herausnehmen.
-2. AP9–AP11 pushen; Umgang mit den uncommitteten Branding-Änderungen entscheiden.
-3. Steuerungsdokumente konsolidieren (Punkte 1–7 aus Kapitel 10) — eine führende Quelle je Thema.
+1. Verwaiste `.git`-Sperrdateien wiederherstellbar quarantänisiert und Integrität geprüft.
+2. AP9–AP11 gepusht; Branding separat versioniert, geprüft und als Branch veröffentlicht.
+3. Führende Steuerungsdokumente gekennzeichnet; frischer Arbeits-Clone außerhalb OneDrive
+   unter `C:\dev\Kabelbereitschaft` eingerichtet.
 
 **Voraussetzung für jede weitere belastbare Aussage:**
 
-4. Supabase-Projekt bereitstellen (URL + Anon-Key), Migrationen 0001–0009 einspielen, ersten
+4. V1-Aufbewahrungsfristen fachlich/rechtlich entscheiden; bis dahin keine produktiven
+   Personen-, EXIF-/GPS- oder Auditdaten.
+5. Supabase-Projekt bereitstellen (URL + Anon-Key), Migrationen 0001–0009 einspielen, ersten
    Administrator anlegen, reale Baustufen und Bereitschaftsnummern liefern.
 5. Test-Supabase + Testbenutzer für die `@app`-E2E; Chromium in der CI installieren; danach
    Browser-, Offline- und a11y-Abnahme nachholen.

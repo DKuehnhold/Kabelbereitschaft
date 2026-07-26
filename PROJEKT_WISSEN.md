@@ -86,7 +86,9 @@ CSV-Export, Offlinebetrieb mit Synchronisation und Konfliktbehandlung.
 - Commit `feat: implement operational incident list (AP11)`; AP8.1-Branding nicht im Commit.
 
 ## Nachtrag Stabilisierung und Roadmap (2026-07-26)
-- **Git:** AP9–AP11 wurden nach `origin/main` gepusht; lokal und remote stehen auf `1b8d071`.
+- **Git:** AP9–AP11 wurden nach `origin/main` gepusht; funktionaler AP11-Stand ist `1b8d071`.
+  `main` und `origin/main` sind synchron und enthalten zusätzlich die nachfolgenden
+  Dokumentations-Commits.
 - **Sicherung:** Vollständige, hashidentisch verifizierte Dateisystemkopie unter
   `C:\Backup\Kabelbereitschaft_2026-07-25_191847`; vollständiges Git-Bundle unter
   `C:\Backup\kabelbereitschaft_main_2026-07-26.bundle`.
@@ -99,5 +101,15 @@ CSV-Export, Offlinebetrieb mit Synchronisation und Konfliktbehandlung.
 - **Datenschutz:** V1 (Aufbewahrungsfristen für Personen-, EXIF-/GPS- und Auditdaten) bleibt offen
   und wirkt als Produktionssperre. Stage/Test bis zur Entscheidung ausschließlich mit
   synthetischen Daten.
-- **Repository:** Der Umzug aus OneDrive in einen frischen lokalen Clone bleibt bis zur
-  nachgewiesenen Anlage unter `C:\dev\Kabelbereitschaft` offen.
+- **Repository:** Frischer GitHub-Clone unter `C:\dev\Kabelbereitschaft` angelegt und
+  verifiziert; dieser Pfad ist für weitere Git-/Entwicklungsarbeit führend. Der bisherige
+  OneDrive-Ordner bleibt wegen des aktiven Obsidian-Vaults unverändert als
+  Sicherungs-/Vault-Kopie erhalten.
+- **Branding:** AP8.1 getrennt als Commit `04253a2` auf Branch
+  `feat/ap8.1-branding` gesichert und nach GitHub gepusht. TypeScript, ESLint und
+  Next.js-Produktions-Build im frischen Clone erfolgreich.
+- **Lokale Laufzeit:** Der unqualifizierte Windows-Befehl `node` wird auf diesem Rechner
+  derzeit fälschlich als `C:\Windows\System32\Node.js` über Visual Studio geöffnet.
+  Die belastbaren Prüfungen wurden deshalb mit
+  `C:\Program Files\nodejs\node.exe` ausgeführt. Diese Windows-Zuordnung ist vor dem
+  regulären Entwicklerbetrieb separat zu korrigieren.

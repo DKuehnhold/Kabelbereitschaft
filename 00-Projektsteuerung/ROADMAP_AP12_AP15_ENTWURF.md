@@ -1,6 +1,6 @@
 # Roadmap AP12–AP15 und Git-Sicherungsplan
 
-> **Version 1.7** · Stand: 2026-07-26 ·
+> **Version 1.8** · Stand: 2026-07-26 ·
 > **Status (V0): Roadmap unter Auflagen als Planungsgrundlage freigegeben; Implementierung noch
 > nicht freigegeben.** Keine Umsetzung, keine Bereinigung, keine Statusdokumente geändert.
 > Die Entscheidungen **V2, V3, V4**, zur **Repository-Struktur** sowie die vier AP12-Detailpunkte
@@ -699,8 +699,9 @@ ausschließlich synthetische Daten verwendet.
 ## B.8 AP12-Startfreigabe-Checkliste
 
 Die Implementierung von AP12 ist erst zulässig, wenn **alle** Punkte abgehakt sind **und** Dennis
-die Startfreigabe ausdrücklich erteilt hat. Stand 2026-07-26: **Punkte 1–5 und 8 erledigt;
-Punkt 6 (getrennte Dokumentations-/Branding-Sicherung) und Punkt 7 (frischer Clone) offen.**
+die Startfreigabe ausdrücklich erteilt hat. Stand 2026-07-26: **Alle acht technischen
+Vorbedingungen sind erledigt. Die ausdrückliche AP12-Implementierungsfreigabe durch Dennis
+steht weiterhin aus.**
 
 - [x] Vollsicherung: vollständige Dateisystemkopie einschließlich `.git` außerhalb OneDrive
       (Teil A, Schritt 0) — **abgeschlossen am 2026-07-25.**
@@ -751,9 +752,24 @@ Punkt 6 (getrennte Dokumentations-/Branding-Sicherung) und Punkt 7 (frischer Clo
       GitHub bestätigte `1cac409..1b8d071 main -> main`; anschließend
       `git rev-parse main` = `git rev-parse origin/main` =
       `1b8d0711957e789568b5b20542d994674d651289`.
-- [ ] Dokumentation und Branding in getrennten Commits bzw. Branches gesichert (Teil A, Schritt 4)
-- [ ] Frischer Clone außerhalb OneDrive erstellt und verifiziert; Altordner umbenannt und
-      vollständig als Sicherung erhalten (Teil A, Schritt 5)
+- [x] Dokumentation und Branding in getrennten Commits bzw. Branches gesichert
+      (Teil A, Schritt 4) — **abgeschlossen am 2026-07-26.**
+      Dokumentation: Commit `cf7d330` auf `main`, nach GitHub gepusht.
+      Branding: Commit `04253a2` auf `feat/ap8.1-branding`, nach GitHub gepusht.
+      Im frischen Clone geprüft mit der echten Node-Laufzeit
+      `C:\Program Files\nodejs\node.exe`: TypeScript ohne Fehler, ESLint ohne Fehler,
+      Next.js-Produktions-Build erfolgreich. Bekannte, nicht blockierende Warnung:
+      `middleware`-Dateikonvention ist veraltet und soll in AP14 durch `proxy` ersetzt werden.
+- [x] Frischer Clone außerhalb OneDrive erstellt und verifiziert (Teil A, Schritt 5) —
+      **abgeschlossen am 2026-07-26.**
+      Neuer Arbeits-Clone: `C:\dev\Kabelbereitschaft`; Remote:
+      `https://github.com/DKuehnhold/Kabelbereitschaft.git`; `main` und `origin/main`
+      standen bei der Verifikation identisch auf `cf7d330`.
+      Der bisherige OneDrive-Ordner bleibt vollständig und unverändert als Sicherungs-/Vault-Kopie
+      erhalten. Auf eine Umbenennung wurde bewusst verzichtet, weil Dennis OneDrive und Obsidian
+      wieder aktiviert hat und eine Pfadänderung den geöffneten Vault unterbrechen würde.
+      Für weitere Git- und Entwicklungsarbeit ist ausschließlich `C:\dev\Kabelbereitschaft`
+      vorgesehen.
 - [x] Führende Statusdokumente eindeutig gekennzeichnet und auf den tatsächlichen Projektstand
       gebracht; veraltete Dubletten als „historisch/abgelöst" markiert, nicht gelöscht
       (Auflage aus B.1) — **abgeschlossen am 2026-07-26.** Führend: `PROJEKTSTATUS.md`
@@ -781,3 +797,4 @@ Punkt 6 (getrennte Dokumentations-/Branding-Sicherung) und Punkt 7 (frischer Clo
 | 1.5 | 2026-07-26 | B.8 Punkt 2 abgeschlossen: sichere Lock-Behandlung durchgeführt — ausschließlich `.git\index.lock` und `.git\HEAD.lock` (je 0 Bytes, SHA-256 `E3B0C442…7852B855`) wiederherstellbar nach `C:\Backup\Kabelbereitschaft_Lockquarantaene_2026-07-26_093108` verschoben, hashidentisch zu den Exemplaren in der Vollsicherung. Vollständiger `.git`-Vergleich 1.282 → 1.280 Dateien mit genau zwei erwarteten Entfernungen, 0 zusätzlichen und 0 veränderten Dateien; alle übrigen Altlasten unangetastet; keine Git-Operation. Die Freigabe beruht wegen eines Parserfehlers bei der manuellen PowerShell-Eingabe ausdrücklich auf der nachgelagerten unabhängigen Endzustandsprüfung, nicht auf der Skript-Erfolgszeile. Status unverändert: V1 offen (Produktionssperre), AP12-Implementierung nicht freigegeben, die sechs übrigen B.8-Punkte offen | Claude (KI) nach Vorgaben von Dennis |
 | 1.6 | 2026-07-26 | B.8 Punkt 3 abgeschlossen: read-only Integritätsprüfung nach der Lock-Entfernung — `git --no-optional-locks status` fehlerfrei (Branch `main`, 3 Commits voraus, Arbeitskopie wie in A.1), `git fsck --connectivity-only` ohne Korruption mit ausschließlich den zwei bekannten dangling commits; `main` = `1b8d071`, `origin/main` = `1cac409`. B.8 Punkt 8 abgeschlossen: führende Statusdokumente gekennzeichnet (`PROJEKTSTATUS.md` Wurzel, `00-Projektsteuerung/CHANGELOG.md`, `07-Betrieb/BACKUP_UND_RECOVERY.md`), Dubletten als historisch/abgelöst markiert statt gelöscht (`00-Projektsteuerung/PROJEKTSTATUS.md`, `CHANGELOG.md` Wurzel, `07-Betrieb/BACKUP.md`), führende `PROJEKTSTATUS.md` auf den tatsächlichen Stand AP9–AP11 inklusive Git-, Sicherungs- und Sperrstatus gebracht. Weiterhin offen: B.8 Punkte 4–7 (Bundle, Push, getrennte Commits, frischer Clone) — blockiert durch fehlenden Zugriff auf `C:\Backup`/`C:\dev` und fehlende GitHub-Anmeldung in der Arbeitsumgebung. Status unverändert: V1 offen (Produktionssperre), AP12-Implementierung nicht freigegeben, kein RC1-Tag | Claude (KI) nach Vorgaben von Dennis |
 | 1.7 | 2026-07-26 | B.8 Punkt 4 abgeschlossen: vollständiges Git-Bundle `C:\Backup\kabelbereitschaft_main_2026-07-26.bundle` (429.458 Bytes) angelegt und mit `git bundle verify` geprüft. B.8 Punkt 5 abgeschlossen: AP9–AP11 nach GitHub gepusht (`1cac409..1b8d071`), `main` und `origin/main` stehen identisch auf `1b8d071`. Der zuvor dokumentierte Umgebungsblocker ist damit entfallen. Weiterhin offen: B.8 Punkte 6–7 (getrennte Dokumentations-/Branding-Sicherung und frischer Clone). Status unverändert: V1 offen (Produktionssperre), AP12-Implementierung nicht freigegeben, kein RC1-Tag | Codex (KI) nach Vorgaben von Dennis |
+| 1.8 | 2026-07-26 | B.8 Punkt 6 abgeschlossen: Dokumentation separat als `cf7d330` auf `main`, Branding separat als `04253a2` auf `feat/ap8.1-branding` gesichert und jeweils nach GitHub gepusht; Branding im frischen Clone mit TypeScript, ESLint und Next.js-Produktions-Build erfolgreich geprüft. B.8 Punkt 7 abgeschlossen: frischer, sauberer GitHub-Clone unter `C:\dev\Kabelbereitschaft` verifiziert. Der OneDrive-Ordner bleibt wegen des wieder aktiven Obsidian-Vaults am bestehenden Pfad vollständig erhalten; weitere Git-/Entwicklungsarbeit erfolgt ausschließlich im neuen Clone. Damit sind alle acht technischen B.8-Punkte erledigt. Status unverändert: V1 offen (Produktionssperre), AP12-Implementierung wartet weiterhin auf die ausdrückliche Freigabe durch Dennis, kein RC1-Tag | Codex (KI) nach Vorgaben von Dennis |
