@@ -11,69 +11,50 @@ export default function LoginPage() {
   const [state, formAction, pending] = useActionState(signIn, initialState);
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-100 px-4">
-      <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
+    <main className="flex min-h-screen items-center justify-center bg-background px-4 safe-x">
+      <div className="w-full max-w-sm rounded-xl border border-border bg-surface p-8 shadow-sm">
         <div className="mb-6 flex flex-col items-center gap-3 text-center">
-          <Logo height={40} />
-          <h1 className="text-lg font-semibold text-slate-900">
-            Kabelbereitschaft
-          </h1>
-          <p className="text-sm text-slate-500">Bitte anmelden</p>
+          <Logo height={44} />
+          <h1 className="text-lg font-semibold text-foreground">Kabelbereitschaft</h1>
+          <p className="text-sm text-muted">Bitte anmelden</p>
         </div>
 
         {!isSupabaseConfigured ? (
-          <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-            Hinweis: Supabase ist noch nicht konfiguriert. Anmeldung erst nach
-            Eintrag von URL und Anon-Key in <code>.env.local</code> möglich.
+          <div
+            className="mb-4 rounded-md border px-3 py-2 text-xs"
+            style={{ borderColor: "var(--warning)", background: "var(--warning-bg)", color: "var(--warning)" }}
+          >
+            Hinweis: Supabase ist noch nicht konfiguriert. Anmeldung erst nach Eintrag von URL und
+            Anon-Key in <code>.env.local</code> möglich.
           </div>
         ) : null}
 
         <form action={formAction} className="space-y-4">
           <div>
-            <label
-              htmlFor="email"
-              className="mb-1 block text-sm font-medium text-slate-700"
-            >
+            <label htmlFor="email" className="mb-1 block text-sm font-medium text-foreground">
               E-Mail
             </label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              autoComplete="email"
-              required
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-            />
+            <input id="email" name="email" type="email" autoComplete="email" required className="input" />
           </div>
 
           <div>
-            <label
-              htmlFor="password"
-              className="mb-1 block text-sm font-medium text-slate-700"
-            >
+            <label htmlFor="password" className="mb-1 block text-sm font-medium text-foreground">
               Passwort
             </label>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              required
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-            />
+            <input id="password" name="password" type="password" autoComplete="current-password" required className="input" />
           </div>
 
           {state.error ? (
-            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            <div
+              className="rounded-md border px-3 py-2 text-sm"
+              style={{ borderColor: "var(--danger)", background: "var(--danger-bg)", color: "var(--danger)" }}
+              role="alert"
+            >
               {state.error}
             </div>
           ) : null}
 
-          <button
-            type="submit"
-            disabled={pending}
-            className="w-full rounded-md bg-blue-900 px-4 py-2 text-sm font-medium text-white hover:bg-blue-800 disabled:opacity-60"
-          >
+          <button type="submit" disabled={pending} className="btn btn-primary w-full">
             {pending ? "Anmeldung läuft…" : "Anmelden"}
           </button>
         </form>
