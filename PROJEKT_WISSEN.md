@@ -123,8 +123,9 @@ Diese Festlegungen gelten dauerhaft und ersetzen alle früheren Standortaussagen
   Übersichts- oder Statusdokumente werden nicht angelegt.
 - **Einziger Projekt- und Arbeitsort** ist der Kabelbereitschaft-Vault
   `C:\Users\DennisKühnhold\OneDrive - W & S Technik GmbH\Kabelbereitschaft-App\Kabelbereitschaft-App`.
-- `C:\dev\Kabelbereitschaft` war ein **vorübergehender technischer Clone** und ist zur
-  Entfernung über den Windows-Papierkorb vorgesehen; `C:\dev` selbst bleibt bestehen.
+- `C:\dev\Kabelbereitschaft` war ein **vorübergehender technischer Clone** und wurde am
+  2026-07-26 nach vollständiger Kontrolle in den Windows-Papierkorb verschoben;
+  `C:\dev` selbst blieb bestehen.
 - Nach dem geprüften Inventar vom 2026-07-26 enthält der Dev-Ordner **keine einzigartige
   relevante Projektdatei**: 226 verglichene Dateien, keine ausschließlich dort vorhanden;
   alle Abweichungen waren durch den Commit `455c71d`, den ausgecheckten Branch oder

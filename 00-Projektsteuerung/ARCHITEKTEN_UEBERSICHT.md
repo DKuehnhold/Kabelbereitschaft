@@ -269,8 +269,8 @@ Vorschlag zur Priorisierung — die Entscheidung liegt beim Architekten bzw. bei
    Standortentscheidung wurde von Dennis am 2026-07-26 aufgehoben. **Einziger Projekt- und
    Arbeitsort ist der Kabelbereitschaft-Vault**
    `C:\Users\DennisKühnhold\OneDrive - W & S Technik GmbH\Kabelbereitschaft-App\Kabelbereitschaft-App`;
-   der Dev-Clone wird nach abgeschlossener Rückführung über den Windows-Papierkorb entfernt
-   (`C:\dev` bleibt bestehen). Fehlender Werkzeugzugriff führt nicht zu einem Ersatzordner,
+   der Dev-Clone wurde nach abgeschlossener Rückführung über den Windows-Papierkorb entfernt
+   (`C:\dev` blieb bestehen). Fehlender Werkzeugzugriff führt nicht zu einem Ersatzordner,
    sondern zu einer Zugriffsmeldung an Dennis.
 
 **Voraussetzung für jede weitere belastbare Aussage:**

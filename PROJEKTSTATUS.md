@@ -86,16 +86,13 @@ AP1–AP7-Regression unverändert grün. Offen: App-Screenshots + visuelle/Scree
   Arbeitsort ist dieser Kabelbereitschaft-Vault**
   `C:\Users\DennisKühnhold\OneDrive - W & S Technik GmbH\Kabelbereitschaft-App\Kabelbereitschaft-App`.
   Die frühere Festlegung auf den Clone `C:\dev\Kabelbereitschaft` ist ausdrücklich aufgehoben.
-- **Repository-Stand:** `main` und `origin/main` stehen auf `455c71d`. Der Branding-Branch
+- **Repository-Stand:** `main` und `origin/main` sind synchron; die Standortkorrektur ist seit
+  Commit `efdadfb` enthalten. Der Branding-Branch
   `feat/ap8.1-branding` steht lokal und remote auf `04253a2` und ist **nicht** nach `main`
   gemergt. Die Arbeitskopie ist nach der Windows-Reparatur des unvollständigen Checkouts sauber;
   einzige bewusste Ausnahme ist die unveränderte Benutzerdatei `Willkommen.md`.
-- **Vorübergehender Clone:** `C:\dev\Kabelbereitschaft` besteht noch, ist aber zur Entfernung
-  über den Windows-Papierkorb vorgesehen. Das Inventar vom 2026-07-26 hat dort **keine
-  einzigartige relevante Projektdatei** gefunden. `C:\dev` selbst bleibt bestehen.
-- **Vor dem endgültigen Abschluss der Rückführung noch offen:** Dokumentations-Commit und Push,
-  finale Gegenprüfung, Entfernung von `C:\dev\Kabelbereitschaft` über den Windows-Papierkorb.
-- **AP12-Start:** Von der Checkliste B.8 sind die Punkte 1–6 und 8 erledigt; Punkt 7 ist wegen
-  der geänderten Standortentscheidung wieder offen und wird als „in Rückführung" geführt. AP12
-  bleibt gesperrt, bis dieser Punkt abgeschlossen ist **und** Dennis die Implementierung
-  ausdrücklich freigibt.
+- **Vorübergehender Clone:** `C:\dev\Kabelbereitschaft` wurde nach vollständiger Kontrolle und
+  dem Nachweis, dass dort keine einzigartige relevante Projektdatei lag, am 2026-07-26 in den
+  Windows-Papierkorb verschoben. `C:\dev` selbst blieb bestehen.
+- **AP12-Start:** Alle acht technischen Punkte der Checkliste B.8 sind abgeschlossen. AP12
+  bleibt gesperrt, bis Dennis die Implementierung ausdrücklich freigibt.
