@@ -82,8 +82,20 @@ AP1–AP7-Regression unverändert grün. Offen: App-Screenshots + visuelle/Scree
 - **Branding:** AP8.1 ist separat als Commit `04253a2` auf
   `feat/ap8.1-branding` gesichert und nach erfolgreicher TypeScript-, ESLint- und
   Produktions-Build-Prüfung nach GitHub gepusht.
-- **Arbeits-Repository:** Der frische Clone unter `C:\dev\Kabelbereitschaft` ist verifiziert
-  und für weitere Git-/Entwicklungsarbeit führend. Der bisherige OneDrive-Ordner bleibt wegen
-  des aktiven Obsidian-Vaults unverändert als Sicherungs-/Vault-Kopie erhalten.
-- **AP12-Start:** Alle acht technischen Punkte der Checkliste B.8 sind erledigt. AP12 bleibt
-  dennoch gesperrt, bis Dennis die Implementierung ausdrücklich freigibt.
+- **Arbeitsort (Entscheidung Dennis, 2026-07-26):** **Führend und alleiniger Projekt- und
+  Arbeitsort ist dieser Kabelbereitschaft-Vault**
+  `C:\Users\DennisKühnhold\OneDrive - W & S Technik GmbH\Kabelbereitschaft-App\Kabelbereitschaft-App`.
+  Die frühere Festlegung auf den Clone `C:\dev\Kabelbereitschaft` ist ausdrücklich aufgehoben.
+- **Repository-Stand:** `main` und `origin/main` stehen auf `455c71d`. Der Branding-Branch
+  `feat/ap8.1-branding` steht lokal und remote auf `04253a2` und ist **nicht** nach `main`
+  gemergt. Die Arbeitskopie ist nach der Windows-Reparatur des unvollständigen Checkouts sauber;
+  einzige bewusste Ausnahme ist die unveränderte Benutzerdatei `Willkommen.md`.
+- **Vorübergehender Clone:** `C:\dev\Kabelbereitschaft` besteht noch, ist aber zur Entfernung
+  über den Windows-Papierkorb vorgesehen. Das Inventar vom 2026-07-26 hat dort **keine
+  einzigartige relevante Projektdatei** gefunden. `C:\dev` selbst bleibt bestehen.
+- **Vor dem endgültigen Abschluss der Rückführung noch offen:** Dokumentations-Commit und Push,
+  finale Gegenprüfung, Entfernung von `C:\dev\Kabelbereitschaft` über den Windows-Papierkorb.
+- **AP12-Start:** Von der Checkliste B.8 sind die Punkte 1–6 und 8 erledigt; Punkt 7 ist wegen
+  der geänderten Standortentscheidung wieder offen und wird als „in Rückführung" geführt. AP12
+  bleibt gesperrt, bis dieser Punkt abgeschlossen ist **und** Dennis die Implementierung
+  ausdrücklich freigibt.

@@ -213,7 +213,7 @@ Diese Punkte sind im Projekt dokumentiert offen und liegen fachlich/architektoni
 | 10 | **`technicians` ↔ `profiles`** | Kopplung Monteur ↔ Benutzerkonto ist über `profile_id` nur vorbereitet; SSO/Login-Kopplung offen |
 | 11 | **Kabelpositionen** | Mehrere Positionen sowie Menge/Zustand je Position sind auf später verschoben — Zielmodell klären |
 | 12 | **Bereitschaftsnummern** | Für `on_call_numbers` existiert **keine Pflegeoberfläche**, nur Auswahl. Bewusste Lücke aus AP9 |
-| 13 | **Repository-Ort** | Verlagerung aus OneDrive in einen lokalen Pfad (Git-Sync-Konflikte) |
+| 13 | **Repository-Ort** | Neu entschieden: ausschließliche Arbeit im Kabelbereitschaft-Vault; OneDrive-Risiko bekannt und akzeptiert |
 | 14 | **Release** | Tag/Release `v1.0.0-rc.1` ist vorbereitet, erfolgt aber nur nach ausdrücklicher Freigabe |
 
 ---
@@ -223,7 +223,7 @@ Diese Punkte sind im Projekt dokumentiert offen und liegen fachlich/architektoni
 | Risiko | Bewertung | Hinweis |
 |---|---|---|
 | Keine Abnahme gegen echte Umgebung | **hoch** | Blockiert eine belastbare Freigabe; braucht Supabase-Projekt + Testbenutzer |
-| Git-Repository in OneDrive, ~15 verwaiste Lock-/Trash-Dateien in `.git` | **entschärft** | Neuer führender Arbeits-Clone unter `C:\dev\Kabelbereitschaft`; OneDrive-Fassung bleibt Sicherungs-/Vault-Kopie |
+| Git-Repository in OneDrive, ~15 verwaiste Lock-/Trash-Dateien in `.git` | **aktiv, bewusst akzeptiert** | Entscheidung Dennis 2026-07-26: Der Kabelbereitschaft-Vault in OneDrive ist der **einzige** Projekt- und Arbeitsort; die frühere Festlegung auf `C:\dev\Kabelbereitschaft` ist aufgehoben. Schutzmaßnahmen: verifizierte Vollsicherung, Git-Bundle, GitHub-Remote als autoritative Quelle, Lockprüfung vor Git-Arbeit, keine eigenmächtigen Ersatzpfade, Zugriffsmeldung statt Ordnerverlagerung. **Kein erneuter Umzug wird vorgeschlagen**, solange Dennis die Entscheidung nicht ändert |
 | AP9–AP11 nur lokal vorhanden | **erledigt** | Am 2026-07-26 nach GitHub gepusht; zusätzlich vollständiges Git-Bundle außerhalb OneDrive verifiziert |
 | Uncommittete Branding-Änderungen über mehrere APs | **erledigt** | Separater Branch `feat/ap8.1-branding`, Commit `04253a2`, TypeScript/Lint/Produktions-Build grün und nach GitHub gepusht |
 | CSP nur Report-Only | **mittel** | Schutzwirkung derzeit nicht aktiv |
@@ -264,8 +264,14 @@ Vorschlag zur Priorisierung — die Entscheidung liegt beim Architekten bzw. bei
 
 1. Verwaiste `.git`-Sperrdateien wiederherstellbar quarantänisiert und Integrität geprüft.
 2. AP9–AP11 gepusht; Branding separat versioniert, geprüft und als Branch veröffentlicht.
-3. Führende Steuerungsdokumente gekennzeichnet; frischer Arbeits-Clone außerhalb OneDrive
-   unter `C:\dev\Kabelbereitschaft` eingerichtet.
+3. Führende Steuerungsdokumente gekennzeichnet. Der am 2026-07-26 eingerichtete Clone
+   `C:\dev\Kabelbereitschaft` war ein **vorübergehender technischer Clone**; die
+   Standortentscheidung wurde von Dennis am 2026-07-26 aufgehoben. **Einziger Projekt- und
+   Arbeitsort ist der Kabelbereitschaft-Vault**
+   `C:\Users\DennisKühnhold\OneDrive - W & S Technik GmbH\Kabelbereitschaft-App\Kabelbereitschaft-App`;
+   der Dev-Clone wird nach abgeschlossener Rückführung über den Windows-Papierkorb entfernt
+   (`C:\dev` bleibt bestehen). Fehlender Werkzeugzugriff führt nicht zu einem Ersatzordner,
+   sondern zu einer Zugriffsmeldung an Dennis.
 
 **Voraussetzung für jede weitere belastbare Aussage:**
 

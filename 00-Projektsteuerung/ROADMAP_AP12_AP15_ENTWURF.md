@@ -1,6 +1,12 @@
 # Roadmap AP12–AP15 und Git-Sicherungsplan
 
-> **Version 1.8** · Stand: 2026-07-26 ·
+> **Version 1.9** · Stand: 2026-07-26 ·
+> **Verbindlicher Arbeitsort (Entscheidung Dennis, 2026-07-26):** einziger Projekt- und
+> Arbeitsort ist der Kabelbereitschaft-Vault
+> `C:\Users\DennisKühnhold\OneDrive - W & S Technik GmbH\Kabelbereitschaft-App\Kabelbereitschaft-App`.
+> Die frühere Festlegung, `C:\dev\Kabelbereitschaft` sei der führende Arbeits-Clone, ist
+> **durch Dennis ausdrücklich aufgehoben**; jener Ordner war ein vorübergehender technischer
+> Clone und wird nach Abschluss der Rückführung über den Windows-Papierkorb entfernt.
 > **Status (V0): Roadmap unter Auflagen als Planungsgrundlage freigegeben; Implementierung noch
 > nicht freigegeben.** Keine Umsetzung, keine Bereinigung, keine Statusdokumente geändert.
 > Die Entscheidungen **V2, V3, V4**, zur **Repository-Struktur** sowie die vier AP12-Detailpunkte
@@ -205,12 +211,23 @@ bewusst getrennt gehalten worden; das sollte so bleiben.
 Die beiden neuen Dokumente (`ARCHITEKTEN_UEBERSICHT.md`, dieses Dokument) sind Dokumentation und
 sollten in einem eigenen `docs:`-Commit landen, nicht im Branding-Commit.
 
-### Schritt 5 — Frischer Clone außerhalb OneDrive (Entscheidung getroffen)
+### Schritt 5 — Standortentscheidung: Vault bleibt alleiniger Arbeitsort (überholt Version 1.8)
 
-**Entschieden (2026-07-25):** Dokumentation und App bleiben zunächst in einem **gemeinsamen
-Repository**. Das vollständige Repository wird aus OneDrive in einen **lokalen, nicht
-synchronisierten Pfad** verlagert (z. B. `C:\dev\Kabelbereitschaft\`). ADR 1 („App-Code im
-Unterordner `app/` des Vaults") wird dadurch **nicht aufgehoben**.
+> **AUFGEHOBEN durch Dennis am 2026-07-26.** Der nachfolgend beschriebene Umzug aus OneDrive
+> wurde 2026-07-25 entschieden und 2026-07-26 als Clone `C:\dev\Kabelbereitschaft` ausgeführt,
+> ist als Standortentscheidung aber **ausdrücklich zurückgenommen**. Verbindlich gilt: einziger
+> Projekt- und Arbeitsort ist der Kabelbereitschaft-Vault
+> `C:\Users\DennisKühnhold\OneDrive - W & S Technik GmbH\Kabelbereitschaft-App\Kabelbereitschaft-App`.
+> Der Dev-Clone wird über den Windows-Papierkorb entfernt. Das bekannte Risiko von
+> Git-Schreiboperationen in OneDrive bleibt bewusst akzeptiert und wird transparent geführt
+> (Schutzmaßnahmen: Vollsicherung, Git-Bundle, GitHub-Remote, Lockprüfung). **Solange Dennis
+> diese Entscheidung nicht ausdrücklich ändert, wird kein erneuter Umzug aus OneDrive
+> vorgeschlagen.** Der folgende Text bleibt als Historie erhalten.
+
+**Entschieden (2026-07-25, inzwischen aufgehoben):** Dokumentation und App bleiben zunächst in
+einem **gemeinsamen Repository**. Das vollständige Repository wird aus OneDrive in einen
+**lokalen, nicht synchronisierten Pfad** verlagert (z. B. `C:\dev\Kabelbereitschaft\`). ADR 1
+(„App-Code im Unterordner `app/` des Vaults") wird dadurch **nicht aufgehoben**.
 
 Der **frische Clone ist die bevorzugte Bereinigung** — alle Altlasten in `.git` entfallen damit
 automatisch, ohne dass im alten Repository etwas gelöscht werden muss:
@@ -243,7 +260,7 @@ getroffen sein muss.
 | # | Thema | Zuordnung / Status |
 |---|---|---|
 | 1 | Roadmap AP12–AP15 | **V0 — entschieden (2026-07-25): unter Auflagen als Planungsgrundlage freigegeben; Implementierung noch nicht freigegeben** |
-| 13 | Repository aus OneDrive | **Entschieden:** Doku und App bleiben in einem gemeinsamen Repository; vollständige Verlagerung in lokalen, nicht synchronisierten Pfad (Teil A, Schritt 5); ADR 1 bleibt bestehen. Sofortmaßnahme vor AP12 |
+| 13 | Repository-Ort | **Neu entschieden (2026-07-26):** gemeinsames Repository und ausschließliche Arbeit im Kabelbereitschaft-Vault; temporären C:-dev-Clone nach Abschlusskontrolle entfernen; OneDrive-Risiko bekannt und akzeptiert |
 | 8 | Aufbewahrungsfristen GPS/Audit | **V1 — OFFEN, wirkt als Produktionssperre.** Fristen werden nicht technisch erfunden. Bis zur fachlichen/datenschutzrechtlichen Entscheidung: Stage und Test **nur mit synthetischen Personen-, EXIF- und GPS-Daten**; produktiver Datenanfall gesperrt. Dokumentation in AP14; technische Löschroutinen erst nach RC1 |
 | 4 | Offline-Scope (Neuanlage, Offline-Liste) | **V2 — entschieden:** Offline-Neuanlage vollständiger Vorgänge und vollständige Offline-Vorgangsliste gehören **nicht** zu RC1; eigenes Ausbaupaket nach RC1. Bestehende Offline-Funktionen (Outbox, Synchronisation, Bilder) bleiben Bestandteil der AP14-Abnahme |
 | 10 | `technicians` ↔ `profiles` / SSO | **V3 — entschieden:** `technicians.profile_id` bleibt bis RC1 eine optionale, informative Zuordnung; keine zwingende Login-, SSO- oder Identitätskopplung in AP12 |
@@ -684,7 +701,7 @@ ausschließlich synthetische Daten verwendet.
 | V2 | Offline-Scope (Neuanlage, Offline-Liste) | Dennis | **ENTSCHIEDEN:** nicht in RC1; eigenes Ausbaupaket nach RC1. Bestehende Offline-Funktionen (Outbox, Sync, Bilder) bleiben Teil der AP14-Abnahme |
 | V3 | `technicians` ↔ `profiles` | Dennis | **ENTSCHIEDEN:** `profile_id` bleibt bis RC1 optionale, informative Zuordnung; keine Login-/SSO-/Identitätskopplung in AP12 |
 | V4 | Rate Limiting | Dennis | **ENTSCHIEDEN (Grundsatz):** bevorzugt Hosting-/Edge-/Reverse-Proxy-Ebene; endgültige Umsetzung nach Plattformwahl in AP14 |
-| — | Repository-Struktur / Umzug aus OneDrive | Dennis | **ENTSCHIEDEN:** gemeinsames Repository bleibt; vollständige Verlagerung in lokalen, nicht synchronisierten Pfad; ADR 1 nicht aufgehoben |
+| — | Repository-Struktur / Arbeitsort | Dennis | **NEU ENTSCHIEDEN (2026-07-26):** gemeinsames Repository und ausschließliche Arbeit im Kabelbereitschaft-Vault; frühere C:-dev-Festlegung aufgehoben; kein Ersatzpfad ohne ausdrückliche Freigabe |
 | — | Doku-Konsolidierung | Dennis | **ENTSCHIEDEN (geteilt):** Kennzeichnung + Statusaktualisierung vor AP12; endgültige Konsolidierung und Archivierung in AP15 |
 | — | Zeitpunkt der Infrastruktur-Beschaffung | Dennis | **ENTSCHIEDEN (1.2):** ab sofort parallel zur Repository-Stabilisierung und AP12-Vorbereitung; bis zur V1-Entscheidung ausschließlich synthetische Daten |
 | — | Menge/Einheit der Kabelpositionen | Dennis / Fachseite | **ENTSCHIEDEN (1.2, präzisiert 1.3):** `quantity_value numeric(12,3)` + `quantity_unit text`; **beide `NULL` oder beide gesetzt** (Teilzustände unzulässig); wenn gesetzt: Wert > 0, Einheiten `piece`/`meter`, bei `piece` ganzzahlig; Bestand darf `NULL` behalten, kein automatischer Backfill; neue/fachlich veränderte Positionen benötigen Wert, Einheit und Zustand; die RPCs unterscheiden eindeutig zwischen unverändert übernommenen und fachlich veränderten Positionen |
@@ -699,9 +716,10 @@ ausschließlich synthetische Daten verwendet.
 ## B.8 AP12-Startfreigabe-Checkliste
 
 Die Implementierung von AP12 ist erst zulässig, wenn **alle** Punkte abgehakt sind **und** Dennis
-die Startfreigabe ausdrücklich erteilt hat. Stand 2026-07-26: **Alle acht technischen
-Vorbedingungen sind erledigt. Die ausdrückliche AP12-Implementierungsfreigabe durch Dennis
-steht weiterhin aus.**
+die Startfreigabe ausdrücklich erteilt hat. Stand 2026-07-26 (Version 1.9): **Die Punkte 1–6 und 8
+sind abgeschlossen. Punkt 7 ist durch die aufgehobene Standortentscheidung wieder offen und wird
+als „in Rückführung" geführt.** Die ausdrückliche AP12-Implementierungsfreigabe durch Dennis steht
+zusätzlich weiterhin aus.
 
 - [x] Vollsicherung: vollständige Dateisystemkopie einschließlich `.git` außerhalb OneDrive
       (Teil A, Schritt 0) — **abgeschlossen am 2026-07-25.**
@@ -760,16 +778,28 @@ steht weiterhin aus.**
       `C:\Program Files\nodejs\node.exe`: TypeScript ohne Fehler, ESLint ohne Fehler,
       Next.js-Produktions-Build erfolgreich. Bekannte, nicht blockierende Warnung:
       `middleware`-Dateikonvention ist veraltet und soll in AP14 durch `proxy` ersetzt werden.
-- [x] Frischer Clone außerhalb OneDrive erstellt und verifiziert (Teil A, Schritt 5) —
-      **abgeschlossen am 2026-07-26.**
-      Neuer Arbeits-Clone: `C:\dev\Kabelbereitschaft`; Remote:
-      `https://github.com/DKuehnhold/Kabelbereitschaft.git`; `main` und `origin/main`
-      standen bei der Verifikation identisch auf `cf7d330`.
-      Der bisherige OneDrive-Ordner bleibt vollständig und unverändert als Sicherungs-/Vault-Kopie
-      erhalten. Auf eine Umbenennung wurde bewusst verzichtet, weil Dennis OneDrive und Obsidian
-      wieder aktiviert hat und eine Pfadänderung den geöffneten Vault unterbrechen würde.
-      Für weitere Git- und Entwicklungsarbeit ist ausschließlich `C:\dev\Kabelbereitschaft`
-      vorgesehen.
+- [ ] **Rückführung in den Vault abgeschlossen** (ersetzt den früheren Punkt „frischer Clone
+      außerhalb OneDrive", Teil A, Schritt 5) — **wieder offen, Status „in Rückführung"
+      (2026-07-26).**
+      *Historie:* Am 2026-07-26 wurde ein frischer Clone unter `C:\dev\Kabelbereitschaft`
+      angelegt und verifiziert (Remote `https://github.com/DKuehnhold/Kabelbereitschaft.git`,
+      `main` = `origin/main` = `cf7d330`) und zunächst als führender Arbeitsort festgelegt.
+      **Diese Standortentscheidung hat Dennis am 2026-07-26 ausdrücklich aufgehoben.** Der
+      Kabelbereitschaft-Vault ist wieder alleiniger Projekt- und Arbeitsort;
+      `C:\dev\Kabelbereitschaft` gilt nur noch als vorübergehender, zu entfernender Clone.
+      *Neue Zielbedingungen für diesen Punkt:*
+      1. Der Vault ist alleiniger Projekt- und Arbeitsort.
+      2. Die Inhalte von `C:\dev\Kabelbereitschaft` sind vollständig kontrolliert.
+      3. Dort verbleiben keine einzigartigen relevanten Dateien (Inventarstand 2026-07-26:
+         **keine** Datei existiert ausschließlich im Dev-Ordner).
+      4. Commit `455c71d` und der Branding-Branch `04253a2` sind im Vault **und** auf GitHub
+         vorhanden.
+      5. `C:\dev\Kabelbereitschaft` wurde über den **Windows-Papierkorb** entfernt
+         (keine permanente Löschung; `C:\dev` selbst bleibt bestehen).
+      *Aktueller Stand:* 1–4 erfüllt; 5 offen. Vault steht auf `main` = `origin/main` =
+      `455c71d`; `origin/feat/ap8.1-branding` = `04253a2`. Offen bleiben zusätzlich der
+      Dokumentations-Commit mit Push und die finale Gegenprüfung.
+      **AP12 bleibt bis zum Abschluss dieses Punktes und der ausdrücklichen Freigabe gesperrt.**
 - [x] Führende Statusdokumente eindeutig gekennzeichnet und auf den tatsächlichen Projektstand
       gebracht; veraltete Dubletten als „historisch/abgelöst" markiert, nicht gelöscht
       (Auflage aus B.1) — **abgeschlossen am 2026-07-26.** Führend: `PROJEKTSTATUS.md`
@@ -798,3 +828,4 @@ steht weiterhin aus.**
 | 1.6 | 2026-07-26 | B.8 Punkt 3 abgeschlossen: read-only Integritätsprüfung nach der Lock-Entfernung — `git --no-optional-locks status` fehlerfrei (Branch `main`, 3 Commits voraus, Arbeitskopie wie in A.1), `git fsck --connectivity-only` ohne Korruption mit ausschließlich den zwei bekannten dangling commits; `main` = `1b8d071`, `origin/main` = `1cac409`. B.8 Punkt 8 abgeschlossen: führende Statusdokumente gekennzeichnet (`PROJEKTSTATUS.md` Wurzel, `00-Projektsteuerung/CHANGELOG.md`, `07-Betrieb/BACKUP_UND_RECOVERY.md`), Dubletten als historisch/abgelöst markiert statt gelöscht (`00-Projektsteuerung/PROJEKTSTATUS.md`, `CHANGELOG.md` Wurzel, `07-Betrieb/BACKUP.md`), führende `PROJEKTSTATUS.md` auf den tatsächlichen Stand AP9–AP11 inklusive Git-, Sicherungs- und Sperrstatus gebracht. Weiterhin offen: B.8 Punkte 4–7 (Bundle, Push, getrennte Commits, frischer Clone) — blockiert durch fehlenden Zugriff auf `C:\Backup`/`C:\dev` und fehlende GitHub-Anmeldung in der Arbeitsumgebung. Status unverändert: V1 offen (Produktionssperre), AP12-Implementierung nicht freigegeben, kein RC1-Tag | Claude (KI) nach Vorgaben von Dennis |
 | 1.7 | 2026-07-26 | B.8 Punkt 4 abgeschlossen: vollständiges Git-Bundle `C:\Backup\kabelbereitschaft_main_2026-07-26.bundle` (429.458 Bytes) angelegt und mit `git bundle verify` geprüft. B.8 Punkt 5 abgeschlossen: AP9–AP11 nach GitHub gepusht (`1cac409..1b8d071`), `main` und `origin/main` stehen identisch auf `1b8d071`. Der zuvor dokumentierte Umgebungsblocker ist damit entfallen. Weiterhin offen: B.8 Punkte 6–7 (getrennte Dokumentations-/Branding-Sicherung und frischer Clone). Status unverändert: V1 offen (Produktionssperre), AP12-Implementierung nicht freigegeben, kein RC1-Tag | Codex (KI) nach Vorgaben von Dennis |
 | 1.8 | 2026-07-26 | B.8 Punkt 6 abgeschlossen: Dokumentation separat als `cf7d330` auf `main`, Branding separat als `04253a2` auf `feat/ap8.1-branding` gesichert und jeweils nach GitHub gepusht; Branding im frischen Clone mit TypeScript, ESLint und Next.js-Produktions-Build erfolgreich geprüft. B.8 Punkt 7 abgeschlossen: frischer, sauberer GitHub-Clone unter `C:\dev\Kabelbereitschaft` verifiziert. Der OneDrive-Ordner bleibt wegen des wieder aktiven Obsidian-Vaults am bestehenden Pfad vollständig erhalten; weitere Git-/Entwicklungsarbeit erfolgt ausschließlich im neuen Clone. Damit sind alle acht technischen B.8-Punkte erledigt. Status unverändert: V1 offen (Produktionssperre), AP12-Implementierung wartet weiterhin auf die ausdrückliche Freigabe durch Dennis, kein RC1-Tag | Codex (KI) nach Vorgaben von Dennis |
+| 1.9 | 2026-07-26 | **Standortentscheidung geändert:** Dennis hebt die Festlegung auf `C:\dev\Kabelbereitschaft` als führenden Arbeits-Clone ausdrücklich auf. Einziger Projekt- und Arbeitsort ist wieder der Kabelbereitschaft-Vault `…\Kabelbereitschaft-App\Kabelbereitschaft-App`; der Dev-Clone gilt als vorübergehender technischer Clone und wird über den Windows-Papierkorb entfernt (`C:\dev` bleibt bestehen). Teil A Schritt 5 als aufgehoben gekennzeichnet, Historie erhalten; keine Empfehlung für einen erneuten Umzug aus OneDrive. B.8 angepasst: Punkte 1–6 und 8 bleiben abgeschlossen, Punkt 7 wieder offen und als „in Rückführung" mit fünf neuen Zielbedingungen geführt (Vault alleiniger Arbeitsort, Dev-Inhalte kontrolliert, keine einzigartigen Dateien dort, Commit und Branding-Branch in Vault und GitHub vorhanden, Dev-Ordner über Papierkorb entfernt). Rückführungsstand: Vault auf `main` = `origin/main` = `455c71d`, `origin/feat/ap8.1-branding` = `04253a2`, Arbeitskopie nach Windows-Reparatur sauber, Inventar ohne einzigartige Dev-Dateien; offen bleiben Dokumentations-Commit mit Push, finale Gegenprüfung und die Entfernung des Dev-Ordners. Branding bleibt separat und ungemergt; AP12 gesperrt; V1 weiterhin Produktionssperre; kein RC1-Tag | Claude (KI) nach Vorgaben von Dennis |

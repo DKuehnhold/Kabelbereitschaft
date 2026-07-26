@@ -101,10 +101,10 @@ CSV-Export, Offlinebetrieb mit Synchronisation und Konfliktbehandlung.
 - **Datenschutz:** V1 (Aufbewahrungsfristen für Personen-, EXIF-/GPS- und Auditdaten) bleibt offen
   und wirkt als Produktionssperre. Stage/Test bis zur Entscheidung ausschließlich mit
   synthetischen Daten.
-- **Repository:** Frischer GitHub-Clone unter `C:\dev\Kabelbereitschaft` angelegt und
-  verifiziert; dieser Pfad ist für weitere Git-/Entwicklungsarbeit führend. Der bisherige
-  OneDrive-Ordner bleibt wegen des aktiven Obsidian-Vaults unverändert als
-  Sicherungs-/Vault-Kopie erhalten.
+- **Repository:** Am 2026-07-26 wurde vorübergehend ein frischer GitHub-Clone unter
+  `C:\dev\Kabelbereitschaft` angelegt und kurzzeitig als führender Arbeitsort geführt.
+  **Diese Festlegung hat Dennis am 2026-07-26 ausdrücklich aufgehoben** (siehe folgender
+  Abschnitt).
 - **Branding:** AP8.1 getrennt als Commit `04253a2` auf Branch
   `feat/ap8.1-branding` gesichert und nach GitHub gepusht. TypeScript, ESLint und
   Next.js-Produktions-Build im frischen Clone erfolgreich.
@@ -113,3 +113,37 @@ CSV-Export, Offlinebetrieb mit Synchronisation und Konfliktbehandlung.
   Die belastbaren Prüfungen wurden deshalb mit
   `C:\Program Files\nodejs\node.exe` ausgeführt. Diese Windows-Zuordnung ist vor dem
   regulären Entwicklerbetrieb separat zu korrigieren.
+
+## Verbindlicher Arbeitsort (Entscheidung Dennis, 2026-07-26)
+
+Diese Festlegungen gelten dauerhaft und ersetzen alle früheren Standortaussagen.
+
+- **Diese Datei ist die zentrale und für alle Projektchats verbindliche Projektübersicht.**
+  Neue Entscheidungen und Statusinformationen werden hier konsolidiert; zusätzliche parallele
+  Übersichts- oder Statusdokumente werden nicht angelegt.
+- **Einziger Projekt- und Arbeitsort** ist der Kabelbereitschaft-Vault
+  `C:\Users\DennisKühnhold\OneDrive - W & S Technik GmbH\Kabelbereitschaft-App\Kabelbereitschaft-App`.
+- `C:\dev\Kabelbereitschaft` war ein **vorübergehender technischer Clone** und ist zur
+  Entfernung über den Windows-Papierkorb vorgesehen; `C:\dev` selbst bleibt bestehen.
+- Nach dem geprüften Inventar vom 2026-07-26 enthält der Dev-Ordner **keine einzigartige
+  relevante Projektdatei**: 226 verglichene Dateien, keine ausschließlich dort vorhanden;
+  alle Abweichungen waren durch den Commit `455c71d`, den ausgecheckten Branch oder
+  generierte Artefakte erklärbar.
+- **Fehlender Werkzeug- oder Ordnerzugriff darf niemals zur eigenständigen Anlage eines
+  Ersatzordners führen.** Kein Ausweichen auf Sitzungs-, Ausgabe- oder temporäre Ordner, keine
+  zusätzliche Repository-Kopie, keine eigenmächtige Verlagerung des Projekts.
+- Bei fehlendem Zugriff **halten Claude bzw. Codex an**, nennen den exakten Blocker (Pfad oder
+  Dienst) und bitten Dennis um Zugang. Ein Arbeitsschritt darf nicht in einer Sandbox simuliert
+  und als erledigt gemeldet werden.
+- **Neue dauerhafte Projektdateien und Arbeitsergebnisse entstehen ausschließlich im Vault.**
+- Die Sicherungen unter `C:\Backup` (Vollsicherung, Git-Bundle, Lock-Quarantäne) bleiben
+  unverändert und sind **keine Arbeitsorte**.
+- Das **Risiko von Git-Schreiboperationen in OneDrive bleibt bekannt und bewusst akzeptiert**.
+  Es wird transparent dokumentiert und durch Vollsicherung, Git-Bundle, GitHub-Remote und
+  Lockprüfung abgesichert. Ein erneuter Umzug aus OneDrive wird nicht vorgeschlagen, solange
+  Dennis diese Entscheidung nicht ausdrücklich ändert.
+- **Branding** bleibt auf `feat/ap8.1-branding` (`04253a2`, auf GitHub gesichert) und ist
+  **nicht** nach `main` gemergt.
+- **AP12 bleibt bis zur ausdrücklichen Freigabe durch Dennis gesperrt.**
+- **V1** (Aufbewahrungsfristen) bleibt offen und wirkt als **Produktionssperre**; Stage und Test
+  ausschließlich mit synthetischen Daten.
