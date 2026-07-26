@@ -1,5 +1,10 @@
 # Projektstatus – Kabelbereitschaft
-> Stand: 2026-07-19
+
+> **FÜHRENDES DOKUMENT (Projektstatus).** Kennzeichnung vom 2026-07-26 gemäß Auflage vor AP12
+> (`00-Projektsteuerung/ROADMAP_AP12_AP15_ENTWURF.md`, B.1/B.8). Abgelöste Dublette:
+> `00-Projektsteuerung/PROJEKTSTATUS.md` (als historisch markiert, nicht gelöscht).
+> Endgültige Konsolidierung und Archivierung erfolgen in AP15.
+> Stand: 2026-07-26
 
 ## Repository
 - Repository: Kabelbereitschaft
@@ -28,7 +33,8 @@
 - **AP7** – Vorschläge: CI mit Test-Supabase scharfschalten, Middleware→Proxy mit E2E, Push/Release,
   WebCrypto/Background-Sync.
 
-## Git / Push
+## Git / Push (VERALTET — siehe „Aktueller Stand 2026-07-26" am Dateiende)
+> Der folgende Absatz beschreibt den Stand vom 2026-07-19 und ist überholt.
 Lokaler `main` ist Remote (`origin/main` = `8d83371`) voraus: **AP4, AP5, AP6 sind noch nicht
 gepusht** (kein Git-Zugang in der Build-Umgebung). Push durch den Nutzer erforderlich.
 
@@ -51,3 +57,26 @@ Dark Mode (Light/Dark/System), theme-fähiges App-Chrome, Skeleton-Ladezustände
 (Fokus/aria/Touch/reduced-motion), Safe-Area. Geprüft: lint (0), tsc (0), build (PASS);
 AP1–AP7-Regression unverändert grün. Offen: App-Screenshots + visuelle/Screenreader-Feinabnahme
 (benötigen Browser + Test-Supabase). Details: `04-UI-UX/GUI.md`, `04-UI-UX/DESIGNSYSTEM.md`.
+
+## Aktueller Stand 2026-07-26
+
+- **AP9** – Stammdatenverwaltung: abgeschlossen, Commit `008f648`.
+- **AP10** – Stammdaten in die Vorgangsanlage integriert: abgeschlossen, Commit `156e43f`.
+- **AP11** – Operative Vorgangsliste: abgeschlossen, Commit `1b8d071`.
+- **Git:** AP9–AP11 wurden am 2026-07-26 nach GitHub gepusht; `main` und `origin/main`
+  stehen identisch auf `1b8d071`.
+- **Sicherung:** vollständige, hashidentisch geprüfte Dateisystemkopie unter
+  `C:\Backup\Kabelbereitschaft_2026-07-25_191847`; verifiziertes Git-Bundle unter
+  `C:\Backup\kabelbereitschaft_main_2026-07-26.bundle`.
+- **Repository-Stabilisierung:** Die verwaisten `index.lock` und `HEAD.lock` wurden
+  wiederherstellbar nach
+  `C:\Backup\Kabelbereitschaft_Lockquarantaene_2026-07-26_093108` verschoben.
+  `git status` und `git fsck --connectivity-only` sind anschließend ohne Korruptionsbefund
+  durchgelaufen; die übrigen `.git`-Altlasten wurden nicht verändert.
+- **Roadmap:** AP12–AP15 sind in
+  `00-Projektsteuerung/ROADMAP_AP12_AP15_ENTWURF.md` geplant. AP12 ist noch nicht zur
+  Implementierung freigegeben.
+- **Produktionssperre:** V1 (Aufbewahrungsfristen für Personen-, EXIF-/GPS- und Auditdaten)
+  ist offen. Bis zur Entscheidung sind ausschließlich synthetische Stage-/Testdaten zulässig.
+- **Noch offen vor AP12:** Branding separat prüfen und versionieren sowie einen frischen
+  Arbeits-Clone außerhalb OneDrive verifizieren.

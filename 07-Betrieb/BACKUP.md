@@ -1,5 +1,11 @@
 # Backup und Wiederherstellung
 
+> **HISTORISCH / ABGELÖST — nicht mehr pflegen.** Kennzeichnung vom 2026-07-26 gemäß Auflage
+> vor AP12 (`00-Projektsteuerung/ROADMAP_AP12_AP15_ENTWURF.md`, B.1/B.8).
+> Führendes Dokument für Backup/Recovery: `07-Betrieb/BACKUP_UND_RECOVERY.md`.
+> Dieses Dokument bleibt zu Nachweiszwecken erhalten und wird erst in AP15 kontrolliert
+> archiviert. Inhalt ist auf dem Stand AP1 (2026-07-19) und damit veraltet.
+
 > Stand: 2026-07-19 · MVP V0.1 · Teil von Arbeitspaket 1
 
 ## Was wird gesichert

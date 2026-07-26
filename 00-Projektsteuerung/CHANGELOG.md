@@ -1,5 +1,10 @@
 # Changelog
 
+> **FÜHRENDES DOKUMENT (Changelog).** Kennzeichnung vom 2026-07-26 gemäß Auflage vor AP12
+> (`00-Projektsteuerung/ROADMAP_AP12_AP15_ENTWURF.md`, B.1/B.8). Abgelöste Dublette:
+> `CHANGELOG.md (Repository-Wurzel)` (als historisch markiert, nicht gelöscht).
+> Endgültige Konsolidierung und Archivierung erfolgen in AP15.
+
 ## [0.1.0] – 2026-07-19 – Arbeitspaket 1
 ### Hinzugefügt
 - Vault-Dokumentationsstruktur (00–07, 99) mit Grundlagendokumenten.

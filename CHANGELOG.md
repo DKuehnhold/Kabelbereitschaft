@@ -1,5 +1,11 @@
 # Changelog
 
+> **HISTORISCH / ABGELÖST — nicht mehr pflegen.** Kennzeichnung vom 2026-07-26 gemäß Auflage
+> vor AP12 (`00-Projektsteuerung/ROADMAP_AP12_AP15_ENTWURF.md`, B.1/B.8).
+> Führendes Dokument für den Changelog: `00-Projektsteuerung/CHANGELOG.md`.
+> Dieses Dokument bleibt zu Nachweiszwecken erhalten und wird erst in AP15 kontrolliert
+> archiviert. Inhalt ist auf dem Stand AP8 (2026-07-19) und enthält AP9–AP11 nicht und damit veraltet.
+
 Alle nennenswerten Änderungen an diesem Projekt.
 
 ## [Unveröffentlicht]

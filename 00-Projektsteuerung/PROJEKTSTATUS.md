@@ -1,4 +1,10 @@
 # Projektstatus
+
+> **HISTORISCH / ABGELÖST — nicht mehr pflegen.** Kennzeichnung vom 2026-07-26 gemäß Auflage
+> vor AP12 (`00-Projektsteuerung/ROADMAP_AP12_AP15_ENTWURF.md`, B.1/B.8).
+> Führendes Dokument für den Projektstatus: `PROJEKTSTATUS.md (Repository-Wurzel)`.
+> Dieses Dokument bleibt zu Nachweiszwecken erhalten und wird erst in AP15 kontrolliert
+> archiviert. Inhalt ist auf dem Stand AP2 (2026-07-19) und damit veraltet.
 > Stand: 2026-07-19 · MVP V0.1
 
 ## Aktueller Stand

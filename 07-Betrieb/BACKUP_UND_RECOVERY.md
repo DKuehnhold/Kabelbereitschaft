@@ -1,4 +1,9 @@
 # Backup und Recovery – Konzept (AP7)
+
+> **FÜHRENDES DOKUMENT (Backup/Recovery).** Kennzeichnung vom 2026-07-26 gemäß Auflage vor AP12
+> (`00-Projektsteuerung/ROADMAP_AP12_AP15_ENTWURF.md`, B.1/B.8). Abgelöste Dublette:
+> `07-Betrieb/BACKUP.md` (als historisch markiert, nicht gelöscht).
+> Endgültige Konsolidierung und Archivierung erfolgen in AP15.
 > Stand: 2026-07-19 · Technisches Konzept. Es wird KEINE Backup-Funktion behauptet, die nicht
 > tatsächlich eingerichtet/getestet wurde. In dieser Umgebung ohne Zielinfrastruktur nicht getestet.
 

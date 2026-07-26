@@ -84,3 +84,20 @@ CSV-Export, Offlinebetrieb mit Synchronisation und Konfliktbehandlung.
 - Offene Hinweise abgeleitet (kein Aufgabenmodell); keine Offline-Liste; kein Audit durch die Liste.
 - Verifiziert lokal: lint/tsc/build; AP11-Smoke 8/8; Performance 600; Regression 11/13/14/15 grün.
 - Commit `feat: implement operational incident list (AP11)`; AP8.1-Branding nicht im Commit.
+
+## Nachtrag Stabilisierung und Roadmap (2026-07-26)
+- **Git:** AP9–AP11 wurden nach `origin/main` gepusht; lokal und remote stehen auf `1b8d071`.
+- **Sicherung:** Vollständige, hashidentisch verifizierte Dateisystemkopie unter
+  `C:\Backup\Kabelbereitschaft_2026-07-25_191847`; vollständiges Git-Bundle unter
+  `C:\Backup\kabelbereitschaft_main_2026-07-26.bundle`.
+- **Locks:** Die verwaisten `.git/index.lock` und `.git/HEAD.lock` wurden nach
+  `C:\Backup\Kabelbereitschaft_Lockquarantaene_2026-07-26_093108` verschoben. Git-Integrität
+  anschließend bestätigt; die übrigen Altlasten blieben unangetastet.
+- **Roadmap:** AP12–AP15 sind in `00-Projektsteuerung/ROADMAP_AP12_AP15_ENTWURF.md` geplant.
+  Die Roadmap ist nur als Planungsgrundlage freigegeben; AP12 ist noch nicht zur Implementierung
+  freigegeben.
+- **Datenschutz:** V1 (Aufbewahrungsfristen für Personen-, EXIF-/GPS- und Auditdaten) bleibt offen
+  und wirkt als Produktionssperre. Stage/Test bis zur Entscheidung ausschließlich mit
+  synthetischen Daten.
+- **Repository:** Der Umzug aus OneDrive in einen frischen lokalen Clone bleibt bis zur
+  nachgewiesenen Anlage unter `C:\dev\Kabelbereitschaft` offen.
