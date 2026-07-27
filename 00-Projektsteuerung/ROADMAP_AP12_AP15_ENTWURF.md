@@ -1,19 +1,19 @@
 # Roadmap AP12–AP15 und Git-Sicherungsplan
 
-> **Version 1.10** · Stand: 2026-07-26 ·
+> **Version 1.12** · Stand: 2026-07-27 ·
 > **Verbindlicher Arbeitsort (Entscheidung Dennis, 2026-07-26):** einziger Projekt- und
 > Arbeitsort ist der Kabelbereitschaft-Vault
 > `C:\Users\DennisKühnhold\OneDrive - W & S Technik GmbH\Kabelbereitschaft-App\Kabelbereitschaft-App`.
 > Die frühere Festlegung, `C:\dev\Kabelbereitschaft` sei der führende Arbeits-Clone, ist
 > **durch Dennis ausdrücklich aufgehoben**; jener Ordner war ein vorübergehender technischer
 > Clone und wurde nach Abschluss der Rückführung über den Windows-Papierkorb entfernt.
-> **Status (V0): Roadmap unter Auflagen als Planungsgrundlage freigegeben; Implementierung noch
-> nicht freigegeben.** Keine Umsetzung, keine Bereinigung, keine Statusdokumente geändert.
+> **Status (V0/AP12): Roadmap unter Auflagen als Planungsgrundlage freigegeben; AP12 wurde
+> durch Dennis am 2026-07-27 ausdrücklich freigegeben und ist technisch abgeschlossen.**
 > Die Entscheidungen **V2, V3, V4**, zur **Repository-Struktur** sowie die vier AP12-Detailpunkte
 > **Menge/Einheit, `condition_code`, Monteur-Kontaktzugriff und Infrastrukturzeitpunkt** sind
 > getroffen (siehe B.1/B.7); **V1 (Datenschutz) bleibt offen und wirkt als Produktionssperre.**
-> Die AP12-Implementierung ist erst nach vollständiger Abarbeitung der
-> **AP12-Startfreigabe-Checkliste (B.8)** und ausdrücklicher Freigabe durch Dennis zulässig.
+> Die **AP12-Startfreigabe-Checkliste (B.8)** ist vollständig abgearbeitet; die erforderliche
+> ausdrückliche Freigabe durch Dennis wurde am 2026-07-27 erteilt.
 > Grundlage: read-only Git-Prüfung vom 2026-07-25, `00-Projektsteuerung/ARCHITEKTEN_UEBERSICHT.md`
 > und die Freigabeentscheidungen vom 2026-07-25 (V0-Auflagen und AP12-Detailentscheidungen).
 > Dieses Dokument überschreibt nichts und ersetzt kein bestehendes Dokument.
@@ -259,7 +259,7 @@ getroffen sein muss.
 
 | # | Thema | Zuordnung / Status |
 |---|---|---|
-| 1 | Roadmap AP12–AP15 | **V0 — entschieden (2026-07-25): unter Auflagen als Planungsgrundlage freigegeben; Implementierung noch nicht freigegeben** |
+| 1 | Roadmap AP12–AP15 | **V0 — Planungsgrundlage seit 2026-07-25 unter Auflagen freigegeben; AP12-Implementierung am 2026-07-27 durch Dennis ausdrücklich freigegeben und in Umsetzung** |
 | 13 | Repository-Ort | **Neu entschieden (2026-07-26):** gemeinsames Repository und ausschließliche Arbeit im Kabelbereitschaft-Vault; temporären C:-dev-Clone nach Abschlusskontrolle entfernen; OneDrive-Risiko bekannt und akzeptiert |
 | 8 | Aufbewahrungsfristen GPS/Audit | **V1 — OFFEN, wirkt als Produktionssperre.** Fristen werden nicht technisch erfunden. Bis zur fachlichen/datenschutzrechtlichen Entscheidung: Stage und Test **nur mit synthetischen Personen-, EXIF- und GPS-Daten**; produktiver Datenanfall gesperrt. Dokumentation in AP14; technische Löschroutinen erst nach RC1 |
 | 4 | Offline-Scope (Neuanlage, Offline-Liste) | **V2 — entschieden:** Offline-Neuanlage vollständiger Vorgänge und vollständige Offline-Vorgangsliste gehören **nicht** zu RC1; eigenes Ausbaupaket nach RC1. Bestehende Offline-Funktionen (Outbox, Synchronisation, Bilder) bleiben Bestandteil der AP14-Abnahme |
@@ -799,7 +799,7 @@ durch Dennis steht weiterhin aus.
       (saubere Arbeitskopie, 226 relevante Dateien, 0 ausschließlich dort vorhandene Dateien,
       lokale Commits auf GitHub gesichert) in den Windows-Papierkorb verschoben.
       `C:\dev` selbst blieb bestehen. Der Vault blieb sauber und `Willkommen.md` hashidentisch.
-      **AP12 bleibt bis zur ausdrücklichen Freigabe durch Dennis gesperrt.**
+      **AP12 wurde am 2026-07-27 ausdrücklich durch Dennis freigegeben.**
 - [x] Führende Statusdokumente eindeutig gekennzeichnet und auf den tatsächlichen Projektstand
       gebracht; veraltete Dubletten als „historisch/abgelöst" markiert, nicht gelöscht
       (Auflage aus B.1) — **abgeschlossen am 2026-07-26.** Führend: `PROJEKTSTATUS.md`
@@ -830,3 +830,5 @@ durch Dennis steht weiterhin aus.
 | 1.8 | 2026-07-26 | B.8 Punkt 6 abgeschlossen: Dokumentation separat als `cf7d330` auf `main`, Branding separat als `04253a2` auf `feat/ap8.1-branding` gesichert und jeweils nach GitHub gepusht; Branding im frischen Clone mit TypeScript, ESLint und Next.js-Produktions-Build erfolgreich geprüft. B.8 Punkt 7 abgeschlossen: frischer, sauberer GitHub-Clone unter `C:\dev\Kabelbereitschaft` verifiziert. Der OneDrive-Ordner bleibt wegen des wieder aktiven Obsidian-Vaults am bestehenden Pfad vollständig erhalten; weitere Git-/Entwicklungsarbeit erfolgt ausschließlich im neuen Clone. Damit sind alle acht technischen B.8-Punkte erledigt. Status unverändert: V1 offen (Produktionssperre), AP12-Implementierung wartet weiterhin auf die ausdrückliche Freigabe durch Dennis, kein RC1-Tag | Codex (KI) nach Vorgaben von Dennis |
 | 1.9 | 2026-07-26 | **Standortentscheidung geändert:** Dennis hebt die Festlegung auf `C:\dev\Kabelbereitschaft` als führenden Arbeits-Clone ausdrücklich auf. Einziger Projekt- und Arbeitsort ist wieder der Kabelbereitschaft-Vault `…\Kabelbereitschaft-App\Kabelbereitschaft-App`; der Dev-Clone gilt als vorübergehender technischer Clone und wird über den Windows-Papierkorb entfernt (`C:\dev` bleibt bestehen). Teil A Schritt 5 als aufgehoben gekennzeichnet, Historie erhalten; keine Empfehlung für einen erneuten Umzug aus OneDrive. B.8 angepasst: Punkte 1–6 und 8 bleiben abgeschlossen, Punkt 7 wieder offen und als „in Rückführung" mit fünf neuen Zielbedingungen geführt (Vault alleiniger Arbeitsort, Dev-Inhalte kontrolliert, keine einzigartigen Dateien dort, Commit und Branding-Branch in Vault und GitHub vorhanden, Dev-Ordner über Papierkorb entfernt). Rückführungsstand: Vault auf `main` = `origin/main` = `455c71d`, `origin/feat/ap8.1-branding` = `04253a2`, Arbeitskopie nach Windows-Reparatur sauber, Inventar ohne einzigartige Dev-Dateien; offen bleiben Dokumentations-Commit mit Push, finale Gegenprüfung und die Entfernung des Dev-Ordners. Branding bleibt separat und ungemergt; AP12 gesperrt; V1 weiterhin Produktionssperre; kein RC1-Tag | Claude (KI) nach Vorgaben von Dennis |
 | 1.10 | 2026-07-26 | Rückführung abgeschlossen: Standortkorrektur als `efdadfb` nach `origin/main` gepusht; temporären Clone `C:\dev\Kabelbereitschaft` nach erneuter Kontrolle über den Windows-Papierkorb entfernt, `C:\dev` beibehalten. Vault anschließend sauber auf `main` = `origin/main`, `Willkommen.md` unverändert. B.8 Punkt 7 geschlossen; alle acht technischen Vorbedingungen sind erledigt. `PROJEKT_WISSEN.md` ist die zentrale Projektübersicht. AP12 wartet nur noch auf die ausdrückliche Freigabe durch Dennis; V1 bleibt Produktionssperre | Codex (KI) nach Vorgaben von Dennis |
+| 1.11 | 2026-07-27 | Dennis erteilt mit „Mach jetzt weiter“ die ausdrückliche AP12-Implementierungsfreigabe. AP12 in Umsetzung: Migration `0010_ap12_incident_details.sql`, neue AP12-RPCs, Mehrfach-Kabelpositionen mit Menge/Einheit/Zustand, Kontakt-FK und Snapshot, minimierte Monteur-Kontaktprojektion, überarbeitete Vorgangsoberfläche und Bereitschaftsnummern-CRUD implementiert. TypeScript, ESLint und Next.js-Produktions-Build erfolgreich. Der lokale PostgreSQL-18-Lauf ist mit `app/supabase/test/run_ap12_local.ps1` vorbereitet und wartet ausschließlich auf die verdeckte Kennworteingabe durch Dennis; AP12 deshalb noch nicht abgeschlossen. V1 bleibt Produktionssperre | Codex (KI) |
+| 1.12 | 2026-07-27 | AP12 technisch abgeschlossen: vollständiger lokaler PostgreSQL-18-Lauf mit Migrationen 0001–0010 und AP10–AP12-Smoke-Tests erfolgreich. Nachgewiesen sind insbesondere Mengen-/Einheiten-/Zustandsregeln, historische NULL-Positionen, Kontakt-Snapshot, minimierte Monteur-Projektion, RLS, Staff-CRUD und der Entzug des AP10-Schreibaltpfads. Teststarter gegen harmlose PostgreSQL-NOTICE-Ausgaben gehärtet; AP11-Zähltests fixture-spezifisch gemacht; temporäre Testdatenbank entfernt. V1 bleibt unverändert Produktionssperre | Codex (KI) |

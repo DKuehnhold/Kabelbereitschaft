@@ -56,6 +56,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/stammdaten/monteure", label: "Monteure", roles: ["admin", "disponent"] },
       { href: "/stammdaten/teams", label: "Teams", roles: ["admin", "disponent"] },
       { href: "/stammdaten/kabelarten", label: "Kabelarten", roles: ["admin", "disponent"] },
+      { href: "/stammdaten/bereitschaftsnummern", label: "Bereitschaftsnummern", roles: ["admin", "disponent"] },
       { href: "/stammdaten/einstellungen", label: "Einstellungen", roles: ["admin", "disponent"] },
     ],
   },

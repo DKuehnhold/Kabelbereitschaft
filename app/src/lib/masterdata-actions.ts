@@ -56,10 +56,42 @@ function revalidateMaster() {
     "/stammdaten/monteure",
     "/stammdaten/teams",
     "/stammdaten/kabelarten",
+    "/stammdaten/bereitschaftsnummern",
     "/stammdaten/einstellungen",
   ]) {
     revalidatePath(p);
   }
+}
+
+// =====================================================================
+// Bereitschaftsnummern
+// =====================================================================
+export async function saveOnCallNumber(_prev: FormState, fd: FormData): Promise<FormState> {
+  if (!(await requireStaff())) return { ok: false, error: STAFF_ONLY };
+  const id = strOrNull(fd, "id");
+  const number = str(fd, "number");
+  if (!number) return { ok: false, error: "Telefonnummer ist erforderlich." };
+  const payload = {
+    number,
+    label: strOrNull(fd, "label"),
+    is_active: str(fd, "is_active") !== "false",
+  };
+  const supabase = await createClient();
+  const res = id
+    ? await supabase.from("on_call_numbers").update(payload).eq("id", id)
+    : await supabase.from("on_call_numbers").insert(payload);
+  if (res.error) return saveErr(res.error.message);
+  revalidateMaster();
+  return { ok: true, error: null };
+}
+
+export async function setOnCallNumberActive(fd: FormData): Promise<void> {
+  if (!(await requireStaff())) return;
+  const id = str(fd, "id");
+  if (!id) return;
+  const supabase = await createClient();
+  await supabase.from("on_call_numbers").update({ is_active: str(fd, "active") === "true" }).eq("id", id);
+  revalidateMaster();
 }
 
 // =====================================================================

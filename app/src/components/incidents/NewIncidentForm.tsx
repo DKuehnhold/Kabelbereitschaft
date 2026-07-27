@@ -4,6 +4,8 @@ import { useActionState, useMemo, useState } from "react";
 import { createIncident } from "@/lib/incident-actions";
 import { PRIORITIES, PRIORITY_LABELS } from "@/lib/priority";
 import type { FormState, IncidentFormOptions } from "@/lib/incidents";
+import { CablePositionsEditor } from "@/components/incidents/CablePositionsEditor";
+import { ContactSelector } from "@/components/incidents/ContactSelector";
 
 const initial: FormState = { ok: false, error: null };
 const labelCls = "mb-1 block text-sm font-medium text-foreground";
@@ -29,7 +31,6 @@ export function NewIncidentForm({ options }: { options: IncidentFormOptions }) {
   const [stageId, setStageId] = useState("");
   const [vzgId, setVzgId] = useState("");
   const [onCallId, setOnCallId] = useState("");
-  const [cableId, setCableId] = useState("");
   const [priority, setPriority] = useState<(typeof PRIORITIES)[number]>("normal");
 
   const vzgOptions = useMemo(
@@ -97,18 +98,13 @@ export function NewIncidentForm({ options }: { options: IncidentFormOptions }) {
               {PRIORITIES.map((p) => <option key={p} value={p}>{PRIORITY_LABELS[p]}</option>)}
             </select>
           </div>
-          <div>
-            <label className={labelCls} htmlFor="cable_type_id">Kabelart *</label>
-            <select id="cable_type_id" name="cable_type_id" required value={cableId} onChange={(e) => setCableId(e.target.value)} className="input">
-              <option value="">Bitte wählen…</option>
-              {options.cableTypes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </select>
-            <p className="mt-1 text-xs text-muted">Erste Kabelposition; weitere Positionen folgen in einem späteren Ausbau.</p>
-          </div>
         </div>
         <div className="mt-4">
           <label className={labelCls} htmlFor="description">Beschreibung *</label>
           <textarea id="description" name="description" rows={3} required className="input" />
+        </div>
+        <div className="mt-4">
+          <CablePositionsEditor cableTypes={options.cableTypes} />
         </div>
       </Section>
 
@@ -129,9 +125,10 @@ export function NewIncidentForm({ options }: { options: IncidentFormOptions }) {
       </Section>
 
       <Section title="Meldung & Bemerkungen (optional)">
+        <ContactSelector contacts={options.contacts} customerId={customerId} />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div><label className={labelCls} htmlFor="caller_name">Anrufer/Ansprechpartner</label><input id="caller_name" name="caller_name" className="input" /></div>
-          <div><label className={labelCls} htmlFor="caller_contact">Telefon</label><input id="caller_contact" name="caller_contact" className="input" /></div>
+          <div><label className={labelCls} htmlFor="caller_name">Freitext-Ansprechpartner / Fallback</label><input id="caller_name" name="caller_name" className="input" /></div>
+          <div><label className={labelCls} htmlFor="caller_contact">Freitext-Telefon / Fallback</label><input id="caller_contact" name="caller_contact" className="input" /></div>
           <div><label className={labelCls} htmlFor="external_reference">Externe Referenz</label><input id="external_reference" name="external_reference" className="input" /></div>
         </div>
         <div className="mt-4">

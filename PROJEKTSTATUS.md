@@ -4,7 +4,7 @@
 > (`00-Projektsteuerung/ROADMAP_AP12_AP15_ENTWURF.md`, B.1/B.8). Abgelöste Dublette:
 > `00-Projektsteuerung/PROJEKTSTATUS.md` (als historisch markiert, nicht gelöscht).
 > Endgültige Konsolidierung und Archivierung erfolgen in AP15.
-> Stand: 2026-07-26
+> Stand: 2026-07-27
 
 ## Repository
 - Repository: Kabelbereitschaft
@@ -75,8 +75,8 @@ AP1–AP7-Regression unverändert grün. Offen: App-Screenshots + visuelle/Scree
   `git status` und `git fsck --connectivity-only` sind anschließend ohne Korruptionsbefund
   durchgelaufen; die übrigen `.git`-Altlasten wurden nicht verändert.
 - **Roadmap:** AP12–AP15 sind in
-  `00-Projektsteuerung/ROADMAP_AP12_AP15_ENTWURF.md` geplant. AP12 ist noch nicht zur
-  Implementierung freigegeben.
+  `00-Projektsteuerung/ROADMAP_AP12_AP15_ENTWURF.md` geplant. AP12 wurde von Dennis am
+  2026-07-27 ausdrücklich zur Implementierung freigegeben.
 - **Produktionssperre:** V1 (Aufbewahrungsfristen für Personen-, EXIF-/GPS- und Auditdaten)
   ist offen. Bis zur Entscheidung sind ausschließlich synthetische Stage-/Testdaten zulässig.
 - **Branding:** AP8.1 ist separat als Commit `04253a2` auf
@@ -94,5 +94,24 @@ AP1–AP7-Regression unverändert grün. Offen: App-Screenshots + visuelle/Scree
 - **Vorübergehender Clone:** `C:\dev\Kabelbereitschaft` wurde nach vollständiger Kontrolle und
   dem Nachweis, dass dort keine einzigartige relevante Projektdatei lag, am 2026-07-26 in den
   Windows-Papierkorb verschoben. `C:\dev` selbst blieb bestehen.
-- **AP12-Start:** Alle acht technischen Punkte der Checkliste B.8 sind abgeschlossen. AP12
-  bleibt gesperrt, bis Dennis die Implementierung ausdrücklich freigibt.
+- **AP12-Start:** Alle acht technischen Punkte der Checkliste B.8 sind abgeschlossen; die
+  Implementierungsfreigabe wurde am 2026-07-27 erteilt.
+
+## AP12 – Umsetzung (2026-07-27)
+
+- Implementiert: Migration `0010_ap12_incident_details.sql`, versionierte
+  `create_incident_ap12`-/`update_incident_ap12`-RPCs und Entzug des AP10-Schreibaltpfads.
+- Implementiert: mehrere Kabelpositionen je Vorgang mit `quantity_value`,
+  `quantity_unit` (`piece`/`meter`) und `condition_code`.
+- Implementiert: Kontakt-FK, historischer Snapshot und auf zugewiesene Vorgänge begrenzte
+  Monteur-Projektion ohne Kontaktliste.
+- Implementiert: überarbeitete Vorgangsformulare/-detailseite und Staff-CRUD für
+  Bereitschaftsnummern.
+- Verifiziert: TypeScript ohne Fehler, ESLint ohne Befund, Next.js-Produktions-Build
+  erfolgreich einschließlich Route `/stammdaten/bereitschaftsnummern`.
+- Verifiziert: `app/supabase/test/run_ap12_local.ps1` hat die Migrationen 0001–0010 in
+  einer temporären lokalen PostgreSQL-18-Datenbank sowie sämtliche AP10–AP12-Smoke-Tests
+  erfolgreich ausgeführt. Datenregeln, Snapshot-Historisierung, RLS/Monteur-Projektion,
+  Staff-CRUD und der Entzug des AP10-Schreibaltpfads sind nachgewiesen. Die Testdatenbank
+  wurde anschließend entfernt.
+- **AP12 ist technisch abgeschlossen.** V1 bleibt davon unabhängig Produktionssperre.

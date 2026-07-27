@@ -9,6 +9,7 @@ import {
   listCableTypes,
   getAppSettings,
   listProfileOptions,
+  listContacts,
 } from "@/lib/masterdata";
 import {
   INCIDENT_PAGE_SIZES,
@@ -44,6 +45,9 @@ export type CablePositionRef = {
   id: string;
   cable_type_id: string;
   sort_order: number;
+  quantity_value: number | null;
+  quantity_unit: "piece" | "meter" | null;
+  condition_code: "ready" | "restricted" | "damaged" | "unusable" | null;
   cable_type: CableTypeRefMini;
 };
 
@@ -67,6 +71,11 @@ export type IncidentRow = {
   external_reference: string | null;
   caller_name: string | null;
   caller_contact: string | null;
+  contact_id: string | null;
+  contact_phone_number_id: string | null;
+  contact_name_snapshot: string | null;
+  contact_function_snapshot: string | null;
+  contact_phone_snapshot: string | null;
   title: string | null;
   description: string | null;
   internal_note: string | null;
@@ -111,18 +120,53 @@ export type IncidentDetail = {
   notes: NoteEvent[];
 };
 
+export type IncidentContactProjection = {
+  incident_id: string;
+  contact_name: string | null;
+  contact_function: string | null;
+  operative_phone: string | null;
+};
+
+export async function getAssignedIncidentContact(id: string): Promise<IncidentContactProjection | null> {
+  const supabase = await createClient();
+  const { data } = await supabase.rpc("get_assigned_incident_contact", { p_incident_id: id });
+  return ((data ?? [])[0] as IncidentContactProjection | undefined) ?? null;
+}
+
+export async function getStaffIncidentContact(
+  contactId: string | null,
+  phoneId: string | null,
+): Promise<Omit<IncidentContactProjection, "incident_id"> | null> {
+  if (!contactId) return null;
+  const supabase = await createClient();
+  const [{ data: contact }, { data: phone }] = await Promise.all([
+    supabase.from("contacts").select("name, function").eq("id", contactId).maybeSingle(),
+    phoneId
+      ? supabase.from("contact_phone_numbers").select("phone").eq("id", phoneId).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+  if (!contact) return null;
+  return {
+    contact_name: (contact as { name: string }).name,
+    contact_function: (contact as { function: string | null }).function,
+    operative_phone: (phone as { phone: string } | null)?.phone ?? null,
+  };
+}
+
 const INCIDENT_SELECT = `
   id, incident_no, status, priority, condition_rating,
   customer_id, vzg_line_id, vzg_line_number, km_from, km_to, operating_point, track, direction,
   object_type, object_designation, location_description, external_reference,
-  caller_name, caller_contact, title, description, internal_note, closing_note,
+  caller_name, caller_contact, contact_id, contact_phone_number_id,
+  contact_name_snapshot, contact_function_snapshot, contact_phone_snapshot,
+  title, description, internal_note, closing_note,
   on_call_number_id, call_received_at, construction_stage_id,
   closed_at, closed_by, created_at, updated_at,
   stage:construction_stages(id, name, code),
   oncall:on_call_numbers(id, number, label),
   customer:customers(id, name),
   vzgline:vzg_lines(id, line_number),
-  cable_positions:incident_cable_positions(id, cable_type_id, sort_order, cable_type:cable_types(id, code, name)),
+  cable_positions:incident_cable_positions(id, cable_type_id, sort_order, quantity_value, quantity_unit, condition_code, cable_type:cable_types(id, code, name)),
   assignments:incident_assignments(id, monteur_id, is_active, assigned_at, monteur:profiles(id, full_name))
 `;
 
@@ -232,22 +276,31 @@ export type FormState = { ok: boolean; error: string | null };
 export type IncidentFormStage = { id: string; label: string; default_on_call_number_id: string | null };
 export type IncidentFormVzg = { id: string; line_number: string; construction_stage_id: string };
 export type IncidentFormOption = { id: string; label: string };
+export type IncidentFormContact = {
+  id: string;
+  customer_id: string;
+  name: string;
+  function: string | null;
+  phones: { id: string; phone: string; phone_type: string }[];
+};
 export type IncidentFormOptions = {
   customers: { id: string; name: string }[];
   stages: IncidentFormStage[];
   vzgLines: IncidentFormVzg[];
   onCall: IncidentFormOption[];
   cableTypes: { id: string; code: string; name: string }[];
+  contacts: IncidentFormContact[];
   defaults: { customer_id: string | null; on_call_number_id: string | null };
 };
 
 export async function getIncidentFormOptions(): Promise<IncidentFormOptions> {
-  const [customers, stages, vzg, onCall, cableTypes, settings] = await Promise.all([
+  const [customers, stages, vzg, onCall, cableTypes, contacts, settings] = await Promise.all([
     getActiveCustomers(),
     listStages(),
     listVzgLines(),
     getActiveOnCallOptions(),
     listCableTypes(),
+    listContacts(),
     getAppSettings(),
   ]);
   return {
@@ -264,6 +317,15 @@ export async function getIncidentFormOptions(): Promise<IncidentFormOptions> {
       .map((v) => ({ id: v.id, line_number: v.line_number, construction_stage_id: v.construction_stage_id })),
     onCall,
     cableTypes: cableTypes.filter((t) => t.is_active).map((t) => ({ id: t.id, code: t.code, name: t.name })),
+    contacts: contacts
+      .filter((c) => c.is_active)
+      .map((c) => ({
+        id: c.id,
+        customer_id: c.customer_id,
+        name: c.name,
+        function: c.function,
+        phones: c.phones.map((p) => ({ id: p.id, phone: p.phone, phone_type: p.phone_type })),
+      })),
     defaults: { customer_id: settings.default_customer_id, on_call_number_id: settings.default_on_call_number_id },
   };
 }

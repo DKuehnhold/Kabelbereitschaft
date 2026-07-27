@@ -48,3 +48,6 @@ next-env.d.ts
 /blob-report/
 /playwright/.cache/
 /e2e/.auth/
+
+# Lokale AP12-Administrationsprotokolle können Zugangsdaten enthalten.
+/supabase/test/.ap12-admin-output.log

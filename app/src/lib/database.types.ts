@@ -127,6 +127,11 @@ export type Incident = {
   call_taken_by: string | null;
   caller_name: string | null;
   caller_contact: string | null;
+  contact_id: string | null;
+  contact_phone_number_id: string | null;
+  contact_name_snapshot: string | null;
+  contact_function_snapshot: string | null;
+  contact_phone_snapshot: string | null;
   construction_stage_id: string;
   // AP10: fachliche Referenzen (Legacy-Snapshotfelder bleiben erhalten)
   customer_id: string | null;
@@ -387,6 +392,9 @@ export type IncidentCablePosition = {
   incident_id: string;
   cable_type_id: string;
   sort_order: number;
+  quantity_value: number | null;
+  quantity_unit: "piece" | "meter" | null;
+  condition_code: "ready" | "restricted" | "damaged" | "unusable" | null;
 } & AuditCols;
 
 // AP10: Argumente der transaktionalen RPCs (Incident + Pflicht-Kabelposition).
@@ -412,6 +420,21 @@ export type CreateIncidentAp10Args = {
   p_cable_type_id: string;
 };
 export type UpdateIncidentAp10Args = { p_id: string } & CreateIncidentAp10Args;
+
+export type IncidentCablePositionInput = {
+  id?: string;
+  cable_type_id: string;
+  quantity_value: number | string | null;
+  quantity_unit: "piece" | "meter" | null;
+  condition_code: "ready" | "restricted" | "damaged" | "unusable" | null;
+};
+
+export type CreateIncidentAp12Args = Omit<CreateIncidentAp10Args, "p_cable_type_id"> & {
+  p_contact_id: string | null;
+  p_contact_phone_number_id: string | null;
+  p_cable_positions: IncidentCablePositionInput[];
+};
+export type UpdateIncidentAp12Args = { p_id: string } & CreateIncidentAp12Args;
 
 // AP6: Deduplizierung/Idempotenz der Offline-Synchronisation.
 export type SyncAction = {
@@ -468,6 +491,17 @@ export type Database = {
     Functions: {
       create_incident_ap10: { Args: CreateIncidentAp10Args; Returns: string };
       update_incident_ap10: { Args: UpdateIncidentAp10Args; Returns: undefined };
+      create_incident_ap12: { Args: CreateIncidentAp12Args; Returns: string };
+      update_incident_ap12: { Args: UpdateIncidentAp12Args; Returns: undefined };
+      get_assigned_incident_contact: {
+        Args: { p_incident_id: string };
+        Returns: {
+          incident_id: string;
+          contact_name: string | null;
+          contact_function: string | null;
+          operative_phone: string | null;
+        }[];
+      };
     };
     Enums: {
       user_role: UserRole;

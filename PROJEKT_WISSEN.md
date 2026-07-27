@@ -1,5 +1,5 @@
 # Projektwissen – Kabelbereitschaft
-> Stand: 2026-07-19 · Nur bestätigte Ergebnisse. Nicht ausgeführte Prüfungen sind als offen markiert.
+> Stand: 2026-07-27 · Nur bestätigte Ergebnisse. Nicht ausgeführte Prüfungen sind als offen markiert.
 
 ## Projektziel
 Offlinefähige Web-Anwendung (PWA) zur Erfassung und Dokumentation von Kabel-Bereitschaftsvorgängen:
@@ -96,7 +96,7 @@ CSV-Export, Offlinebetrieb mit Synchronisation und Konfliktbehandlung.
   `C:\Backup\Kabelbereitschaft_Lockquarantaene_2026-07-26_093108` verschoben. Git-Integrität
   anschließend bestätigt; die übrigen Altlasten blieben unangetastet.
 - **Roadmap:** AP12–AP15 sind in `00-Projektsteuerung/ROADMAP_AP12_AP15_ENTWURF.md` geplant.
-  Die Roadmap ist nur als Planungsgrundlage freigegeben; AP12 ist noch nicht zur Implementierung
+  Dennis hat AP12 am 2026-07-27 mit „Mach jetzt weiter“ ausdrücklich zur Implementierung
   freigegeben.
 - **Datenschutz:** V1 (Aufbewahrungsfristen für Personen-, EXIF-/GPS- und Auditdaten) bleibt offen
   und wirkt als Produktionssperre. Stage/Test bis zur Entscheidung ausschließlich mit
@@ -145,6 +145,14 @@ Diese Festlegungen gelten dauerhaft und ersetzen alle früheren Standortaussagen
   Dennis diese Entscheidung nicht ausdrücklich ändert.
 - **Branding** bleibt auf `feat/ap8.1-branding` (`04253a2`, auf GitHub gesichert) und ist
   **nicht** nach `main` gemergt.
-- **AP12 bleibt bis zur ausdrücklichen Freigabe durch Dennis gesperrt.**
+- **AP12 ist seit 2026-07-27 ausdrücklich freigegeben und technisch abgeschlossen.** Implementiert sind
+  Migration `0010_ap12_incident_details.sql`, die neuen AP12-RPCs, Mehrfach-Kabelpositionen
+  mit Menge/Einheit/Zustand, Kontakt-FK und historischer Snapshot, minimierte
+  Monteur-Kontaktprojektion, die erweiterte Vorgangsdetail-/Bearbeitungsoberfläche sowie die
+  Pflege der Bereitschaftsnummern. TypeScript, ESLint und Next.js-Produktions-Build sind
+  erfolgreich. Der lokale PostgreSQL-18-Lauf mit Migrationen 0001–0010 und den AP10–AP12-
+  Smoke-Tests ist ebenfalls vollständig erfolgreich; die temporäre Testdatenbank wurde
+  anschließend entfernt. Der Teststarter behandelt PostgreSQL-NOTICE-Ausgaben korrekt über
+  den Prozess-Exitcode, und die AP11-Zähltests sind gegen vorangehende Fixture-Daten isoliert.
 - **V1** (Aufbewahrungsfristen) bleibt offen und wirkt als **Produktionssperre**; Stage und Test
   ausschließlich mit synthetischen Daten.

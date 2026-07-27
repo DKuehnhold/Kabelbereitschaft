@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireSession } from "@/lib/auth";
 import { NoAccess } from "@/components/Placeholder";
-import { getIncidentDetail, getMonteure } from "@/lib/incidents";
+import { getAssignedIncidentContact, getIncidentDetail, getMonteure, getStaffIncidentContact } from "@/lib/incidents";
 import { StatusBadge } from "@/components/incidents/StatusBadge";
 import { PriorityBadge } from "@/components/incidents/PriorityBadge";
 import { Timeline } from "@/components/incidents/Timeline";
@@ -45,6 +45,18 @@ export default async function IncidentDetailPage({
     getActiveMaterials(),
     getActiveLocations(),
   ]);
+  const projectedContact = isStaff
+    ? await getStaffIncidentContact(i.contact_id, i.contact_phone_number_id)
+    : await getAssignedIncidentContact(id);
+  const contactName = projectedContact?.contact_name ?? i.contact_name_snapshot ?? i.caller_name;
+  const contactFunction = projectedContact?.contact_function ?? i.contact_function_snapshot;
+  const contactPhone = projectedContact?.operative_phone ?? i.contact_phone_snapshot ?? i.caller_contact;
+  const conditionLabels = {
+    ready: "Einsatzbereit",
+    restricted: "Eingeschränkt",
+    damaged: "Beschädigt",
+    unusable: "Nicht verwendbar",
+  } as const;
 
   return (
     <div className="space-y-5">
@@ -94,18 +106,48 @@ export default async function IncidentDetailPage({
             <dl>
               <Row label="Bereitschaftsnummer" value={i.oncall ? (i.oncall.label ? `${i.oncall.number} – ${i.oncall.label}` : i.oncall.number) : "—"} />
               <Row label="Anrufzeitpunkt" value={fmt(i.call_received_at)} />
-              <Row label="DB-Ansprechpartner" value={i.caller_name} />
-              <Row label="Telefon" value={i.caller_contact} />
-              <Row
-                label="Kabelart"
-                value={
-                  i.cable_positions?.length
-                    ? i.cable_positions.map((p) => p.cable_type?.name ?? "—").join(", ")
-                    : "—"
-                }
-              />
+              <Row label="Ansprechpartner" value={contactName} />
+              <Row label="Funktion/Rolle" value={contactFunction} />
+              <Row label="Operative Telefonnummer" value={contactPhone} />
               <Row label="Beschreibung" value={i.description} />
             </dl>
+          </section>
+
+          <section className="rounded-lg border border-slate-200 bg-white p-4">
+            <h2 className="mb-3 text-sm font-semibold uppercase text-slate-500">Kabelpositionen</h2>
+            {i.cable_positions?.length ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="text-slate-500">
+                    <tr>
+                      <th className="pb-2 pr-4">Position</th>
+                      <th className="pb-2 pr-4">Kabelart</th>
+                      <th className="pb-2 pr-4">Menge</th>
+                      <th className="pb-2">Zustand</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {i.cable_positions
+                      .slice()
+                      .sort((a, b) => a.sort_order - b.sort_order)
+                      .map((position, index) => (
+                        <tr key={position.id} className="border-t border-slate-100">
+                          <td className="py-2 pr-4">{index + 1}</td>
+                          <td className="py-2 pr-4">{position.cable_type?.name ?? "—"}</td>
+                          <td className="py-2 pr-4">
+                            {position.quantity_value == null
+                              ? "nicht erfasst"
+                              : `${position.quantity_value} ${position.quantity_unit === "piece" ? "Stück" : "m"}`}
+                          </td>
+                          <td className="py-2">
+                            {position.condition_code ? conditionLabels[position.condition_code] : "nicht erfasst"}
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : <p className="text-sm text-slate-500">Keine Kabelpositionen erfasst.</p>}
           </section>
 
           <section className="rounded-lg border border-slate-200 bg-white p-4">

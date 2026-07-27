@@ -45,7 +45,12 @@ set role app_user;
 -- L1/L6/L7/L8: Admin
 select set_config('test.uid', 'd1000000-0000-0000-0000-000000000001', false);
 do $$ declare n int; begin
-  select count(*) into n from public.incident_list_view;
+  select count(*) into n
+    from public.incident_list_view
+   where id in (
+     'd5000000-0000-0000-0000-000000000001',
+     'd5000000-0000-0000-0000-000000000002'
+   );
   if n=2 then raise notice 'SMOKE L1 OK Admin sieht alle (%)', n; else raise notice 'SMOKE L1 FAIL Admin count=%', n; end if;
 end $$;
 do $$ declare a jsonb; il int; cn int; mn int; begin
@@ -65,7 +70,13 @@ do $$ declare n int; begin
   if n=1 then raise notice 'SMOKE L5 OK Suchtext trifft (%)', n; else raise notice 'SMOKE L5 FAIL Suche=%', n; end if;
 end $$;
 do $$ declare n int; begin
-  select count(*) into n from public.incident_list_view where status not in ('abgeschlossen','storniert');
+  select count(*) into n
+    from public.incident_list_view
+   where id in (
+     'd5000000-0000-0000-0000-000000000001',
+     'd5000000-0000-0000-0000-000000000002'
+   )
+     and status not in ('abgeschlossen','storniert');
   if n=2 then raise notice 'SMOKE L6 OK Aktivitätsfilter aktiv (%)', n; else raise notice 'SMOKE L6 FAIL aktiv=%', n; end if;
 end $$;
 do $$ declare d date; begin

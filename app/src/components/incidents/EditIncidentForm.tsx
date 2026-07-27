@@ -5,6 +5,8 @@ import Link from "next/link";
 import { updateIncident } from "@/lib/incident-actions";
 import { PRIORITIES, PRIORITY_LABELS } from "@/lib/priority";
 import type { FormState, IncidentRow, IncidentFormOptions } from "@/lib/incidents";
+import { CablePositionsEditor } from "@/components/incidents/CablePositionsEditor";
+import { ContactSelector } from "@/components/incidents/ContactSelector";
 
 const initial: FormState = { ok: false, error: null };
 const labelCls = "mb-1 block text-sm font-medium text-foreground";
@@ -27,7 +29,6 @@ export function EditIncidentForm({
 }) {
   const [state, formAction, pending] = useActionState(updateIncident, initial);
   const i = incident;
-  const firstPos = i.cable_positions?.[0];
 
   // Bereits referenzierte, aber ggf. inaktive Stammdaten sichtbar einblenden.
   const customers = useMemo(() => {
@@ -71,16 +72,17 @@ export function EditIncidentForm({
 
   const cableTypes = useMemo(() => {
     const list = options.cableTypes.map((t) => ({ ...t }));
-    if (firstPos && !list.some((t) => t.id === firstPos.cable_type_id))
-      list.push({ id: firstPos.cable_type_id, code: "", name: `${firstPos.cable_type?.name ?? "unbekannt"} (inaktiv)` });
+    for (const position of i.cable_positions ?? []) {
+      if (!list.some((t) => t.id === position.cable_type_id))
+        list.push({ id: position.cable_type_id, code: "", name: `${position.cable_type?.name ?? "unbekannt"} (inaktiv)` });
+    }
     return list;
-  }, [options.cableTypes, firstPos]);
+  }, [options.cableTypes, i.cable_positions]);
 
   const [customerId, setCustomerId] = useState(i.customer_id ?? "");
   const [stageId, setStageId] = useState(i.construction_stage_id ?? "");
   const [vzgId, setVzgId] = useState(i.vzg_line_id ?? "");
   const [onCallId, setOnCallId] = useState(i.on_call_number_id ?? "");
-  const [cableId, setCableId] = useState(firstPos?.cable_type_id ?? "");
   const [priority, setPriority] = useState(i.priority);
 
   const vzgOptions = useMemo(
@@ -149,17 +151,13 @@ export function EditIncidentForm({
               {PRIORITIES.map((p) => <option key={p} value={p}>{PRIORITY_LABELS[p]}</option>)}
             </select>
           </div>
-          <div>
-            <label className={labelCls} htmlFor="cable_type_id">Kabelart *</label>
-            <select id="cable_type_id" name="cable_type_id" required value={cableId} onChange={(e) => setCableId(e.target.value)} className="input">
-              <option value="">Bitte wählen…</option>
-              {cableTypes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </select>
-          </div>
         </div>
         <div className="mt-4">
           <label className={labelCls} htmlFor="description">Beschreibung *</label>
           <textarea id="description" name="description" rows={3} required defaultValue={i.description ?? ""} className="input" />
+        </div>
+        <div className="mt-4">
+          <CablePositionsEditor cableTypes={cableTypes} initial={i.cable_positions ?? []} />
         </div>
       </Section>
 
@@ -180,9 +178,15 @@ export function EditIncidentForm({
       </Section>
 
       <Section title="Meldung & Bemerkungen (optional)">
+        <ContactSelector
+          contacts={options.contacts}
+          customerId={customerId}
+          initialContactId={i.contact_id ?? ""}
+          initialPhoneId={i.contact_phone_number_id ?? ""}
+        />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div><label className={labelCls} htmlFor="caller_name">Anrufer/Ansprechpartner</label><input id="caller_name" name="caller_name" defaultValue={i.caller_name ?? ""} className="input" /></div>
-          <div><label className={labelCls} htmlFor="caller_contact">Telefon</label><input id="caller_contact" name="caller_contact" defaultValue={i.caller_contact ?? ""} className="input" /></div>
+          <div><label className={labelCls} htmlFor="caller_name">Freitext-Ansprechpartner / Fallback</label><input id="caller_name" name="caller_name" defaultValue={i.caller_name ?? ""} className="input" /></div>
+          <div><label className={labelCls} htmlFor="caller_contact">Freitext-Telefon / Fallback</label><input id="caller_contact" name="caller_contact" defaultValue={i.caller_contact ?? ""} className="input" /></div>
           <div><label className={labelCls} htmlFor="external_reference">Externe Referenz</label><input id="external_reference" name="external_reference" defaultValue={i.external_reference ?? ""} className="input" /></div>
         </div>
         <div className="mt-4">

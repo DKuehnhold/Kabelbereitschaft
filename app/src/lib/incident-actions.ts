@@ -41,7 +41,7 @@ type RefInput = {
   customer_id: string;
   construction_stage_id: string;
   vzg_line_id: string;
-  cable_type_id: string;
+  cable_type_ids: string[];
   on_call_number_id: string | null;
 };
 
@@ -50,11 +50,11 @@ async function validateRefs(
   r: RefInput,
   requireActive: boolean,
 ): Promise<string | null> {
-  const [cust, stage, vzg, cable, oncall] = await Promise.all([
+  const [cust, stage, vzg, cables, oncall] = await Promise.all([
     supabase.from("customers").select("id, is_active").eq("id", r.customer_id).maybeSingle(),
     supabase.from("construction_stages").select("id, is_active").eq("id", r.construction_stage_id).maybeSingle(),
     supabase.from("vzg_lines").select("id, is_active, construction_stage_id").eq("id", r.vzg_line_id).maybeSingle(),
-    supabase.from("cable_types").select("id, is_active").eq("id", r.cable_type_id).maybeSingle(),
+    supabase.from("cable_types").select("id, is_active").in("id", r.cable_type_ids),
     r.on_call_number_id
       ? supabase.from("on_call_numbers").select("id, is_active").eq("id", r.on_call_number_id).maybeSingle()
       : Promise.resolve({ data: null }),
@@ -62,7 +62,7 @@ async function validateRefs(
   const c = cust.data as { is_active: boolean } | null;
   const s = stage.data as { is_active: boolean } | null;
   const v = vzg.data as { is_active: boolean; construction_stage_id: string } | null;
-  const k = cable.data as { is_active: boolean } | null;
+  const cableRows = (cables.data ?? []) as { id: string; is_active: boolean }[];
   const o = (oncall as { data: { is_active: boolean } | null }).data;
 
   if (!c) return "Kunde nicht gefunden.";
@@ -73,8 +73,8 @@ async function validateRefs(
   if (requireActive && !v.is_active) return "Die gewählte VzG-Strecke ist inaktiv.";
   if (v.construction_stage_id !== r.construction_stage_id)
     return "Die VzG-Strecke gehört nicht zum gewählten Bauabschnitt.";
-  if (!k) return "Kabelart nicht gefunden.";
-  if (requireActive && !k.is_active) return "Die gewählte Kabelart ist inaktiv.";
+  if (cableRows.length !== new Set(r.cable_type_ids).size) return "Mindestens eine Kabelart wurde nicht gefunden.";
+  if (requireActive && cableRows.some((k) => !k.is_active)) return "Mindestens eine gewählte Kabelart ist inaktiv.";
   if (r.on_call_number_id) {
     if (!o) return "Bereitschaftsnummer nicht gefunden.";
     if (requireActive && !o.is_active) return "Die gewählte Bereitschaftsnummer ist inaktiv.";
@@ -99,8 +99,58 @@ function readIncidentFields(fd: FormData) {
     on_call_number_id: strOrNull(fd, "on_call_number_id"),
     priority: str(fd, "priority") as Priority,
     description: strOrNull(fd, "description"),
-    cable_type_id: strOrNull(fd, "cable_type_id"),
+    contact_id: strOrNull(fd, "contact_id"),
+    contact_phone_number_id: strOrNull(fd, "contact_phone_number_id"),
   };
+}
+
+type CablePositionInput = {
+  id?: string;
+  cable_type_id: string;
+  quantity_value: string | null;
+  quantity_unit: "piece" | "meter" | null;
+  condition_code: "ready" | "restricted" | "damaged" | "unusable" | null;
+};
+
+const POSITION_UNITS = ["piece", "meter"] as const;
+const POSITION_CONDITIONS = ["ready", "restricted", "damaged", "unusable"] as const;
+
+function parseCablePositions(fd: FormData): CablePositionInput[] | null {
+  try {
+    const raw = JSON.parse(str(fd, "cable_positions_json"));
+    if (!Array.isArray(raw) || raw.length === 0) return null;
+    const rows = raw.map((item: unknown) => {
+      const p = (item ?? {}) as Record<string, unknown>;
+      const unit = String(p.quantity_unit ?? "") as CablePositionInput["quantity_unit"];
+      const condition = String(p.condition_code ?? "") as CablePositionInput["condition_code"];
+      return {
+        ...(p.id ? { id: String(p.id) } : {}),
+        cable_type_id: String(p.cable_type_id ?? "").trim(),
+        quantity_value: String(p.quantity_value ?? "").trim() || null,
+        quantity_unit: POSITION_UNITS.includes(unit as (typeof POSITION_UNITS)[number]) ? unit : null,
+        condition_code: POSITION_CONDITIONS.includes(condition as (typeof POSITION_CONDITIONS)[number])
+          ? condition
+          : null,
+      };
+    });
+    return rows.some((p) => !p.cable_type_id) ? null : rows;
+  } catch {
+    return null;
+  }
+}
+
+function validatePositionValues(rows: CablePositionInput[], isCreate: boolean): string | null {
+  for (const row of rows) {
+    const complete = row.quantity_value !== null && row.quantity_unit !== null && row.condition_code !== null;
+    if ((isCreate || !row.id) && !complete) return "Neue Kabelpositionen benötigen Menge, Einheit und Zustand.";
+    if (row.quantity_value !== null) {
+      const value = Number(row.quantity_value.replace(",", "."));
+      if (!Number.isFinite(value) || value <= 0) return "Die Menge muss größer als 0 sein.";
+      if (row.quantity_unit === "piece" && !Number.isInteger(value))
+        return "Die Einheit Stück erlaubt nur ganze Mengen.";
+    }
+  }
+  return null;
 }
 
 function missingRequired(f: ReturnType<typeof readIncidentFields>): string[] {
@@ -109,7 +159,6 @@ function missingRequired(f: ReturnType<typeof readIncidentFields>): string[] {
     ["Bauabschnitt", f.construction_stage_id],
     ["VzG-Strecke", f.vzg_line_id],
     ["Beschreibung", f.description],
-    ["Kabelart", f.cable_type_id],
   ] as [string, unknown][])
     .filter(([, v]) => v === null || v === "")
     .map(([l]) => l);
@@ -123,8 +172,12 @@ export async function createIncident(_prev: FormState, fd: FormData): Promise<Fo
     return { ok: false, error: "Nur Disposition/Administration darf Vorgänge anlegen." };
 
   const f = readIncidentFields(fd);
+  const positions = parseCablePositions(fd);
   const missing = missingRequired(f);
+  if (!positions) missing.push("Kabelpositionen");
   if (missing.length) return { ok: false, error: `Pflichtfelder fehlen: ${missing.join(", ")}.` };
+  const positionError = validatePositionValues(positions!, true);
+  if (positionError) return { ok: false, error: positionError };
   if (!PRIORITIES.includes(f.priority)) return { ok: false, error: "Ungültige Priorität." };
 
   const supabase = await createClient();
@@ -134,14 +187,14 @@ export async function createIncident(_prev: FormState, fd: FormData): Promise<Fo
       customer_id: f.customer_id!,
       construction_stage_id: f.construction_stage_id!,
       vzg_line_id: f.vzg_line_id!,
-      cable_type_id: f.cable_type_id!,
+      cable_type_ids: positions!.map((p) => p.cable_type_id),
       on_call_number_id: f.on_call_number_id,
     },
     true, // Neuanlage: nur aktive Stammdaten
   );
   if (refErr) return { ok: false, error: refErr };
 
-  const { data, error } = await supabase.rpc("create_incident_ap10", {
+  const { data, error } = await supabase.rpc("create_incident_ap12", {
     p_customer_id: f.customer_id!,
     p_construction_stage_id: f.construction_stage_id!,
     p_vzg_line_id: f.vzg_line_id!,
@@ -160,7 +213,9 @@ export async function createIncident(_prev: FormState, fd: FormData): Promise<Fo
     p_caller_name: strOrNull(fd, "caller_name"),
     p_caller_contact: strOrNull(fd, "caller_contact"),
     p_internal_note: strOrNull(fd, "internal_note"),
-    p_cable_type_id: f.cable_type_id!,
+    p_contact_id: f.contact_id,
+    p_contact_phone_number_id: f.contact_phone_number_id,
+    p_cable_positions: positions!,
   });
   if (error || !data) return { ok: false, error: mapDbError(error?.message) };
   revalidateAll();
@@ -178,8 +233,12 @@ export async function updateIncident(_prev: FormState, fd: FormData): Promise<Fo
   if (!id) return { ok: false, error: "Kein Vorgang angegeben." };
 
   const f = readIncidentFields(fd);
+  const positions = parseCablePositions(fd);
   const missing = missingRequired(f);
+  if (!positions) missing.push("Kabelpositionen");
   if (missing.length) return { ok: false, error: `Pflichtfelder fehlen: ${missing.join(", ")}.` };
+  const positionError = validatePositionValues(positions!, false);
+  if (positionError) return { ok: false, error: positionError };
   if (!PRIORITIES.includes(f.priority)) return { ok: false, error: "Ungültige Priorität." };
 
   const supabase = await createClient();
@@ -191,14 +250,14 @@ export async function updateIncident(_prev: FormState, fd: FormData): Promise<Fo
       customer_id: f.customer_id!,
       construction_stage_id: f.construction_stage_id!,
       vzg_line_id: f.vzg_line_id!,
-      cable_type_id: f.cable_type_id!,
+      cable_type_ids: positions!.map((p) => p.cable_type_id),
       on_call_number_id: f.on_call_number_id,
     },
     false,
   );
   if (refErr) return { ok: false, error: refErr };
 
-  const { error } = await supabase.rpc("update_incident_ap10", {
+  const { error } = await supabase.rpc("update_incident_ap12", {
     p_id: id,
     p_customer_id: f.customer_id!,
     p_construction_stage_id: f.construction_stage_id!,
@@ -218,7 +277,9 @@ export async function updateIncident(_prev: FormState, fd: FormData): Promise<Fo
     p_caller_name: strOrNull(fd, "caller_name"),
     p_caller_contact: strOrNull(fd, "caller_contact"),
     p_internal_note: strOrNull(fd, "internal_note"),
-    p_cable_type_id: f.cable_type_id!,
+    p_contact_id: f.contact_id,
+    p_contact_phone_number_id: f.contact_phone_number_id,
+    p_cable_positions: positions!,
   });
   if (error) return { ok: false, error: mapDbError(error.message) };
   revalidateAll(id);
