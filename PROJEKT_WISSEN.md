@@ -154,5 +154,8 @@ Diese Festlegungen gelten dauerhaft und ersetzen alle früheren Standortaussagen
   Smoke-Tests ist ebenfalls vollständig erfolgreich; die temporäre Testdatenbank wurde
   anschließend entfernt. Der Teststarter behandelt PostgreSQL-NOTICE-Ausgaben korrekt über
   den Prozess-Exitcode, und die AP11-Zähltests sind gegen vorangehende Fixture-Daten isoliert.
+  Der geprüfte AP12-Stand wurde als Commit `761e89d` (`feat: implement AP12 incident details`)
+  nach `origin/main` gepusht; `main` und `origin/main` waren anschließend identisch und die
+  Arbeitskopie sauber.
 - **V1** (Aufbewahrungsfristen) bleibt offen und wirkt als **Produktionssperre**; Stage und Test
   ausschließlich mit synthetischen Daten.
