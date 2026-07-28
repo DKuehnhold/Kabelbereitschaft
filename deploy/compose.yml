@@ -1,0 +1,107 @@
+# Kabelbereitschaft - Basis-Stack (AP14 / Arbeitspaket A)
+#
+# ------------------------------------------------------------------------------
+# NICHT PRODUKTIONSFAEHIG.
+# Die Anwendung nutzt in diesem Stand weiterhin Supabase (Auth, Datenzugriff,
+# Bildspeicher). Der postgres-Dienst ist vorbereitet, wird von der Anwendung
+# aber noch NICHT verwendet. Der Stack ist erst nach Abschluss von
+# Arbeitspaket B (Supabase-Abloesung, siehe 00-Projektsteuerung/
+# ADR-011-postgres-eigenplattform.md) betriebsfaehig.
+# ------------------------------------------------------------------------------
+#
+# Grundsaetze:
+#   - Kein veroeffentlichter Port. TLS und Rate Limiting liegen auf HAProxy
+#     (Unternehmens-Gateway). Der App-Port ist ausschliesslich intern "expose".
+#   - Kein veroeffentlichter Datenbankport. postgres ist nur im internen Netz
+#     erreichbar.
+#   - Keine Secrets in dieser Datei. Werte kommen aus deploy/env/*.env,
+#     die nicht versioniert werden.
+#   - Feste, kontrollierte Image-Referenz. Kein unkontrolliertes "latest".
+#   - Kein "version"-Feld (Compose-Spezifikation).
+#
+# APP_IMAGE_REF enthaelt die VOLLSTAENDIGE Referenz, weil Tag und Digest
+# unterschiedliche Trennzeichen verwenden:
+#   Tag:    ghcr.io/dkuehnhold/kabelbereitschaft:sha-<commit>
+#   Digest: ghcr.io/dkuehnhold/kabelbereitschaft@sha256:<digest>
+# Eine zusammengesetzte Variante (repo:${TAG}) wuerde mit einem Digest eine
+# ungueltige Referenz ergeben.
+#
+# Verwendung (Beispiel Stage):
+#   export APP_IMAGE_REF=ghcr.io/dkuehnhold/kabelbereitschaft@sha256:...
+#   docker compose -f deploy/compose.yml -f deploy/compose.stage.yml config
+#   docker compose -f deploy/compose.yml -f deploy/compose.stage.yml up -d
+
+name: ${COMPOSE_PROJECT_NAME:-kabelbereitschaft}
+
+services:
+  app:
+    image: ${APP_IMAGE_REF:?APP_IMAGE_REF muss die vollstaendige Image-Referenz enthalten - Tag oder Digest}
+    restart: unless-stopped
+    init: true
+    env_file:
+      - ./env/app.env
+    expose:
+      - "3000"
+    healthcheck:
+      test: ["CMD", "node", "/app/docker/healthcheck.mjs"]
+      interval: 30s
+      timeout: 5s
+      start_period: 25s
+      retries: 3
+    depends_on:
+      postgres:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      # Next.js benoetigt beschreibbare temporaere Pfade. Der Anwendungscode
+      # selbst bleibt unveraenderbar (Dateien gehoeren root, Prozess laeuft
+      # als node). Ob read_only vollstaendig ohne Funktionsverlust moeglich
+      # ist, ist im Containerlauf zu bestaetigen - siehe deploy/README.md,
+      # Abschnitt "Offene Nachweise".
+      - /tmp:mode=1777,size=64m
+      - /app/.next/cache:mode=0700,uid=1000,gid=1000,size=256m
+    networks:
+      - internal
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  postgres:
+    # Vorbereitet fuer Arbeitspaket B. Die Anwendung verbindet sich in
+    # Arbeitspaket A noch nicht mit diesem Dienst.
+    image: postgres:18-bookworm
+    restart: unless-stopped
+    env_file:
+      - ./env/postgres.env
+    # Bewusst KEIN "ports:" - die Datenbank ist nicht von aussen erreichbar.
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\" -q"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - internal
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+networks:
+  internal:
+    driver: bridge
+    internal: false
+
+volumes:
+  postgres-data:

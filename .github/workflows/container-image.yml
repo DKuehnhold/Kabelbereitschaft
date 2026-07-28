@@ -1,0 +1,99 @@
+name: Container-Image
+
+# Baut das Produktionsimage und veroeffentlicht es in der GitHub Container
+# Registry. Ausdruecklich KEIN Deployment (Arbeitspaket A, Stufe 1).
+#
+# Sicherheitsregeln:
+#   - Push nur aus dem eigenen Repository und nur aus zulaessigen Referenzen.
+#     Pull Requests aus Forks erreichen diesen Workflow nicht, damit kein
+#     fremder Code mit Schreibrechten auf die Registry laeuft.
+#   - Kein automatisches "latest": ein bewegliches Ziel ohne Freigaberegel
+#     waere in Produktion nicht nachvollziehbar.
+#   - Semantische Tags entstehen ausschliesslich aus Tags, die Dennis setzt.
+#   - Das Image enthaelt keine Secrets; Konfiguration erfolgt zur Laufzeit.
+#
+# WICHTIG (Stand Arbeitspaket A): NEXT_PUBLIC_*-Werte werden zur Buildzeit
+# eingebrannt. Das hier gebaute Image ist deshalb noch nicht ohne weiteres
+# von Stage nach Produktion promotebar. Mit Arbeitspaket B entfallen die
+# betroffenen Variablen (siehe ADR-011).
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: container-image-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: dkuehnhold/kabelbereitschaft
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    if: github.repository == 'DKuehnhold/Kabelbereitschaft'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Bei GHCR anmelden
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tags und Labels bestimmen
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # Kein "latest" (flags=false unterdrueckt den Automatismus).
+          flavor: |
+            latest=false
+          tags: |
+            type=sha,format=long,prefix=sha-
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+          labels: |
+            org.opencontainers.image.title=Kabelbereitschaft
+            org.opencontainers.image.description=Offlinefaehige Web-Anwendung zur Erfassung von Kabel-Bereitschaftsvorgaengen
+            org.opencontainers.image.vendor=W&S Technik GmbH
+
+      # Einzelarchitektur (linux/amd64). Multi-Arch erst nach Bestaetigung der
+      # Zielserverarchitektur - ein unbestaetigter arm64-Build waere ungeprueft.
+      - name: Bauen und pushen
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: app
+          file: app/Dockerfile
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Digest ausgeben
+        run: |
+          echo "### Image veroeffentlicht" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Digest: \`${{ steps.build.outputs.digest }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Deployment (manuell auf dem Zielserver):" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "./deploy/scripts/deploy.sh stage ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"

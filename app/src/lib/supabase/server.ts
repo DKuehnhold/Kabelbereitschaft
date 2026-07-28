@@ -1,10 +1,14 @@
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import type { Database } from "@/lib/database.types";
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./config";
+import { SUPABASE_URL, SUPABASE_ANON_KEY, assertSupabaseConfigured } from "./config";
 
 // Supabase-Client fuer Server-Komponenten, Server-Actions und Route-Handler.
 export async function createClient() {
+  // AP14/A3: kein Client mit Platzhalterwerten. Fehlt die Konfiguration,
+  // bricht der Aufruf mit klarer Meldung ab.
+  assertSupabaseConfigured();
+
   const cookieStore = await cookies();
 
   return createServerClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, {

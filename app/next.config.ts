@@ -35,6 +35,16 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // Containerbetrieb (AP14): "standalone" erzeugt unter .next/standalone einen
+  // eigenstaendigen Server samt minimaler node_modules. Das Laufzeitimage
+  // braucht damit keine Build-Werkzeuge und keine vollen Abhaengigkeiten.
+  // Zu beachten: .next/static und public/ sind NICHT Teil der
+  // Standalone-Ausgabe und werden im Dockerfile separat kopiert.
+  // Der Modus ist absichtlich nur beim Containerbau aktiv. Ein globales
+  // "standalone" macht `next start` unbrauchbar und wuerde damit den
+  // bestehenden Playwright-Webserver in der Verify-CI brechen.
+  output: process.env.BUILD_STANDALONE === "1" ? "standalone" : undefined,
+
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

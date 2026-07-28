@@ -5,6 +5,68 @@
 > `CHANGELOG.md (Repository-Wurzel)` (als historisch markiert, nicht gelöscht).
 > Endgültige Konsolidierung und Archivierung erfolgen in AP15.
 
+## [Unveröffentlicht] – 2026-07-28 – AP14 / Arbeitspaket A (Container- und CI-Grundlage)
+
+> **Auf Feature-Branch implementiert und lokal geprüft; CI-Nachweis, Merge,
+> Deployment und Release offen.**
+> Der Stack ist bis zum Abschluss von Arbeitspaket B ausdrücklich **nicht produktionsfähig**.
+
+### Entschieden
+- **ADR-011 (Entwurf):** Zielarchitektur ohne Supabase — ausschließlich PostgreSQL, Auth.js v5 mit
+  serverseitiger Widerrufstabelle, MinIO für Bilder, RLS bleibt Autorisierungsträger.
+  Rolle `kunde` ausdrücklich ausgeklammert. Details:
+  `00-Projektsteuerung/ADR-011-postgres-eigenplattform.md`, Kurzzeile in `ENTSCHEIDUNGEN.md` (#11).
+
+### Hinzugefügt
+- `app/Dockerfile` (Multi-Stage, Node 22, non-root, Healthcheck) und `app/.dockerignore`.
+- `app/docker/`: Startvalidierung (`verify-runtime-config.mjs`, Exit-Code 78 bei fehlender
+  Pflichtvariable), `healthcheck.mjs` (ohne curl/wget), `entrypoint.sh`.
+- `deploy/`: `compose.yml` (app + postgres, keine veröffentlichten Ports), Overlays für Stage und
+  Produktion, Environment-Vorlagen, Skripte für Deployment, Rollback, Healthcheck, Backup und
+  Wiederherstellung, Betriebsdokumentation `deploy/README.md`.
+- `.github/workflows/container-image.yml`: GHCR-Build und -Push, OCI-Labels, kein `latest`,
+  `packages: write` nur in diesem Workflow.
+- `app/supabase/test/run_db_tests.sh`: POSIX-Fassung von `run_ap12_local.ps1` (gleiche Dateien,
+  gleiche Reihenfolge) — die SQL-Smokes laufen damit erstmals in der CI.
+
+### Geändert
+- `app/next.config.ts`: Standalone-Ausgabe ausschließlich für den Containerbau
+  (`BUILD_STANDALONE=1`) ergänzt. Normale Builds und der Playwright-Webserver
+  verwenden weiterhin `next start`. Header und CSP unverändert (CSP bleibt Report-Only).
+- `app/src/lib/supabase/config.ts`: stille Platzhalter entfernt; `assertSupabaseConfigured()` mit
+  klarer Meldung; Exportform unverändert.
+- `app/src/lib/supabase/{client,server}.ts`: Abbruch statt Client mit Platzhalterwerten.
+- `app/src/app/api/health/route.ts`: Version aus `APP_VERSION` (serverseitig, zur Laufzeit setzbar);
+  `NEXT_PUBLIC_APP_VERSION` bleibt übergangsweise als Rückfall.
+- `.github/workflows/ci.yml`: kontrolliert erweitert — `permissions: contents: read`,
+  Concurrency-Gruppe, Service-Worker-Syntaxprüfung, neue Jobs `database` (PostgreSQL 18) und
+  `container` (Hadolint, Docker-Build, Startvalidierung, `docker history`-Prüfung,
+  `docker compose config`, Trivy informativ). Alle bestehenden Schritte unverändert erhalten.
+- `03-Architektur/DEPLOYMENT.md`, `07-Betrieb/HOSTING.md`: Vercel-/Supabase-Cloud-Annahme als
+  überholt gekennzeichnet, nichts gelöscht; Richtigstellung zu `SUPABASE_SERVICE_ROLE_KEY`.
+- `07-Betrieb/MONITORING.md`: Abschnitt zum Containerbetrieb ergänzt.
+
+### Nicht enthalten
+- Keine Fachänderung, keine Supabase-Ablösung, keine AP12-/AP13-/AP15-Änderung.
+- Kein Deployment-Workflow, kein SSH, kein Push, kein Merge, kein Tag.
+- Keine Aktualisierung von `PROJEKT_WISSEN.md` und `PROJEKTSTATUS.md`: beide tragen derzeit nicht
+  committete Änderungen und werden bewusst nicht mit AP14-Inhalten vermischt.
+
+### Lokal geprüft
+- ESLint, TypeScript und normaler Produktions-Build erfolgreich.
+- Produktions-Build ohne Supabase-Konfiguration erfolgreich.
+- Container-Startvalidierung: fehlende Konfiguration = Exit 78, gültige
+  Übergangskonfiguration = Exit 0, verbotener Service-Role-Key = Exit 78.
+- Standalone-Build erfolgreich; `.next/standalone/server.js` vorhanden.
+- 11/11 öffentliche Playwright-/Accessibility-Tests erfolgreich.
+- Fünf YAML-Dateien erfolgreich geparst; sieben Shell-Skripte mit `bash -n`
+  erfolgreich geprüft.
+
+### Offen
+- `docker build`, realer Containerlauf, `docker compose config`, Hadolint,
+  Trivy und der neue Linux-Datenbankrunner werden durch die GitHub-CI geprüft;
+  Docker ist auf dem lokalen Windows-Rechner nicht installiert.
+
 ## [0.1.0] – 2026-07-19 – Arbeitspaket 1
 ### Hinzugefügt
 - Vault-Dokumentationsstruktur (00–07, 99) mit Grundlagendokumenten.

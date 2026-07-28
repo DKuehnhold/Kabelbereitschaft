@@ -1,0 +1,39 @@
+# Build-Kontext bewusst minimal halten: nichts Geheimes, nichts Generiertes,
+# keine Testartefakte und keine Git-Metadaten im Image.
+
+# Abhaengigkeiten und Build-Artefakte (werden im Image neu erzeugt)
+node_modules
+.next
+out
+build
+*.tsbuildinfo
+next-env.d.ts
+
+# Secrets und Umgebungsdateien - NIE in den Kontext
+.env
+.env.*
+!.env.example
+
+# Git und Editor
+.git
+.gitignore
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+
+# Tests und Testartefakte (nicht Bestandteil des Produktionsimages)
+e2e
+playwright.config.ts
+playwright-report
+test-results
+blob-report
+playwright/.cache
+
+# Datenbankartefakte: Migrationen werden kontrolliert ausserhalb des Images
+# angewendet (siehe deploy/README.md), Testskripte gehoeren nie ins Image.
+supabase/test
+supabase/seed.sql
+
+# Dokumentation
+README.md

@@ -1,0 +1,37 @@
+# Overlay Produktion. Immer gemeinsam mit compose.yml verwenden:
+#   docker compose -f deploy/compose.yml -f deploy/compose.production.yml ...
+#
+# ACHTUNG - zwei Sperren gelten unabhaengig von dieser Datei:
+#   1. Der Stack ist bis zum Abschluss von Arbeitspaket B nicht
+#      produktionsfaehig (Supabase-Abhaengigkeit, siehe compose.yml).
+#   2. V1 (Aufbewahrungsfristen fuer Personen-, EXIF-/GPS- und Auditdaten) ist
+#      offen und wirkt als Produktionssperre. Produktiver Datenanfall ist bis
+#      zur Entscheidung durch Dennis nicht zulaessig.
+#
+# In Produktion wird ausschliesslich ein bereits gebauter und gepruefter
+# Image-DIGEST eingesetzt, kein beweglicher Tag:
+#   APP_IMAGE_REF=ghcr.io/dkuehnhold/kabelbereitschaft@sha256:...
+#   (vollstaendige Referenz, siehe deploy/scripts/deploy.sh)
+
+services:
+  app:
+    environment:
+      APP_ENVIRONMENT: production
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2g
+        reservations:
+          memory: 512m
+
+  postgres:
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2g
+        reservations:
+          memory: 512m
+    # Produktionsdatenbanken werden getrennt von Stage betrieben (eigene
+    # Instanz bzw. eigenes Volume, eigene Zugangsdaten, eigenes Backupziel).

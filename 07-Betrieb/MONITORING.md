@@ -20,3 +20,19 @@ geeignet. Erweiterte Diagnose nur für angemeldete Nutzer/Administratoren (Offli
 ## Umsetzung
 Konkrete Plattform (z. B. Hosting-Logs, Supabase-Logs, externer APM) ist bei Deployment festzulegen.
 Bis dahin: Konzept vorhanden, technische Umsetzung offen.
+
+## Ergänzung Containerbetrieb (2026-07-28, AP14/A11)
+Zielplattform ist ein Docker-Compose-Stack (siehe `deploy/README.md`). Daraus konkretisiert sich:
+
+- **Logs:** Docker-`json-file`-Treiber mit Rotation (10 MB × 5 Dateien je Dienst), Zugriff über
+  `docker compose logs`. Eine zentrale Aggregation und die Aufbewahrungsdauer sind **offen**.
+- **Verfügbarkeit:** `/api/health` wird sowohl als Container-Healthcheck
+  (`app/docker/healthcheck.mjs`, ohne curl/wget) als auch für externe Uptime-Prüfungen über HAProxy
+  genutzt. Ungesunde Container werden von Compose neu gestartet (`restart: unless-stopped`).
+- **HTTP-Statusverteilung, Antwortzeiten und Missbrauchsmuster** werden auf **HAProxy**-Ebene
+  erhoben; dort liegt gemäß V4 auch das Rate Limiting.
+- **Datenbank:** `pg_isready` als Healthcheck; Fehler- und Verbindungsmetriken aus den
+  PostgreSQL-Logs. Statt „Supabase-Logs" gilt ab Arbeitspaket B der eigene PostgreSQL-Container.
+- **Benachrichtigungsweg bei Fehlern:** **offen** (Infrastrukturentscheidung).
+- Die Logging-Regeln oben gelten unverändert: keine Passwörter, Tokens, Schlüssel oder
+  vollständigen personenbezogenen Inhalte in Logs.
