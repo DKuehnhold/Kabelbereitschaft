@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Plattformunabhaengiger Lauf der Datenbankpruefungen (AP14 / A10).
 #
-# Spiegelt run_ap12_local.ps1 EXAKT: gleiche Dateien, gleiche Reihenfolge,
-# gleiche Fehlererkennung, gleiche Abschlusszeile. Die PowerShell-Fassung
-# bleibt unveraendert; dieses Skript ergaenzt sie fuer Linux und die CI.
+# Fuehrt zuerst die historische Kette samt AP10-AP13-Smokes aus und danach
+# den endlichen AP14/B-Plattformwechsel (0012/0013 + Smoke 19). Die
+# PowerShell-Fassung bleibt als historischer lokaler AP12/AP13-Nachweis
+# unveraendert.
 #
 # Aufruf:
 #   PGHOST=localhost PGPORT=5432 PGUSER=postgres PGPASSWORD=... ./run_db_tests.sh
@@ -27,7 +28,9 @@ export PGPORT="${PGPORT:-5432}"
 export PGUSER="${PGUSER:-postgres}"
 
 FILES=(
-  "${TEST_ROOT}/00_stub_auth_storage.sql"
+  "${SUPABASE_ROOT}/bootstrap/01_roles.sql"
+  "${SUPABASE_ROOT}/bootstrap/02_compat_auth.sql"
+  "${SUPABASE_ROOT}/bootstrap/03_compat_storage.sql"
   "${MIGRATIONS}/0001_init.sql"
   "${MIGRATIONS}/0002_storage.sql"
   "${MIGRATIONS}/0003_ap2_priority.sql"
@@ -43,6 +46,9 @@ FILES=(
   "${TEST_ROOT}/16_ap11_list.sql"
   "${TEST_ROOT}/17_ap12_details.sql"
   "${TEST_ROOT}/18_ap13_tasks.sql"
+  "${MIGRATIONS}/0012_ap14b_platform_auth.sql"
+  "${MIGRATIONS}/0013_ap14b_drop_supabase_compat.sql"
+  "${TEST_ROOT}/19_ap14b_platform.sql"
 )
 
 for f in "${FILES[@]}"; do
@@ -84,4 +90,4 @@ if grep -Eq 'SMOKE[[:space:]]+[^[:space:]]+[[:space:]]+FAIL' "${LOG}"; then
 fi
 
 echo
-echo "ERGEBNIS: AP10/AP11/AP12/AP13 DATENBANKTESTS ERFOLGREICH."
+echo "ERGEBNIS: AP10/AP11/AP12/AP13/AP14B DATENBANKTESTS ERFOLGREICH."
