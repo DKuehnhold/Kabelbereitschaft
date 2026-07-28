@@ -11,6 +11,11 @@ import { IncidentMaterialCard } from "@/components/inventory/IncidentMaterialCar
 import { IncidentImages } from "@/components/images/IncidentImages";
 import { OfflineIncidentActions } from "@/components/offline/OfflineIncidentActions";
 import { CONDITION_LABELS } from "@/lib/status";
+import { listAssignedIncidentTasks, listIncidentTasks } from "@/lib/tasks";
+import type { AssignedIncidentTask, IncidentTask } from "@/lib/tasks";
+import { AssignedTaskList, TaskList } from "@/components/incidents/TaskList";
+import { listProfileOptions, listTeams } from "@/lib/masterdata";
+import type { StageOption, TeamRow } from "@/lib/masterdata";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +50,16 @@ export default async function IncidentDetailPage({
     getActiveMaterials(),
     getActiveLocations(),
   ]);
+  // AP13: Aufgaben. Staff liest die Tabelle (RLS), Monteure erhalten die
+  // minimierte Projektion über die RPC. Zuständigkeitsoptionen nur für Staff.
+  const [tasks, assignedTasks, taskProfiles, teamRows] = await Promise.all([
+    isStaff ? listIncidentTasks(id) : Promise.resolve<IncidentTask[]>([]),
+    isStaff ? Promise.resolve<AssignedIncidentTask[]>([]) : listAssignedIncidentTasks(id),
+    isStaff ? listProfileOptions() : Promise.resolve<StageOption[]>([]),
+    isStaff ? listTeams() : Promise.resolve<TeamRow[]>([]),
+  ]);
+  const taskTeams = teamRows.filter((t) => t.is_active).map((t) => ({ id: t.id, label: t.name }));
+
   const projectedContact = isStaff
     ? await getStaffIncidentContact(i.contact_id, i.contact_phone_number_id)
     : await getAssignedIncidentContact(id);
@@ -159,6 +174,12 @@ export default async function IncidentDetailPage({
               <Row label="Abschlussdatum" value={fmt(i.closed_at)} />
             </dl>
           </section>
+
+          {isStaff ? (
+            <TaskList incidentId={i.id} tasks={tasks} profiles={taskProfiles} teams={taskTeams} />
+          ) : (
+            <AssignedTaskList tasks={assignedTasks} />
+          )}
 
           <IncidentControls incident={i} role={session.role} monteure={monteure} />
 

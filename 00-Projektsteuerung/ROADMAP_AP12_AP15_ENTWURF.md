@@ -1,6 +1,6 @@
 # Roadmap AP12–AP15 und Git-Sicherungsplan
 
-> **Version 1.12** · Stand: 2026-07-27 ·
+> **Version 1.14** · Stand: 2026-07-28 ·
 > **Verbindlicher Arbeitsort (Entscheidung Dennis, 2026-07-26):** einziger Projekt- und
 > Arbeitsort ist der Kabelbereitschaft-Vault
 > `C:\Users\DennisKühnhold\OneDrive - W & S Technik GmbH\Kabelbereitschaft-App\Kabelbereitschaft-App`.
@@ -450,6 +450,19 @@ Freigabe durch Dennis auf Basis von Umsetzungsbericht + Smoke-Ergebnissen.
 
 ## B.3 AP13 — Aufgaben-/Hinweismodell und auditierbare Massenaktionen
 
+> **Status (2026-07-28): lokal technisch verifiziert; Commit, Push und CI-Nachweis offen.**
+> AP13 ist damit **nicht** endgültig abgeschlossen. Umgesetzt sind Migration
+> `0011_ap13_tasks_bulk.sql`, die gehärtete Reconciliation mit Triggern auf den vier Quelltabellen,
+> die minimierte `SECURITY DEFINER`-Monteur-RPC, die beiden `SECURITY INVOKER`-Bulk-RPCs mit
+> gemeinsamem gesperrten Zuweisungspfad, `has_open_task` RLS-konform in `incident_list_view` sowie
+> Oberfläche und Server Actions einschließlich Entfernung von `deriveOpenHints()`. Nachgewiesen:
+> TypeScript, ESLint und Produktions-Build erfolgreich; lokaler PostgreSQL-Lauf mit Migrationen
+> 0001–0011 und den Smokes AP10–AP13 erfolgreich (Abschlusszeile
+> `ERGEBNIS: AP10/AP11/AP12/AP13 DATENBANKTESTS ERFOLGREICH.`, keine `SMOKE … FAIL`-, `ERROR`- oder
+> `FATAL`-Meldung, E20a–E20c und E21a–E21c ausdrücklich erfolgreich, temporäre Testdatenbank
+> entfernt). Testnachweis im Detail in `PROJEKT_WISSEN.md`.
+> **V1 bleibt Produktionssperre, Branding bleibt separat, kein RC1-Tag.**
+
 **Ziel und fachlicher Nutzen.** Aus abgeleiteten Hinweisen wird ein steuerbares Arbeitsmittel.
 Heute berechnet die Liste „offene Hinweise" aus dem Vorgangszustand — niemand ist zuständig, nichts
 ist quittierbar, nichts hat eine Frist. Gleichzeitig sind die Massenaktionen in der Liste sichtbar,
@@ -471,23 +484,100 @@ Freie Aufgaben ohne Vorgangsbezug. **Offline-Bearbeitung von Aufgaben — für R
 
 **Architektur- und Datenmodellentscheidungen.**
 
-- Neue Tabelle `incident_tasks` (Arbeitstitel) mit Enum-Typ; **keine** Erweiterung von
-  `incident_notes` (das sind unveränderbare Chronikeinträge — Grundsatz aus ADR 7).
-- Zuständigkeit passend zu V3: Zuweisung bevorzugt an **`profiles`**, Teams oder Rollen — **keine**
-  zwingende Kopplung an `technicians`.
-- Aufgaben sind **veränderbar** (Quittierung), ihre Zustandsänderungen werden über `tg_audit`
-  protokolliert. Die Chronik bleibt unveränderbar; Aufgaben sind ein zweites, klar getrenntes Konzept.
-- Massenaktionen unterscheiden klar zwischen **Gesamtauftrag** (der ausgewählten Menge) und
-  **Einzeltransaktionen** (je Vorgang). Teilerfolg erfordert kontrollierte Einzeltransaktionen oder
-  eine entsprechend entworfene Datenbankfunktion — keine einzelne Sammeltransaktion, die bei einem
-  Fehler alles verwirft oder einen inkonsistenten Zwischenstand hinterlässt. Ergebnis als
-  Teilerfolgsbericht („x von y geändert, z abgelehnt"). **Keine** stille Überschreibung: Vorgänge,
-  die sich seit dem Laden geändert haben (`updated_at`), werden abgelehnt und benannt — dasselbe
-  Prinzip wie in der Offline-Konfliktbehandlung.
-- Jede Einzeländerung bleibt separat auditierbar. Statuswechsel laufen ausschließlich über die
-  bestehenden Trigger/Guards (`tg_incident_status_history`, `tg_incident_guard`) — die Massenaktion
-  umgeht **weder RLS noch Status-Guards noch Chroniktrigger**.
-- Keine Service-Role: Massenaktionen wirken unter der Benutzersession, RLS entscheidet.
+> **Verbindliche Architekturpräzisierungen (Freigabe Dennis, 2026-07-27, Version 1.13).**
+> Die folgenden sieben Blöcke sind entschieden. Zwei frühere Formulierungen dieses Abschnitts sind
+> damit ausdrücklich **korrigiert**: (a) statt eines **PostgreSQL-Enums** wird durchgehend `text`
+> **mit Check-Constraints** verwendet (konsistent zu AP12 `condition_code`); (b) Teilerfolg entsteht
+> **nicht** durch unabhängig committete Einzeltransaktionen, sondern durch **abgefangene
+> Subtransaktionen innerhalb eines RPC-Aufrufs**.
+
+**1. Zuständigkeit.**
+
+- `assignee_profile_id` → `profiles(id)` ist die **einzige berechtigungswirksame** persönliche
+  Zuständigkeit.
+- `assignee_team_id` und `assignee_role` sind **ausschließlich informative** Filter- und
+  Anzeigeattribute und dürfen nicht in `using`/`with check` erscheinen.
+- Aufgaben dürfen **unzugewiesen** sein.
+- Es entsteht **keine** zwingende Kopplung an `technicians`; **V3 bleibt unverändert.**
+
+**2. Lebenszyklus und Wertebereiche.**
+
+- Neue Tabelle `incident_tasks`; **keine** Erweiterung von `incident_notes` (unveränderbare
+  Chronikeinträge — ADR 7). Aufgaben sind veränderbarer Arbeitszustand, ihre Änderungen werden über
+  `tg_audit` feldgenau protokolliert.
+- **`text` mit Check-Constraints, keine neuen PostgreSQL-Enums.**
+- Status: `open`, `in_progress`, `acknowledged`, `void`. Priorität: `low`, `normal`, `high`.
+  **Deutsche Bezeichnungen ausschließlich in der UI.**
+- `acknowledged_at` und `acknowledged_by` sind **genau dann beide gesetzt**, wenn
+  `status = 'acknowledged'`; bei allen anderen Statuswerten sind **beide `NULL`** (Check-Constraint).
+- **Quittieren darf für RC1 ausschließlich Staff.**
+- **Aufgaben dürfen nicht gelöscht werden** (kein Delete-Policy, `revoke delete`, zusätzlich
+  abweisender Trigger).
+
+**3. Persistierte Ableitungen.**
+
+- Je `(incident_id, task_type)` existiert **höchstens ein** `derived`-Datensatz (partieller
+  Unique-Index).
+- Trifft eine Ableitungsbedingung zu, wird die Aufgabe **erzeugt oder von `void` auf `open`
+  zurückgesetzt**.
+- **Entfällt die fachliche Ursache, wird die abgeleitete Aufgabe auf `void` gesetzt.**
+- Eine weiterhin bestehende, bereits quittierte Aufgabe bleibt **`acknowledged`**.
+- Die Synchronisierung wird **datenbankseitig** zuverlässig ausgelöst durch Änderungen an
+  `incidents`, `incident_assignments`, `incident_images` und `incident_cable_positions`. Eine
+  Aktualisierung erst beim Seitenaufruf ist **unzulässig**.
+- Mit Migration 0011 erfolgt ein **idempotenter Backfill**.
+- `deriveOpenHints()` wird nach erfolgreicher Umstellung aus der Anzeige **entfernt**
+  (keine Doppelanzeige).
+
+**4. Monteur-Sichtbarkeit.**
+
+- Monteure erhalten **kein direktes Tabellenrecht** auf `incident_tasks`.
+- **Deshalb keine `security_invoker`-Projektion** — eine Invoker-Sicht könnte ohne Tabellenrecht
+  nichts liefern.
+- Zugriff über eine eng begrenzte **`SECURITY DEFINER`-RPC** mit festem `search_path`, expliziter
+  Prüfung auf angemeldeten Benutzer und `is_assigned_to_incident(incident_id)`.
+- Rückgabe **ausschließlich**: `incident_id`, `task_type`, `title`, `status`, `due_at` — keine
+  Zuständigkeitsfelder, keine Namen, keine internen Auditfelder.
+- `REVOKE` für `public` und `anon`; `GRANT EXECUTE` ausschließlich an `authenticated`.
+- Tests weisen den **direkten Tabellenzugriff des Monteurs ab** und bestätigen den begrenzten
+  RPC-Zugriff.
+
+**5. Bulk-Statusänderung.**
+
+- **`SECURITY INVOKER`**-Datenbankfunktion unter der Benutzersession; keine Service-Role, RLS
+  entscheidet.
+- Maximal **200 Vorgänge** je Aufruf; Überschreitung ist ein **harter Fehler**.
+- **Ein äußerer RPC-Aufruf mit abgefangener Subtransaktion je Eintrag** — das sind **keine
+  unabhängig committeten Einzeltransaktionen**.
+- Erwartbare Einzelfehler werden je Vorgang abgefangen und im Ergebnis gemeldet; ein
+  **unerwarteter technischer Fehler darf den gesamten RPC zurückrollen**.
+- Konfliktprüfung über `expected_updated_at`; keine stille Überschreibung.
+- Ergebnis je Vorgang mit stabilen, maschinenlesbaren Codes: `ok`, `conflict`, `not_found`,
+  `guard_rejected`, `invalid_status`.
+- Jede erfolgreiche Statusänderung erzeugt regulär **genau einen Incident-Auditeintrag und einen
+  Status-Historieneintrag** über die bestehenden Trigger (`tg_audit`,
+  `tg_incident_status_history`, `tg_incident_guard`) — keine Umgehung.
+
+**6. Bulk-Monteurzuweisung.**
+
+- `p_monteur_id` muss ein **aktives `profiles`-Profil mit Rolle `monteur`** bezeichnen.
+- Zuweisung ist **additiv und idempotent**: vorhandene aktive Monteure werden nicht automatisch
+  entfernt; eine bereits aktive identische Zuweisung ist ein **erfolgreiches No-op**.
+- **`incidents.updated_at` allein erkennt konkurrierende Zuweisungen nicht zuverlässig.** Jedes
+  Eingabeelement führt daher zusätzlich die beim Laden **erwartete sortierte Menge aktiver
+  `monteur_id`-Werte**; die RPC vergleicht sie unmittelbar vor der Änderung, Abweichung ergibt
+  `conflict`.
+- **Einzel- und Bulk-Zuweisung der Anwendung nutzen denselben kontrollierten RPC-/Sperrpfad**,
+  damit die Konfliktprüfung nicht umgangen wird.
+- Jede neue Zuweisung erzeugt einen **eigenen Auditeintrag auf `incident_assignments`**.
+- Ein Status-Historieneintrag entsteht **nur bei tatsächlicher Statusänderung** (z. B. `neu` →
+  `monteur_zugewiesen`) — **keine künstlichen Chronikeinträge**.
+
+**7. Listenintegration.**
+
+- `has_open_task` wird **additiv** in `incident_list_view` aufgenommen.
+- Als offen gelten **ausschließlich `open` und `in_progress`**; `acknowledged` und `void` zählen
+  nicht.
 
 **Abhängigkeiten und Voraussetzungen.** AP12 abgeschlossen (Detailseite als Anzeigeort). **V2 ist
 entschieden:** AP13 ist online-only; Aufgaben werden **nicht** in die Outbox aufgenommen und
@@ -499,14 +589,29 @@ entschieden:** AP13 ist online-only; Aufgaben werden **nicht** in die Outbox auf
 - Die bisherigen abgeleiteten Hinweise sind vollständig durch persistierte Aufgaben abgedeckt;
   keine doppelte Anzeige.
 - Massenaktion über ≥ 20 ausgewählte Vorgänge: alle Berechtigten geändert, nicht Berechtigte
-  abgelehnt und benannt, je Vorgang ein Chronik- und ein Auditeintrag.
-- Ein zwischenzeitlich fremdgeänderter Vorgang wird abgelehnt, nicht überschrieben.
+  abgelehnt und mit stabilem Code benannt; je erfolgreicher Statusänderung genau ein Auditeintrag
+  und ein Status-Historieneintrag.
+- Ein zwischenzeitlich fremdgeänderter Vorgang wird abgelehnt, nicht überschrieben — bei der
+  Zuweisung auch dann, wenn sich nur die Menge aktiver Monteure geändert hat.
+- Ein Monteur erhält auf `incident_tasks` keinen direkten Tabellenzugriff und sieht über die
+  `SECURITY DEFINER`-RPC ausschließlich `incident_id`, `task_type`, `title`, `status`, `due_at`
+  seiner zugewiesenen Vorgänge.
+- Entfällt eine Ableitungsursache, wechselt die zugehörige abgeleitete Aufgabe auf `void`; tritt
+  sie erneut auf, wird dieselbe Aufgabe wieder `open`. Eine quittierte Aufgabe bleibt
+  `acknowledged`.
 - Monteur kann keine Massenaktion ausführen (RLS + UI).
 - `lint` / `tsc` / `build` grün; Smokes 10–17 unverändert grün.
 
-**Migrationen.** `0011_ap13_tasks_bulk.sql` — `incident_tasks` + Enum, Indizes, RLS
-(`is_staff()` schreibend, Monteur lesend auf zugewiesene Vorgänge), `tg_audit`-Anbindung,
-optional Bulk-RPC. Additiv/idempotent.
+**Migrationen.** `0011_ap13_tasks_bulk.sql` — additiv/idempotent: `incident_tasks` mit
+**`text`-Spalten und Check-Constraints (kein Enum)**, partieller Unique-Index
+`(incident_id, task_type) where source = 'derived'`, Indizes auf `(incident_id, status)` und
+`(assignee_profile_id, status)`; Trigger `tg_touch_updated`, `tg_audit` und
+Löschsperre; RLS mit `is_staff()` schreibend und lesend, **kein** direktes Monteur-Tabellenrecht;
+`SECURITY DEFINER`-RPC für die minimierte Monteur-Sicht; datenbankseitige Synchronisierung der
+Ableitungen über Trigger auf `incidents`, `incident_assignments`, `incident_images` und
+`incident_cable_positions` plus idempotenter Backfill; `SECURITY INVOKER`-Bulk-RPCs für
+Statusänderung und Monteurzuweisung; `has_open_task` additiv in `incident_list_view`;
+gezielte `REVOKE`/`GRANT EXECUTE`-Zuweisungen.
 
 **Sicherheit / Datenschutz / Offline / Audit.**
 
@@ -518,8 +623,17 @@ optional Bulk-RPC. Additiv/idempotent.
 - Offline: gemäß V2 für RC1 ausgeschlossen — AP13 bleibt online-only; bestehende Offline-Funktionen
   unverändert (Regressionsnachweis erforderlich).
 
-**Erforderliche Tests.** Smoke `18_ap13_tasks.sql` (Lebenszyklus, RLS, Audit je Änderung,
-Idempotenz der Ableitung). Bulk-Test mit Konfliktfall und Teilerfolg. Regression aller Vorgänger-Smokes.
+**Erforderliche Tests.** Smoke `18_ap13_tasks.sql`: Lebenszyklus `open` → `in_progress` →
+`acknowledged` und abgewiesenes `DELETE`; Kohärenz-Constraint für `acknowledged_at`/
+`acknowledged_by`; Idempotenz der Ableitung, `void`-Setzung bei entfallener Ursache,
+Wiederöffnung bei Wiederauftreten, unveränderte quittierte Aufgabe; Trigger-Auslösung über
+`incidents`, `incident_assignments`, `incident_images`, `incident_cable_positions`; RLS für Staff,
+**abgewiesener direkter Tabellenzugriff des Monteurs** und bestätigter begrenzter RPC-Zugriff;
+Zuweisung an `profiles` wirksam, Team und Rolle ohne Rechtewirkung; Bulk-Erfolg über ≥ 20
+Vorgänge, Bulk-Teilerfolg mit stabilen Codes, veraltetes `expected_updated_at` → `conflict`,
+abweichende erwartete Monteurmenge → `conflict`, No-op bei bereits aktiver Zuweisung, Obergrenze
+201 → harter Fehler, Monteur-Bulk-Aufruf abgewiesen; je erfolgreicher Änderung ein Auditeintrag
+und nur bei echter Statusänderung ein Historieneintrag. Regression aller Vorgänger-Smokes 10–17.
 E2E: Auswahl + Bulk in `incidents.spec.ts` (@app).
 
 **Abbruch- / Freigabekriterien.** Abbruch, wenn Massenaktionen ohne Einzelaudit oder ohne
@@ -832,3 +946,5 @@ durch Dennis steht weiterhin aus.
 | 1.10 | 2026-07-26 | Rückführung abgeschlossen: Standortkorrektur als `efdadfb` nach `origin/main` gepusht; temporären Clone `C:\dev\Kabelbereitschaft` nach erneuter Kontrolle über den Windows-Papierkorb entfernt, `C:\dev` beibehalten. Vault anschließend sauber auf `main` = `origin/main`, `Willkommen.md` unverändert. B.8 Punkt 7 geschlossen; alle acht technischen Vorbedingungen sind erledigt. `PROJEKT_WISSEN.md` ist die zentrale Projektübersicht. AP12 wartet nur noch auf die ausdrückliche Freigabe durch Dennis; V1 bleibt Produktionssperre | Codex (KI) nach Vorgaben von Dennis |
 | 1.11 | 2026-07-27 | Dennis erteilt mit „Mach jetzt weiter“ die ausdrückliche AP12-Implementierungsfreigabe. AP12 in Umsetzung: Migration `0010_ap12_incident_details.sql`, neue AP12-RPCs, Mehrfach-Kabelpositionen mit Menge/Einheit/Zustand, Kontakt-FK und Snapshot, minimierte Monteur-Kontaktprojektion, überarbeitete Vorgangsoberfläche und Bereitschaftsnummern-CRUD implementiert. TypeScript, ESLint und Next.js-Produktions-Build erfolgreich. Der lokale PostgreSQL-18-Lauf ist mit `app/supabase/test/run_ap12_local.ps1` vorbereitet und wartet ausschließlich auf die verdeckte Kennworteingabe durch Dennis; AP12 deshalb noch nicht abgeschlossen. V1 bleibt Produktionssperre | Codex (KI) |
 | 1.12 | 2026-07-27 | AP12 technisch abgeschlossen: vollständiger lokaler PostgreSQL-18-Lauf mit Migrationen 0001–0010 und AP10–AP12-Smoke-Tests erfolgreich. Nachgewiesen sind insbesondere Mengen-/Einheiten-/Zustandsregeln, historische NULL-Positionen, Kontakt-Snapshot, minimierte Monteur-Projektion, RLS, Staff-CRUD und der Entzug des AP10-Schreibaltpfads. Teststarter gegen harmlose PostgreSQL-NOTICE-Ausgaben gehärtet; AP11-Zähltests fixture-spezifisch gemacht; temporäre Testdatenbank entfernt. V1 bleibt unverändert Produktionssperre | Codex (KI) |
+| 1.13 | 2026-07-27 | **AP13-Architektur unter verbindlichen Präzisierungen freigegeben (Implementierung noch nicht begonnen).** B.3 vollständig neu gefasst in sieben entschiedene Blöcke: (1) Zuständigkeit — nur `assignee_profile_id` berechtigungswirksam, `assignee_team_id`/`assignee_role` rein informativ, Aufgaben dürfen unzugewiesen sein, keine Kopplung an `technicians`, V3 unverändert; (2) Lebenszyklus — Status `open`/`in_progress`/`acknowledged`/`void`, Priorität `low`/`normal`/`high`, deutsche Labels nur in der UI, Kohärenz-Constraint für `acknowledged_at`/`acknowledged_by`, Quittieren in RC1 nur Staff, kein Löschen; (3) Ableitungen — höchstens ein `derived`-Datensatz je `(incident_id, task_type)`, Erzeugen bzw. Wiederöffnen aus `void`, `void`-Setzung bei entfallener Ursache, quittierte Aufgaben bleiben `acknowledged`, datenbankseitige Trigger-Synchronisierung über `incidents`, `incident_assignments`, `incident_images`, `incident_cable_positions`, idempotenter Backfill, `deriveOpenHints()` entfällt; (4) Monteur-Sicht — kein direktes Tabellenrecht, deshalb **keine `security_invoker`-Projektion**, sondern eng begrenzte `SECURITY DEFINER`-RPC mit festem `search_path` und `is_assigned_to_incident()`, Rückgabe nur `incident_id`/`task_type`/`title`/`status`/`due_at`, `REVOKE` für `public`/`anon`; (5) Bulk-Status — `SECURITY INVOKER`, Obergrenze 200 als harter Fehler, ein äußerer RPC-Aufruf mit **abgefangenen Subtransaktionen** je Eintrag, unerwarteter technischer Fehler rollt den gesamten RPC zurück, Konflikt über `expected_updated_at`, stabile Codes `ok`/`conflict`/`not_found`/`guard_rejected`/`invalid_status`, je Erfolg ein Audit- und ein Status-Historieneintrag; (6) Bulk-Zuweisung — `p_monteur_id` als aktives `profiles`-Profil mit Rolle `monteur`, additiv und idempotent mit No-op bei bestehender Zuweisung, zusätzlich Vergleich der erwarteten sortierten Menge aktiver `monteur_id`-Werte, gemeinsamer RPC-/Sperrpfad für Einzel- und Bulk-Zuweisung, eigener Auditeintrag je Zuweisung, Historieneintrag nur bei echter Statusänderung; (7) Liste — `has_open_task` additiv in `incident_list_view`, offen sind ausschließlich `open` und `in_progress`. **Zwei frühere Angaben ausdrücklich korrigiert:** `text` mit Check-Constraints statt PostgreSQL-Enum (konsistent zu AP12) und abgefangene Subtransaktionen statt unabhängig committeter Einzeltransaktionen. Migrations- und Testabschnitt entsprechend präzisiert. V1 bleibt Produktionssperre, Branding separat, kein RC1-Tag | Claude (KI) nach Vorgaben von Dennis |
+| 1.14 | 2026-07-28 | **AP13 implementiert und lokal technisch verifiziert; Commit, Push und CI-Nachweis offen — AP13 damit noch nicht endgueltig abgeschlossen.** Umgesetzt: Migration `0011_ap13_tasks_bulk.sql` (Tabelle `incident_tasks` mit `text`-Check-Constraints, Kohaerenz-Constraint fuer `acknowledged_at`/`acknowledged_by`, partieller Unique-Index fuer `derived`, Indizes, `tg_touch_updated`, `tg_audit`, dreifache Loeschsperre, RLS nur `is_staff()`); gehaertete `SECURITY DEFINER`-Reconciliation `sync_incident_tasks_internal` mit `EXECUTE`-Entzug fuer `public`/`anon`/`authenticated` und Triggern auf `incidents`, `incident_assignments`, `incident_images`, `incident_cable_positions` plus idempotentem Backfill und Staff-Refresh; Ableitung setzt entfallene Ursachen **immer** auf `void` und leert dabei beide Quittierungsfelder atomar, quittierte Aufgaben bleiben nur bei fortbestehender Ursache `acknowledged`; minimierte `SECURITY DEFINER`-RPC `get_assigned_incident_tasks`; `has_open_task` **RLS-konform innerhalb** der `security_invoker`-View statt ueber einen frei aufrufbaren Definer-Helfer; `SECURITY INVOKER`-Bulk-RPCs mit Obergrenze 200, abgefangenen Subtransaktionen je Eintrag und stabilen Codes; gemeinsamer gesperrter Zuweisungspfad mit Vergleich von `expected_updated_at` und erwarteter aktiver Monteurmenge; Oberflaeche, Server Actions, Filter, aktivierte Massenaktionsleiste mit Teilerfolgsbericht und Entfernung von `deriveOpenHints()`. Nachgewiesen: TypeScript, ESLint und Next.js-Produktions-Build erfolgreich; lokaler PostgreSQL-Lauf mit Migrationen 0001-0011 und Smokes AP10-AP13 erfolgreich, keine `SMOKE ... FAIL`-, `ERROR`- oder `FATAL`-Meldung, E20a-E20c und E21a-E21c ausdruecklich erfolgreich, Abschlusszeile `ERGEBNIS: AP10/AP11/AP12/AP13 DATENBANKTESTS ERFOLGREICH.`, temporaere Testdatenbank `kabelbereitschaft_ap12_test_20260728_104535` entfernt. Zwei Testaufbaufehler behoben (kein Produktfehler): `ON_ERROR_STOP on`, gezielter Entzug der Pauschalrechte fruehrerer Smokes fuer `app_user`, Auditabfragen auf `entity`/`entity_id` im Admin-Kontext. V1 bleibt Produktionssperre, Branding separat, kein RC1-Tag | Claude (KI) nach Vorgaben von Dennis |

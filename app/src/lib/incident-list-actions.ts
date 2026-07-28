@@ -1,11 +1,21 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
+import { createClient } from "@/lib/supabase/server";
 import { getSessionProfile } from "@/lib/auth";
 import { listIncidentsForExport } from "@/lib/incidents";
-import { deriveOpenHints, mergeCableArts, type IncidentListQuery } from "@/lib/incident-list";
-import { STATUS_LABELS } from "@/lib/status";
+import {
+  INCIDENT_BULK_LIMIT,
+  mergeCableArts,
+  type IncidentBulkAssignItem,
+  type IncidentBulkItem,
+  type IncidentBulkResult,
+  type IncidentListQuery,
+} from "@/lib/incident-list";
+import { INCIDENT_STATUS, STATUS_LABELS, type IncidentStatus } from "@/lib/status";
 import { PRIORITY_LABELS } from "@/lib/priority";
 import { buildCsv, CSV_BOM } from "@/lib/csv";
+import type { IncidentBulkActionResult } from "@/lib/database.types";
 
 function deNum(n: number | null): string {
   return n === null || n === undefined ? "" : String(n).replace(".", ",");
@@ -17,6 +27,8 @@ function fmtDate(dt: string | null): string {
       })
     : "";
 }
+
+const STAFF_ONLY_BULK = "Massenaktionen sind der Disposition/Administration vorbehalten.";
 
 // Vollständige gefilterte Treffermenge (aktuelle Filter + Sortierung, ohne Pagination).
 // RLS greift über die security_invoker-View; keine Service-Role, kein Audit.
@@ -33,7 +45,7 @@ export async function exportIncidentList(
   const headers = [
     "Vorgangsnummer", "Status", "Priorität", "Kunde", "Bauabschnitt", "VzG", "Betriebsstelle",
     "Kilometer", "Bereitschaftsnummer", "Kabelarten", "Erstellt am", "Zuletzt geändert",
-    "Monteure", "Bildanzahl", "Offene Hinweise",
+    "Monteure", "Bildanzahl", "Offene Aufgabe",
   ];
   const data = rows.map((r) => [
     r.incident_no,
@@ -50,8 +62,106 @@ export async function exportIncidentList(
     fmtDate(r.updated_at),
     r.monteur_names.length ? r.monteur_names.join(", ") : "Nicht zugewiesen",
     r.image_count,
-    deriveOpenHints(r).join("; ") || "—",
+    r.has_open_task ? "Ja" : "Nein",
   ]);
 
   return { csv: CSV_BOM + buildCsv(headers, data), count: rows.length, capped, error: null };
+}
+
+// =====================================================================
+// AP13: Massenaktionen über die Bulk-RPCs (SECURITY INVOKER, ein äußerer
+// Aufruf mit abgefangener Subtransaktion je Eintrag). Guards, Audit und
+// Statuschronik greifen unverändert über die bestehenden Trigger.
+// =====================================================================
+function mapBulkError(message?: string): string {
+  if (!message) return "Die Massenaktion ist fehlgeschlagen.";
+  if (/maximal 200|begrenzt/i.test(message))
+    return `Massenaktionen sind auf ${INCIDENT_BULK_LIMIT} Vorgänge begrenzt.`;
+  if (/Nur Staff|row-level security|permission denied|42501/i.test(message))
+    return "Keine Berechtigung für Massenaktionen.";
+  if (/JSON-Array|22023/i.test(message)) return "Die Auswahl konnte nicht verarbeitet werden.";
+  return "Die Massenaktion ist fehlgeschlagen. Bitte Auswahl prüfen und erneut versuchen.";
+}
+
+function summarize(rows: IncidentBulkActionResult[]): IncidentBulkResult {
+  return {
+    ok: rows.filter((r) => r.ok).length,
+    failed: rows.filter((r) => !r.ok).map((r) => ({ id: r.incident_id, code: r.code })),
+    error: null,
+  };
+}
+
+function revalidateLists() {
+  revalidatePath("/vorgaenge");
+  revalidatePath("/dashboard");
+  revalidatePath("/meine-einsaetze");
+}
+
+// Vorabprüfung von Auswahl und Obergrenze (die Datenbank prüft erneut).
+function guardItems(items: { id: string }[] | null | undefined): string | null {
+  if (!Array.isArray(items) || items.length === 0) return "Keine Vorgänge ausgewählt.";
+  if (items.length > INCIDENT_BULK_LIMIT)
+    return `Massenaktionen sind auf ${INCIDENT_BULK_LIMIT} Vorgänge begrenzt (ausgewählt: ${items.length}).`;
+  if (items.some((i) => !i.id)) return "Die Auswahl enthält einen ungültigen Vorgang.";
+  return null;
+}
+
+export async function bulkUpdateIncidentStatus(
+  items: IncidentBulkItem[],
+  newStatus: IncidentStatus,
+): Promise<IncidentBulkResult> {
+  const session = await getSessionProfile();
+  if (!session || session.role === "monteur") return { ok: 0, failed: [], error: STAFF_ONLY_BULK };
+
+  const guard = guardItems(items);
+  if (guard) return { ok: 0, failed: [], error: guard };
+  if (!(INCIDENT_STATUS as readonly string[]).includes(newStatus))
+    return { ok: 0, failed: [], error: "Ungültiger Status." };
+
+  const payload: IncidentBulkItem[] = items.map((i) => ({
+    id: i.id,
+    expected_updated_at: i.expected_updated_at,
+  }));
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("bulk_update_incident_status_ap13", {
+    p_items: payload,
+    p_new_status: newStatus,
+  });
+  if (error) return { ok: 0, failed: [], error: mapBulkError(error.message) };
+
+  const result = summarize((data ?? []) as IncidentBulkActionResult[]);
+  if (result.ok > 0) revalidateLists();
+  return result;
+}
+
+export async function bulkAssignIncidentMonteur(
+  items: IncidentBulkAssignItem[],
+  monteurId: string,
+): Promise<IncidentBulkResult> {
+  const session = await getSessionProfile();
+  if (!session || session.role === "monteur") return { ok: 0, failed: [], error: STAFF_ONLY_BULK };
+
+  const guard = guardItems(items);
+  if (guard) return { ok: 0, failed: [], error: guard };
+  if (!monteurId) return { ok: 0, failed: [], error: "Kein Monteur gewählt." };
+
+  // Jeder Eintrag führt die erwartete sortierte Menge aktiver monteur_ids;
+  // Abweichung ergibt datenbankseitig 'conflict'.
+  const payload: IncidentBulkAssignItem[] = items.map((i) => ({
+    id: i.id,
+    expected_updated_at: i.expected_updated_at,
+    expected_monteur_ids: (i.expected_monteur_ids ?? []).slice().sort(),
+  }));
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("bulk_assign_incident_monteur_ap13", {
+    p_items: payload,
+    p_monteur_id: monteurId,
+  });
+  if (error) return { ok: 0, failed: [], error: mapBulkError(error.message) };
+
+  const result = summarize((data ?? []) as IncidentBulkActionResult[]);
+  if (result.ok > 0) revalidateLists();
+  return result;
 }

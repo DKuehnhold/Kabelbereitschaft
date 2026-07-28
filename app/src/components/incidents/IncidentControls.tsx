@@ -1,10 +1,10 @@
 import {
   changeStatus,
   updateCondition,
-  addAssignment,
   deactivateAssignment,
   addNote,
 } from "@/lib/incident-actions";
+import { AssignMonteurForm } from "@/components/incidents/AssignMonteurForm";
 import {
   INCIDENT_STATUS,
   MONTEUR_STATUS,
@@ -93,16 +93,7 @@ export function IncidentControls({
           ) : (
             <p className="mb-3 text-sm text-slate-400">Noch kein Monteur zugewiesen.</p>
           )}
-          <form action={addAssignment} className="flex flex-wrap items-end gap-2">
-            <input type="hidden" name="id" value={incident.id} />
-            <select name="monteur_id" required className={`${field} max-w-xs`}>
-              <option value="">Monteur wählen…</option>
-              {monteure.map((m) => (
-                <option key={m.id} value={m.id}>{m.full_name ?? "—"}</option>
-              ))}
-            </select>
-            <button type="submit" className={btn}>Zuweisen</button>
-          </form>
+          <AssignMonteurForm incidentId={incident.id} monteure={monteure} />
         </div>
       ) : null}
 

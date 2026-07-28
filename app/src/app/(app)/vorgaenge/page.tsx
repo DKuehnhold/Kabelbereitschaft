@@ -44,6 +44,7 @@ export default async function VorgaengePage({
         pageSize={result.pageSize}
         query={effQuery}
         options={options}
+        isStaff
       />
     </div>
   );

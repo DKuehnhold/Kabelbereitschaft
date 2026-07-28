@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import type { IncidentStatus, ConditionRating } from "@/lib/status";
 import type { Priority } from "@/lib/priority";
+import type { AssignMonteurAp13Code } from "@/lib/database.types";
 import {
   getActiveCustomers,
   listStages,
@@ -338,7 +339,7 @@ const LIST_SELECT =
   "id, incident_no, status, priority, customer_id, customer_name, construction_stage_id, stage_code, stage_name, " +
   "vzg_line_id, vzg_line_number, vzg_line_ref, on_call_number_id, on_call_number, on_call_label, operating_point, " +
   "km_from, km_to, created_at, created_by, updated_at, image_count, cable_arts, monteur_names, monteur_ids, " +
-  "no_monteur, no_images, no_cable, historic_vzg";
+  "no_monteur, no_images, no_cable, historic_vzg, has_open_task";
 
 const SORT_COLUMN: Record<IncidentListSortField, string> = {
   incident_no: "incident_no",
@@ -384,6 +385,8 @@ async function fetchList(
   if (f.monteur_id) q = q.contains("monteur_ids", [f.monteur_id]);
   if (f.images === "with") q = q.gt("image_count", 0);
   else if (f.images === "without") q = q.eq("image_count", 0);
+  // AP13: „hat offene Aufgabe" wird serverseitig auf der View gefiltert.
+  if (f.hasOpenTask) q = q.eq("has_open_task", true);
   if (f.date_from) q = q.gte("created_date_local", f.date_from);
   if (f.date_to) q = q.lte("created_date_local", f.date_to);
   const term = (f.q ?? "").trim();
@@ -439,4 +442,56 @@ export async function getIncidentListFilterOptions(): Promise<IncidentListFilter
     monteure: monteure.map((m) => ({ id: m.id, label: m.full_name ?? "—" })),
     creators,
   };
+}
+
+// =====================================================================
+// AP13: Einzelzuweisung eines Monteurs über den kontrollierten RPC-Pfad.
+//
+// Einzel- und Massenzuweisung nutzen denselben gesperrten Pfad
+// (assign_incident_monteur_ap13, SECURITY INVOKER). Konfliktbasis sind
+// incidents.updated_at UND die erwartete sortierte Menge aktiver
+// monteur_ids, weil updated_at konkurrierende Zuweisungen nicht erkennt.
+// =====================================================================
+const ASSIGN_MESSAGES: Record<Exclude<AssignMonteurAp13Code, "ok">, string> = {
+  conflict:
+    "Der Vorgang wurde zwischenzeitlich geändert (Status oder Zuweisungen). Bitte die Seite neu laden und erneut zuweisen.",
+  not_found: "Der Vorgang wurde nicht gefunden.",
+  invalid_monteur: "Der gewählte Monteur ist nicht aktiv oder hat nicht die Rolle Monteur.",
+};
+
+export async function assignIncidentMonteur(incidentId: string, monteurId: string): Promise<FormState> {
+  const supabase = await createClient();
+
+  // Konfliktbasis laden (RLS greift; Monteure sehen fremde Vorgänge nicht).
+  const { data: incident } = await supabase
+    .from("incidents")
+    .select("updated_at")
+    .eq("id", incidentId)
+    .maybeSingle();
+  if (!incident) return { ok: false, error: ASSIGN_MESSAGES.not_found };
+
+  const { data: assignments } = await supabase
+    .from("incident_assignments")
+    .select("monteur_id")
+    .eq("incident_id", incidentId)
+    .eq("is_active", true);
+  const expectedMonteurIds = ((assignments ?? []) as { monteur_id: string }[])
+    .map((a) => a.monteur_id)
+    .sort();
+
+  const { data, error } = await supabase.rpc("assign_incident_monteur_ap13", {
+    p_incident_id: incidentId,
+    p_monteur_id: monteurId,
+    p_expected_updated_at: (incident as { updated_at: string }).updated_at,
+    p_expected_monteur_ids: expectedMonteurIds,
+  });
+  if (error) {
+    if (/row-level security|permission denied|42501|Nur Staff/i.test(error.message))
+      return { ok: false, error: "Nur Disposition und Administration dürfen Monteure zuweisen." };
+    return { ok: false, error: "Die Zuweisung ist fehlgeschlagen. Bitte erneut versuchen." };
+  }
+
+  const code = (data ?? "conflict") as AssignMonteurAp13Code;
+  if (code === "ok") return { ok: true, error: null };
+  return { ok: false, error: ASSIGN_MESSAGES[code] ?? "Die Zuweisung ist fehlgeschlagen." };
 }

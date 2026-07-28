@@ -31,6 +31,8 @@ export function parseIncidentListQuery(get: ParamGetter): IncidentListQuery {
   const activity = clean(get("activity"));
   const dateFrom = clean(get("from"));
   const dateTo = clean(get("to"));
+  // AP13: „hat offene Aufgabe" (offen = 'open' oder 'in_progress').
+  const openTask = clean(get("offen"));
 
   const filters: IncidentListFilters = {
     q: clean(get("q")),
@@ -46,6 +48,7 @@ export function parseIncidentListQuery(get: ParamGetter): IncidentListQuery {
     date_to: dateTo && ISO_DATE.test(dateTo) ? dateTo : undefined,
     images: images === "with" || images === "without" ? (images as IncidentImagesFilter) : undefined,
     activity: activity === "active" || activity === "closed" ? (activity as IncidentActivity) : undefined,
+    hasOpenTask: openTask === "1" ? true : undefined,
   };
 
   const sort: IncidentListSort = [];
@@ -85,6 +88,7 @@ export function buildIncidentListParams(query: IncidentListQuery): URLSearchPara
   set("to", f.date_to);
   set("images", f.images && f.images !== "all" ? f.images : undefined);
   set("activity", f.activity && f.activity !== "all" ? f.activity : undefined);
+  set("offen", f.hasOpenTask ? "1" : undefined);
   if (query.sort.length) p.set("sort", query.sort.map((s) => `${s.field}:${s.dir}`).join(","));
   if (query.page > 1) p.set("page", String(query.page));
   if (query.pageSize !== 50) p.set("size", String(query.pageSize));

@@ -309,7 +309,67 @@ export type IncidentListView = {
   no_cable: boolean;
   historic_vzg: boolean;
   search_text: string;
+  // AP13 additiv: offen = Aufgabe im Status 'open' oder 'in_progress'.
+  has_open_task: boolean;
 };
+
+// =====================================================================
+// AP13: Aufgaben je Vorgang (incident_tasks) und auditierbare Massenaktionen.
+// Wertebereiche sind `text` mit Check-Constraints (keine neuen Enums).
+// =====================================================================
+export type IncidentTaskType = "no_monteur" | "no_images" | "no_cable" | "historic_vzg" | "manual";
+export type IncidentTaskSource = "derived" | "manual";
+export type IncidentTaskStatus = "open" | "in_progress" | "acknowledged" | "void";
+export type IncidentTaskPriority = "low" | "normal" | "high";
+
+export type IncidentTaskRow = {
+  id: string;
+  incident_id: string;
+  task_type: IncidentTaskType;
+  source: IncidentTaskSource;
+  title: string;
+  body: string | null;
+  status: IncidentTaskStatus;
+  priority: IncidentTaskPriority;
+  due_at: string | null;
+  // Einzige berechtigungswirksame persönliche Zuständigkeit; Team und Rolle
+  // sind rein informative Filter-/Anzeigeattribute.
+  assignee_profile_id: string | null;
+  assignee_team_id: string | null;
+  assignee_role: UserRole | null;
+  // Genau bei status = 'acknowledged' beide gesetzt, sonst beide NULL.
+  acknowledged_at: string | null;
+  acknowledged_by: string | null;
+} & AuditCols;
+
+// Minimierte Monteur-Projektion der SECURITY-DEFINER-RPC.
+export type AssignedIncidentTaskRow = {
+  incident_id: string;
+  task_type: IncidentTaskType;
+  title: string;
+  status: IncidentTaskStatus;
+  due_at: string | null;
+};
+
+// Ergebniscodes der Einzel-/Massenaktionen (stabil, sprachneutral).
+export type AssignMonteurAp13Code = "ok" | "conflict" | "not_found" | "invalid_monteur";
+export type IncidentBulkActionCode =
+  | "ok"
+  | "conflict"
+  | "not_found"
+  | "guard_rejected"
+  | "invalid_status"
+  | "invalid_monteur";
+
+export type IncidentBulkActionResult = {
+  incident_id: string;
+  ok: boolean;
+  code: IncidentBulkActionCode;
+};
+
+// p_items-Elemente der Bulk-RPCs (jsonb-Array).
+export type IncidentBulkStatusItem = { id: string; expected_updated_at: string };
+export type IncidentBulkAssignItem = IncidentBulkStatusItem & { expected_monteur_ids: string[] };
 
 // =====================================================================
 // AP9: Stammdaten & Einstellungen
@@ -483,6 +543,8 @@ export type Database = {
       app_settings: Table<AppSettings>;
       // AP10
       incident_cable_positions: Table<IncidentCablePosition>;
+      // AP13 (kein Delete: weder Policy noch Tabellenrecht)
+      incident_tasks: Table<IncidentTaskRow>;
     };
     Views: {
       material_stock: { Row: MaterialStock; Relationships: [] };
@@ -501,6 +563,32 @@ export type Database = {
           contact_function: string | null;
           operative_phone: string | null;
         }[];
+      };
+      // AP13
+      get_assigned_incident_tasks: {
+        Args: { p_incident_id: string };
+        Returns: AssignedIncidentTaskRow[];
+      };
+      refresh_incident_tasks_ap13: {
+        Args: { p_incident_id?: string | null };
+        Returns: number;
+      };
+      assign_incident_monteur_ap13: {
+        Args: {
+          p_incident_id: string;
+          p_monteur_id: string;
+          p_expected_updated_at: string;
+          p_expected_monteur_ids: string[];
+        };
+        Returns: AssignMonteurAp13Code;
+      };
+      bulk_update_incident_status_ap13: {
+        Args: { p_items: IncidentBulkStatusItem[]; p_new_status: IncidentStatus };
+        Returns: IncidentBulkActionResult[];
+      };
+      bulk_assign_incident_monteur_ap13: {
+        Args: { p_items: IncidentBulkAssignItem[]; p_monteur_id: string };
+        Returns: IncidentBulkActionResult[];
       };
     };
     Enums: {

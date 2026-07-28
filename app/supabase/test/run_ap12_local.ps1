@@ -33,9 +33,11 @@ $files = @(
   (Join-Path $migrationRoot "0008_ap10_incident_master_data.sql"),
   (Join-Path $migrationRoot "0009_ap11_incident_list_view.sql"),
   (Join-Path $migrationRoot "0010_ap12_incident_details.sql"),
+  (Join-Path $migrationRoot "0011_ap13_tasks_bulk.sql"),
   (Join-Path $testRoot "15_ap10_smoke.sql"),
   (Join-Path $testRoot "16_ap11_list.sql"),
-  (Join-Path $testRoot "17_ap12_details.sql")
+  (Join-Path $testRoot "17_ap12_details.sql"),
+  (Join-Path $testRoot "18_ap13_tasks.sql")
 )
 foreach ($file in $files) {
   if (-not (Test-Path -LiteralPath $file)) {
@@ -91,7 +93,7 @@ try {
   }
 
   Write-Host ""
-  Write-Host "ERGEBNIS: AP10/AP11/AP12 DATENBANKTESTS ERFOLGREICH." -ForegroundColor Green
+  Write-Host "ERGEBNIS: AP10/AP11/AP12/AP13 DATENBANKTESTS ERFOLGREICH." -ForegroundColor Green
 }
 finally {
   if ($databaseCreated) {

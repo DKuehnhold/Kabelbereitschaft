@@ -6,12 +6,14 @@ import { useRouter, usePathname } from "next/navigation";
 import { StatusBadge } from "@/components/incidents/StatusBadge";
 import { PriorityBadge } from "@/components/incidents/PriorityBadge";
 import { Badge } from "@/components/ui/primitives";
-import { INCIDENT_STATUS, STATUS_LABELS } from "@/lib/status";
+import { INCIDENT_STATUS, STATUS_LABELS, type IncidentStatus } from "@/lib/status";
 import { PRIORITIES, PRIORITY_LABELS } from "@/lib/priority";
 import {
+  BULK_CODE_LABELS,
+  INCIDENT_BULK_LIMIT,
   INCIDENT_PAGE_SIZES,
-  deriveOpenHints,
   mergeCableArts,
+  type IncidentBulkResult,
   type IncidentListFilters,
   type IncidentListQuery,
   type IncidentListRow,
@@ -19,7 +21,11 @@ import {
   type IncidentListFilterOptions,
 } from "@/lib/incident-list";
 import { buildIncidentListQueryString } from "@/lib/incident-list-url";
-import { exportIncidentList } from "@/lib/incident-list-actions";
+import {
+  bulkAssignIncidentMonteur,
+  bulkUpdateIncidentStatus,
+  exportIncidentList,
+} from "@/lib/incident-list-actions";
 import { buildCsv, CSV_BOM, csvFilename } from "@/lib/csv";
 
 function fmt(dt: string): string {
@@ -60,7 +66,7 @@ const SORTABLE: { field: IncidentListSortField; label: string }[] = [
 ];
 
 export function OperationalList({
-  rows, total, page, pageSize, query, options,
+  rows, total, page, pageSize, query, options, isStaff = true,
 }: {
   rows: IncidentListRow[];
   total: number;
@@ -68,6 +74,8 @@ export function OperationalList({
   pageSize: number;
   query: IncidentListQuery;
   options: IncidentListFilterOptions;
+  // Massenaktionen sind ausschließlich für Disposition/Administration.
+  isStaff?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -76,10 +84,20 @@ export function OperationalList({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [exporting, setExporting] = useState(false);
   const [exportMsg, setExportMsg] = useState<string | null>(null);
+  // AP13: Massenaktionen
+  const [bulkStatus, setBulkStatus] = useState<string>("");
+  const [bulkMonteur, setBulkMonteur] = useState<string>("");
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkMsg, setBulkMsg] = useState<string | null>(null);
+  const [bulkError, setBulkError] = useState<string | null>(null);
+  const [bulkFailed, setBulkFailed] = useState<{ id: string; code: string }[]>([]);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const navigate = (q: IncidentListQuery) => {
     setSelected(new Set()); // Auswahl bei jeder Zustandsänderung zurücksetzen
+    setBulkMsg(null);
+    setBulkError(null);
+    setBulkFailed([]);
     const qs = buildIncidentListQueryString(q);
     startTransition(() => router.push(qs ? `${pathname}?${qs}` : pathname));
   };
@@ -138,6 +156,7 @@ export function OperationalList({
   if (f.priority) chips.push({ key: "priority", label: `Priorität: ${PRIORITY_LABELS[f.priority]}`, clear: () => updateFilters({ priority: undefined }) });
   if (f.activity && f.activity !== "all") chips.push({ key: "activity", label: `Aktivität: ${f.activity === "active" ? "Aktiv" : "Abgeschlossen"}`, clear: () => updateFilters({ activity: undefined }) });
   if (f.images && f.images !== "all") chips.push({ key: "images", label: f.images === "with" ? "Mit Bildern" : "Ohne Bilder", clear: () => updateFilters({ images: undefined }) });
+  if (f.hasOpenTask) chips.push({ key: "task", label: "Hat offene Aufgabe", clear: () => updateFilters({ hasOpenTask: undefined }) });
   if (f.customer_id) chips.push({ key: "customer", label: `Kunde: ${nameOf(options.customers, f.customer_id)}`, clear: () => updateFilters({ customer_id: undefined }) });
   if (f.stage_id) chips.push({ key: "stage", label: `Bauabschnitt: ${nameOf(options.stages, f.stage_id)}`, clear: () => updateFilters({ stage_id: undefined, vzg_line_id: undefined }) });
   if (f.vzg_line_id) chips.push({ key: "vzg", label: `VzG: ${nameOf(options.vzgLines, f.vzg_line_id)}`, clear: () => updateFilters({ vzg_line_id: undefined }) });
@@ -165,14 +184,73 @@ export function OperationalList({
   const exportSelection = () => {
     const sel = rows.filter((r) => selected.has(r.id));
     if (sel.length === 0) return;
-    const headers = ["Vorgangsnummer", "Status", "Priorität", "Kunde", "Bauabschnitt", "VzG", "Kabelarten", "Monteure", "Bilder", "Offene Hinweise"];
+    const headers = ["Vorgangsnummer", "Status", "Priorität", "Kunde", "Bauabschnitt", "VzG", "Kabelarten", "Monteure", "Bilder", "Offene Aufgabe"];
     const data = sel.map((r) => [
       r.incident_no, STATUS_LABELS[r.status], PRIORITY_LABELS[r.priority], r.customer_name ?? "",
       r.stage_code ? `${r.stage_code} – ${r.stage_name ?? ""}` : (r.stage_name ?? ""), vzg(r),
       mergeCableArts(r.cable_arts).map((g) => (g.count > 1 ? `${g.name} ×${g.count}` : g.name)).join(", "),
-      r.monteur_names.join(", ") || "Nicht zugewiesen", r.image_count, deriveOpenHints(r).join("; ") || "—",
+      r.monteur_names.join(", ") || "Nicht zugewiesen", r.image_count, r.has_open_task ? "Ja" : "Nein",
     ]);
     downloadCsv(CSV_BOM + buildCsv(headers, data), "vorgaenge_auswahl");
+  };
+
+  // ---------- AP13: Massenaktionen ----------
+  // Die Auswahl bezieht sich immer auf die aktuell angezeigte Seite; jede
+  // Zustandsänderung setzt sie zurück. Konfliktbasis je Eintrag ist
+  // updated_at (und bei der Zuweisung die aktuell geladenen monteur_ids).
+  const selectedRows = rows.filter((r) => selected.has(r.id));
+  const nrOf = (id: string) => rows.find((r) => r.id === id)?.incident_no ?? null;
+
+  const resetBulk = () => {
+    setBulkMsg(null);
+    setBulkError(null);
+    setBulkFailed([]);
+  };
+
+  const applyBulkResult = (res: IncidentBulkResult, count: number) => {
+    if (res.error) {
+      setBulkError(res.error);
+      setBulkFailed([]);
+      return;
+    }
+    setBulkMsg(`${res.ok} von ${count} geändert, ${res.failed.length} abgelehnt.`);
+    setBulkFailed(res.failed);
+    if (res.ok > 0) {
+      setSelected(new Set());
+      startTransition(() => router.refresh());
+    }
+  };
+
+  const runBulkStatus = async () => {
+    if (!isStaff || selectedRows.length === 0 || !bulkStatus) return;
+    if (selectedRows.length > INCIDENT_BULK_LIMIT) {
+      setBulkError(`Massenaktionen sind auf ${INCIDENT_BULK_LIMIT} Vorgänge begrenzt (ausgewählt: ${selectedRows.length}).`);
+      return;
+    }
+    setBulkBusy(true);
+    resetBulk();
+    const items = selectedRows.map((r) => ({ id: r.id, expected_updated_at: r.updated_at }));
+    const res = await bulkUpdateIncidentStatus(items, bulkStatus as IncidentStatus);
+    setBulkBusy(false);
+    applyBulkResult(res, items.length);
+  };
+
+  const runBulkAssign = async () => {
+    if (!isStaff || selectedRows.length === 0 || !bulkMonteur) return;
+    if (selectedRows.length > INCIDENT_BULK_LIMIT) {
+      setBulkError(`Massenaktionen sind auf ${INCIDENT_BULK_LIMIT} Vorgänge begrenzt (ausgewählt: ${selectedRows.length}).`);
+      return;
+    }
+    setBulkBusy(true);
+    resetBulk();
+    const items = selectedRows.map((r) => ({
+      id: r.id,
+      expected_updated_at: r.updated_at,
+      expected_monteur_ids: r.monteur_ids.slice().sort(),
+    }));
+    const res = await bulkAssignIncidentMonteur(items, bulkMonteur);
+    setBulkBusy(false);
+    applyBulkResult(res, items.length);
   };
 
   const inputCls = "input max-w-[220px]";
@@ -196,6 +274,11 @@ export function OperationalList({
             label="Bilder" value={f.images ?? "all"}
             options={[["all", "Alle"], ["with", "Mit"], ["without", "Ohne"]]}
             onChange={(v) => updateFilters({ images: v === "all" ? undefined : (v as IncidentListFilters["images"]) })}
+          />
+          <Segmented
+            label="Aufgaben" value={f.hasOpenTask ? "open" : "all"}
+            options={[["all", "Alle"], ["open", "Nur mit offener Aufgabe"]]}
+            onChange={(v) => updateFilters({ hasOpenTask: v === "open" ? true : undefined })}
           />
           <button type="button" className="btn btn-outline" onClick={() => setAdvanced((v) => !v)}>
             {advanced ? "Weitere Filter ausblenden" : "Weitere Filter"}
@@ -265,14 +348,71 @@ export function OperationalList({
         {exportMsg ? <p className="text-xs text-muted">{exportMsg}</p> : null}
       </div>
 
-      {/* Massenaktionsleiste (nur Vorbereitung) */}
+      {/* Massenaktionsleiste (AP13; Statuswechsel und Zuweisung nur für Staff) */}
       {selected.size > 0 ? (
-        <div className="card flex flex-wrap items-center gap-2 p-3">
-          <span className="text-sm font-medium text-foreground">{selected.size} ausgewählt</span>
-          <button type="button" className="btn btn-outline" disabled title="Noch nicht verfügbar">Status ändern (noch nicht verfügbar)</button>
-          <button type="button" className="btn btn-outline" disabled title="Noch nicht verfügbar">Monteur zuweisen (noch nicht verfügbar)</button>
-          <button type="button" className="btn btn-outline" onClick={exportSelection}>Auswahl exportieren</button>
-          <button type="button" className="btn btn-outline ml-auto" onClick={() => setSelected(new Set())}>Auswahl aufheben</button>
+        <div className="card space-y-2 p-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-medium text-foreground">{selected.size} ausgewählt</span>
+            {isStaff ? (
+              <>
+                <select
+                  className="input max-w-[220px]" value={bulkStatus}
+                  onChange={(e) => setBulkStatus(e.target.value)} aria-label="Neuer Status"
+                >
+                  <option value="">Status wählen…</option>
+                  {INCIDENT_STATUS.map((s) => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
+                </select>
+                <button
+                  type="button" className="btn btn-outline"
+                  disabled={bulkBusy || !bulkStatus}
+                  onClick={() => void runBulkStatus()}
+                >
+                  {bulkBusy ? "Wird ausgeführt…" : "Status ändern"}
+                </button>
+                <select
+                  className="input max-w-[220px]" value={bulkMonteur}
+                  onChange={(e) => setBulkMonteur(e.target.value)} aria-label="Monteur für Massenzuweisung"
+                >
+                  <option value="">Monteur wählen…</option>
+                  {options.monteure.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+                </select>
+                <button
+                  type="button" className="btn btn-outline"
+                  disabled={bulkBusy || !bulkMonteur}
+                  onClick={() => void runBulkAssign()}
+                >
+                  {bulkBusy ? "Wird ausgeführt…" : "Monteur zuweisen"}
+                </button>
+              </>
+            ) : null}
+            <button type="button" className="btn btn-outline" onClick={exportSelection}>Auswahl exportieren</button>
+            <button type="button" className="btn btn-outline ml-auto" onClick={() => { setSelected(new Set()); resetBulk(); }}>Auswahl aufheben</button>
+          </div>
+          {isStaff ? (
+            <p className="text-xs text-muted">
+              Massenaktionen wirken auf höchstens {INCIDENT_BULK_LIMIT} Vorgänge der aktuellen Seite; Regelprüfung,
+              Chronik und Protokollierung greifen wie bei einzelnen Änderungen.
+            </p>
+          ) : null}
+          {bulkError ? (
+            <p
+              role="alert" className="rounded-md border px-3 py-2 text-sm"
+              style={{ background: "var(--danger-bg)", color: "var(--danger)", borderColor: "var(--danger)" }}
+            >
+              {bulkError}
+            </p>
+          ) : null}
+          {bulkMsg ? <p className="text-sm text-foreground">{bulkMsg}</p> : null}
+          {bulkFailed.length > 0 ? (
+            <ul className="space-y-1 text-xs text-muted">
+              {bulkFailed.map((fail) => (
+                <li key={fail.id}>
+                  {nrOf(fail.id) != null ? `#${nrOf(fail.id)}` : fail.id}:{" "}
+                  {BULK_CODE_LABELS[fail.code as keyof typeof BULK_CODE_LABELS] ?? fail.code} ({fail.code})
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </div>
       ) : null}
 
@@ -292,12 +432,11 @@ export function OperationalList({
               <Th>VzG</Th><Th>Betriebsstelle</Th><Th>km</Th><Th>Bereitschaft</Th><Th>Kabelarten</Th>
               <SortTh c={SORTABLE[5]} info={sortInfo("created_at")} onClick={() => toggleSort("created_at")} />
               <SortTh c={SORTABLE[6]} info={sortInfo("updated_at")} onClick={() => toggleSort("updated_at")} />
-              <Th>Monteure</Th><Th>Bilder</Th><Th>Offene Hinweise</Th>
+              <Th>Monteure</Th><Th>Bilder</Th><Th>Offene Aufgabe</Th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
             {rows.map((r) => {
-              const hints = deriveOpenHints(r);
               const cables = mergeCableArts(r.cable_arts);
               return (
                 <tr
@@ -331,11 +470,7 @@ export function OperationalList({
                   <td className="px-3 py-2 text-muted">{monteure(r)}</td>
                   <td className="px-3 py-2 text-muted">{r.image_count}</td>
                   <td className="px-3 py-2">
-                    {hints.length === 0 ? <span className="text-muted">—</span> : (
-                      <span className="flex flex-wrap items-center gap-1" title={hints.join(", ")}>
-                        <Badge tone="warning">{hints.length}</Badge>
-                      </span>
-                    )}
+                    {r.has_open_task ? <Badge tone="warning">Ja</Badge> : <span className="text-muted">—</span>}
                   </td>
                 </tr>
               );
@@ -350,7 +485,6 @@ export function OperationalList({
       {/* Mobile-Karten */}
       <div className="space-y-2 md:hidden">
         {rows.map((r) => {
-          const hints = deriveOpenHints(r);
           const cables = mergeCableArts(r.cable_arts);
           return (
             <div key={r.id} className="card p-3">
@@ -371,9 +505,9 @@ export function OperationalList({
                   cables.map((g) => <Badge key={g.name} tone="info">{g.count > 1 ? `${g.name} ×${g.count}` : g.name}</Badge>)}
               </div>
               <div className="mt-1 text-xs text-muted">Monteure: {monteure(r)} · Bilder: {r.image_count} · {fmt(r.updated_at)}</div>
-              {hints.length > 0 ? (
+              {r.has_open_task ? (
                 <div className="mt-1 flex flex-wrap gap-1">
-                  {hints.map((h) => <Badge key={h} tone="warning">{h}</Badge>)}
+                  <Badge tone="warning">Offene Aufgabe</Badge>
                 </div>
               ) : null}
             </div>

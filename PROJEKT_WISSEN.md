@@ -1,5 +1,5 @@
 # Projektwissen – Kabelbereitschaft
-> Stand: 2026-07-27 · Nur bestätigte Ergebnisse. Nicht ausgeführte Prüfungen sind als offen markiert.
+> Stand: 2026-07-28 · Nur bestätigte Ergebnisse. Nicht ausgeführte Prüfungen sind als offen markiert.
 
 ## Projektziel
 Offlinefähige Web-Anwendung (PWA) zur Erfassung und Dokumentation von Kabel-Bereitschaftsvorgängen:
@@ -159,3 +159,116 @@ Diese Festlegungen gelten dauerhaft und ersetzen alle früheren Standortaussagen
   Arbeitskopie sauber.
 - **V1** (Aufbewahrungsfristen) bleibt offen und wirkt als **Produktionssperre**; Stage und Test
   ausschließlich mit synthetischen Daten.
+
+## AP13 — freigegebene Architektur (Entscheidung Dennis, 2026-07-27)
+
+Die Architektur ist unter den folgenden verbindlichen Präzisierungen freigegeben. **Die
+Implementierung ist inzwischen erfolgt und lokal technisch verifiziert — siehe folgender
+Abschnitt.** Details in Roadmap B.3 (Version 1.14).
+
+- **Zuständigkeit:** `assignee_profile_id` → `profiles(id)` ist die einzige berechtigungswirksame
+  persönliche Zuständigkeit. `assignee_team_id` und `assignee_role` sind rein informative Filter-
+  und Anzeigeattribute und erscheinen nicht in RLS-Ausdrücken. Aufgaben dürfen unzugewiesen sein.
+  Keine Kopplung an `technicians` — **V3 bleibt unverändert.**
+- **Wertebereiche:** `text` mit Check-Constraints, **keine neuen PostgreSQL-Enums** (konsistent zu
+  AP12 `condition_code`). Status `open`/`in_progress`/`acknowledged`/`void`, Priorität
+  `low`/`normal`/`high`; deutsche Bezeichnungen nur in der UI. `acknowledged_at` und
+  `acknowledged_by` sind genau dann beide gesetzt, wenn `status = 'acknowledged'`, sonst beide
+  `NULL`. Quittieren in RC1 nur durch Staff. Aufgaben können nicht gelöscht werden.
+- **Ableitungen:** höchstens ein `derived`-Datensatz je `(incident_id, task_type)`. Zutreffende
+  Ursache erzeugt die Aufgabe oder setzt sie von `void` auf `open`; entfallene Ursache setzt sie
+  auf `void`; eine bereits quittierte, weiter bestehende Aufgabe bleibt `acknowledged`. Die
+  Synchronisierung läuft **datenbankseitig über Trigger** auf `incidents`,
+  `incident_assignments`, `incident_images` und `incident_cable_positions` — eine Aktualisierung
+  erst beim Seitenaufruf ist unzulässig. Mit Migration 0011 erfolgt ein idempotenter Backfill;
+  `deriveOpenHints()` entfällt danach, damit keine Doppelanzeige entsteht.
+- **Monteur-Sicht:** kein direktes Tabellenrecht auf `incident_tasks`, deshalb **keine
+  `security_invoker`-Projektion**. Zugriff über eine eng begrenzte **`SECURITY DEFINER`-RPC** mit
+  festem `search_path`, Prüfung auf angemeldeten Benutzer und `is_assigned_to_incident()`;
+  Rückgabe ausschließlich `incident_id`, `task_type`, `title`, `status`, `due_at` — keine
+  Zuständigkeitsfelder, keine Namen, keine Auditfelder. `REVOKE` für `public`/`anon`,
+  `GRANT EXECUTE` nur an `authenticated`.
+- **Bulk-Statusänderung:** `SECURITY INVOKER` unter der Benutzersession, Obergrenze 200 Vorgänge
+  als harter Fehler. **Ein äußerer RPC-Aufruf mit abgefangenen Subtransaktionen je Eintrag** —
+  keine unabhängig committeten Einzeltransaktionen; ein unerwarteter technischer Fehler rollt den
+  gesamten Aufruf zurück. Konflikt über `expected_updated_at`; stabile Codes `ok`, `conflict`,
+  `not_found`, `guard_rejected`, `invalid_status`. Je Erfolg genau ein Auditeintrag und ein
+  Status-Historieneintrag über die bestehenden Trigger.
+- **Bulk-Monteurzuweisung:** `p_monteur_id` muss ein aktives `profiles`-Profil mit Rolle `monteur`
+  sein. Additiv und idempotent, bestehende aktive Monteure bleiben, identische Zuweisung ist ein
+  erfolgreiches No-op. Da `incidents.updated_at` konkurrierende Zuweisungen nicht zuverlässig
+  erkennt, führt jedes Eingabeelement zusätzlich die **erwartete sortierte Menge aktiver
+  `monteur_id`-Werte**; Abweichung ergibt `conflict`. Einzel- und Bulk-Zuweisung nutzen denselben
+  kontrollierten RPC-/Sperrpfad. Eigener Auditeintrag je Zuweisung; Historieneintrag nur bei
+  echter Statusänderung.
+- **Liste:** `has_open_task` additiv in `incident_list_view`; offen sind ausschließlich `open` und
+  `in_progress`.
+
+## AP13 — Umsetzung: lokal technisch verifiziert (2026-07-28)
+
+**Status: lokal technisch verifiziert; Commit, Push und CI-Nachweis offen.** AP13 ist damit
+**nicht** endgültig abgeschlossen.
+
+### Umgesetzter Umfang
+
+- Migration `0011_ap13_tasks_bulk.sql`, additiv und wiederholbar: Tabelle `incident_tasks` mit
+  `text`-Spalten und Check-Constraints (kein Enum), Kohärenz-Constraint für
+  `acknowledged_at`/`acknowledged_by`, partieller Unique-Index
+  `(incident_id, task_type) where source = 'derived'`, Indizes auf `(incident_id, status)`,
+  `(assignee_profile_id, status)` und `(status, due_at)`, `tg_touch_updated`, `tg_audit`,
+  dreifache Löschsperre (keine Delete-Policy, `revoke delete`, abweisender Trigger), RLS
+  ausschließlich für `is_staff()`.
+- Gehärtete interne Reconciliation `sync_incident_tasks_internal` als `SECURITY DEFINER` mit festem
+  `search_path`; `EXECUTE` für `public`, `anon` und `authenticated` entzogen, Aufruf nur über
+  Trigger. Notwendig, weil die Trigger auch durch zulässige Monteur-Aktionen ausgelöst werden.
+- Trigger auf `incidents` (`vzg_line_id`/`vzg_line_number`), `incident_assignments`,
+  `incident_images` und `incident_cable_positions`; idempotenter Backfill in der Migration;
+  Staff-Refresh `refresh_incident_tasks_ap13`.
+- Ableitungslogik für `no_monteur`, `no_images`, `no_cable`, `historic_vzg`: Ursache vorhanden →
+  Aufgabe erzeugen oder aus `void` wieder `open`; Ursache entfallen → **immer** `void`, wobei
+  `acknowledged_at` und `acknowledged_by` atomar auf `NULL` gesetzt werden. Eine quittierte Aufgabe
+  bleibt nur `acknowledged`, solange ihre Ursache besteht.
+- Minimierte Monteur-Sicht `get_assigned_incident_tasks` als `SECURITY DEFINER`: weist
+  `auth.uid() is null` ab, prüft `is_assigned_to_incident()`, liefert nur `incident_id`,
+  `task_type`, `title`, `status`, `due_at`.
+- `has_open_task` wird **RLS-konform innerhalb** der `security_invoker`-View `incident_list_view`
+  ermittelt; es gibt bewusst **keinen** allgemein aufrufbaren Definer-Helfer, der den
+  Aufgabenstatus fremder Vorgänge preisgeben könnte.
+- Bulk-Statusänderung `bulk_update_incident_status_ap13` als `SECURITY INVOKER`: Obergrenze 200 als
+  harter Fehler, ein äußerer Aufruf mit **abgefangener Subtransaktion je Eintrag**, unerwartete
+  technische Fehler rollen den Gesamtaufruf zurück, Konfliktprüfung über `expected_updated_at`,
+  Codes `ok`/`conflict`/`not_found`/`guard_rejected`/`invalid_status`.
+- Monteurzuweisung `assign_incident_monteur_ap13` als gemeinsamer gesperrter Pfad für Einzel- und
+  Bulk-Aufruf (`select … for update`), Vergleich von `expected_updated_at` **und** der erwarteten
+  sortierten Menge aktiver `monteur_id`-Werte, additiv und idempotent mit No-op bei bestehender
+  Zuweisung, Statuswechsel nur aus `neu`; `bulk_assign_incident_monteur_ap13` nutzt denselben Pfad.
+- Oberfläche und Server Actions: Aufgabenanzeige im Vorgangsdetail (Staff bearbeitbar, Monteur nur
+  minimierte Liste), Filter „hat offene Aufgabe" mit URL-Parameter, aktivierte Massenaktionsleiste
+  mit Teilerfolgsbericht je Vorgang, Einzelzuweisung auf den RPC-Pfad umgestellt.
+  `deriveOpenHints()` ist aus Anzeige und CSV-Export entfernt; die CSV führt stattdessen
+  „Offene Aufgabe" mit Ja/Nein. Keine Offline-Aufgabenbearbeitung.
+
+### Prüfergebnisse (bestätigt)
+
+- TypeScript, ESLint und Next.js-Produktions-Build: erfolgreich.
+- Lokaler PostgreSQL-Lauf über `app/supabase/test/run_ap12_local.ps1`: Migrationen **0001–0011**
+  erfolgreich, Smokes **AP10, AP11, AP12 und AP13** erfolgreich, keine `SMOKE … FAIL`-, `ERROR`-
+  oder `FATAL`-Meldung, Abschlusszeile
+  `ERGEBNIS: AP10/AP11/AP12/AP13 DATENBANKTESTS ERFOLGREICH.`
+- Ausdrücklich nachgewiesen: **E20a–E20c** (quittierte Aufgabe bleibt bei fortbestehender Ursache
+  `acknowledged`; entfallene Ursache führt zu `void` mit beiden Quittierungsfeldern `NULL`;
+  Wiederauftreten öffnet dieselbe Aufgabe unquittiert wieder) und **E21a–E21c** (kein frei
+  nutzbarer Definer-Helfer, fremder Monteur ohne View-Zeile, zugewiesener Monteur mit genau einer
+  View-Zeile und `has_open_task = false` bei gleichzeitig funktionierender RPC-Sicht).
+- Temporäre Testdatenbank `kabelbereitschaft_ap12_test_20260728_104535` anschließend entfernt.
+- Zwei Testaufbaufehler wurden im Vorlauf behoben (kein Produktfehler): `ON_ERROR_STOP` steht in
+  `18_ap13_tasks.sql` auf `on`, die pauschalen Rechte früherer Smokes werden für `app_user` gezielt
+  entzogen (`DELETE` auf `incident_tasks`, `EXECUTE` auf `sync_incident_tasks_internal`), und die
+  Auditabfragen nutzen die tatsächlichen Spalten `entity`/`entity_id` im Admin-Kontext.
+
+### Offen
+
+Kontrollierter Commit und Push, anschließend der CI-Nachweis auf GitHub. **V1** bleibt
+Produktionssperre (Stage und Test nur mit synthetischen Daten), Branding bleibt separat auf
+`feat/ap8.1-branding` (`04253a2`, nicht gemergt), **kein RC1-Tag**. Browser-E2E der
+Massenaktionen bleibt AP14 vorbehalten (lokal fehlt Playwright-Chromium).

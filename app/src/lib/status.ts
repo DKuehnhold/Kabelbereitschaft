@@ -221,6 +221,78 @@ export const STATUS_TONE: Record<IncidentStatus, BadgeTone> = {
   fehlalarm: "danger",
 };
 
+// ---------------------------------------------------------------------
+// AP13: Aufgaben je Vorgang (incident_tasks).
+//
+// Die Codes entsprechen exakt den Check-Constraints der Migration 0011
+// (text, keine neuen PostgreSQL-Enums); deutsche Bezeichnungen erscheinen
+// ausschließlich in der Oberfläche.
+//
+// Bewusst hier und nicht in @/lib/tasks: dieses Modul ist rein (keine
+// Serverimporte) und damit auch in Client-Komponenten nutzbar.
+// @/lib/tasks reicht die Werte für den Serverkontext weiter.
+// ---------------------------------------------------------------------
+export const TASK_TYPES = ["no_monteur", "no_images", "no_cable", "historic_vzg", "manual"] as const;
+export type TaskType = (typeof TASK_TYPES)[number];
+
+export const TASK_STATUS = ["open", "in_progress", "acknowledged", "void"] as const;
+export type TaskStatus = (typeof TASK_STATUS)[number];
+
+export const TASK_PRIORITIES = ["low", "normal", "high"] as const;
+export type TaskPriority = (typeof TASK_PRIORITIES)[number];
+
+export const TASK_SOURCES = ["derived", "manual"] as const;
+export type TaskSource = (typeof TASK_SOURCES)[number];
+
+export const TASK_TYPE_LABELS: Record<TaskType, string> = {
+  no_monteur: "Kein Monteur zugewiesen",
+  no_images: "Keine Bilder vorhanden",
+  no_cable: "Keine Kabelposition vorhanden",
+  historic_vzg: "Historische VzG-Zuordnung",
+  manual: "Manuelle Aufgabe",
+};
+
+export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
+  open: "Offen",
+  in_progress: "In Bearbeitung",
+  acknowledged: "Quittiert",
+  void: "Entfallen",
+};
+
+export const TASK_PRIORITY_LABELS: Record<TaskPriority, string> = {
+  low: "Niedrig",
+  normal: "Normal",
+  high: "Hoch",
+};
+
+export const TASK_SOURCE_LABELS: Record<TaskSource, string> = {
+  derived: "Abgeleitet",
+  manual: "Manuell",
+};
+
+// Status, die die Disposition direkt setzen darf. „Quittiert" läuft
+// ausschließlich über die Quittier-Aktion, weil acknowledged_at und
+// acknowledged_by dabei zwingend mitgesetzt werden müssen.
+export const TASK_EDIT_STATUS: TaskStatus[] = ["open", "in_progress", "void"];
+
+// Offen im Sinne von incident_list_view.has_open_task.
+export function isOpenTask(status: TaskStatus): boolean {
+  return status === "open" || status === "in_progress";
+}
+
+export const TASK_STATUS_TONE: Record<TaskStatus, BadgeTone> = {
+  open: "warning",
+  in_progress: "info",
+  acknowledged: "success",
+  void: "info",
+};
+
+export const TASK_PRIORITY_TONE: Record<TaskPriority, BadgeTone> = {
+  low: "info",
+  normal: "info",
+  high: "danger",
+};
+
 export const STATUS_STYLES: Record<IncidentStatus, string> = {
   neu: "bg-blue-100 text-blue-800 border-blue-200",
   monteur_zugewiesen: "bg-indigo-100 text-indigo-800 border-indigo-200",

@@ -3,6 +3,7 @@
 // incidents.ts, die URL-Abbildung in incident-list-url.ts.
 import type { IncidentStatus } from "@/lib/status";
 import type { Priority } from "@/lib/priority";
+import type { IncidentBulkActionCode } from "@/lib/database.types";
 
 export type IncidentListRow = {
   id: string;
@@ -34,6 +35,8 @@ export type IncidentListRow = {
   no_images: boolean;
   no_cable: boolean;
   historic_vzg: boolean;
+  // AP13: offen = Aufgabe im Status 'open' oder 'in_progress'.
+  has_open_task: boolean;
 };
 
 export type IncidentActivity = "all" | "active" | "closed";
@@ -53,6 +56,8 @@ export type IncidentListFilters = {
   date_to?: string; // YYYY-MM-DD (lokal, inklusive)
   images?: IncidentImagesFilter;
   activity?: IncidentActivity;
+  // AP13: nur Vorgänge mit mindestens einer offenen Aufgabe.
+  hasOpenTask?: boolean;
 };
 
 export type IncidentListSortField =
@@ -86,17 +91,32 @@ export type IncidentListFilterOptions = {
   creators: IncidentFilterOption[];
 };
 
-// Abgeleitete „offene Hinweise" (kein Aufgabenmodell, keine Mutation/Audit).
-export function deriveOpenHints(row: {
-  no_monteur: boolean; no_images: boolean; no_cable: boolean; historic_vzg: boolean;
-}): string[] {
-  const hints: string[] = [];
-  if (row.no_monteur) hints.push("Kein Monteur zugewiesen");
-  if (row.no_images) hints.push("Keine Bilder vorhanden");
-  if (row.no_cable) hints.push("Keine Kabelposition vorhanden");
-  if (row.historic_vzg) hints.push("Historische VzG-Zuordnung");
-  return hints;
-}
+// =====================================================================
+// AP13: Massenaktionen (Status ändern, Monteur zuweisen).
+// Obergrenze und Ergebnisform liegen hier, damit Server-Actions und
+// Client-Komponente dieselbe Quelle nutzen. Die Datenbank erzwingt die
+// Obergrenze zusätzlich als harten Fehler.
+// =====================================================================
+export const INCIDENT_BULK_LIMIT = 200;
+
+export type IncidentBulkItem = { id: string; expected_updated_at: string };
+export type IncidentBulkAssignItem = IncidentBulkItem & { expected_monteur_ids: string[] };
+export type IncidentBulkCode = IncidentBulkActionCode;
+
+export type IncidentBulkResult = {
+  ok: number;
+  failed: { id: string; code: IncidentBulkCode }[];
+  error: string | null;
+};
+
+export const BULK_CODE_LABELS: Record<IncidentBulkCode, string> = {
+  ok: "Übernommen",
+  conflict: "Zwischenzeitlich geändert",
+  not_found: "Nicht gefunden",
+  guard_rejected: "Von der Regelprüfung abgelehnt",
+  invalid_status: "Ungültiger Status",
+  invalid_monteur: "Monteur ungültig oder inaktiv",
+};
 
 // Kabelarten für die Anzeige zusammenfassen (gleiche Art -> Zähler).
 export function mergeCableArts(names: string[]): { name: string; count: number }[] {

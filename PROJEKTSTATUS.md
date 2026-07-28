@@ -4,7 +4,7 @@
 > (`00-Projektsteuerung/ROADMAP_AP12_AP15_ENTWURF.md`, B.1/B.8). Abgelöste Dublette:
 > `00-Projektsteuerung/PROJEKTSTATUS.md` (als historisch markiert, nicht gelöscht).
 > Endgültige Konsolidierung und Archivierung erfolgen in AP15.
-> Stand: 2026-07-27
+> Stand: 2026-07-28
 
 ## Repository
 - Repository: Kabelbereitschaft
@@ -115,3 +115,21 @@ AP1–AP7-Regression unverändert grün. Offen: App-Screenshots + visuelle/Scree
   Staff-CRUD und der Entzug des AP10-Schreibaltpfads sind nachgewiesen. Die Testdatenbank
   wurde anschließend entfernt.
 - **AP12 ist technisch abgeschlossen.** V1 bleibt davon unabhängig Produktionssperre.
+
+## AP13 – Umsetzung (2026-07-28)
+
+- **Status: lokal technisch verifiziert; Commit, Push und CI-Nachweis offen.** AP13 ist damit
+  **noch nicht endgültig abgeschlossen.**
+- Implementiert: Aufgabenmodell `incident_tasks` mit persistierten Ableitungen, minimierter
+  Monteur-Sicht sowie auditierbare Massenaktionen für Statusänderung und Monteurzuweisung
+  (Migration `0011_ap13_tasks_bulk.sql`).
+- Verifiziert: TypeScript ohne Fehler, ESLint ohne Befund, Next.js-Produktions-Build erfolgreich.
+- Verifiziert: lokaler Datenbanklauf mit Migration `0011` und den Smokes 15–18 erfolgreich,
+  einschließlich E20a–E20c (Quittierung bleibt bei fortbestehender Ursache, `void` mit geleerten
+  Quittierungsfeldern bei entfallener Ursache, Wiederöffnung bei Wiederauftreten) und E21a–E21c
+  (kein frei nutzbarer Informationszugriff auf den Aufgabenstatus). Temporäre Testdatenbank
+  anschließend entfernt.
+- Einzelheiten: `PROJEKT_WISSEN.md` (Abschnitt „AP13 – Umsetzung") und
+  `00-Projektsteuerung/ROADMAP_AP12_AP15_ENTWURF.md` (B.3, Version 1.14).
+- V1 bleibt Produktionssperre; Branding bleibt separat auf `feat/ap8.1-branding` und ist nicht
+  gemergt; **kein RC1-Tag.**

@@ -12,6 +12,7 @@ import {
   type ConditionRating,
 } from "@/lib/status";
 import { PRIORITIES, type Priority } from "@/lib/priority";
+import { assignIncidentMonteur } from "@/lib/incidents";
 import type { FormState } from "@/lib/incidents";
 import type { Incident } from "@/lib/database.types";
 
@@ -323,26 +324,23 @@ export async function updateCondition(fd: FormData): Promise<void> {
 }
 
 // ---------- Monteur zuweisen (Disposition/Admin) ----------
-export async function addAssignment(fd: FormData): Promise<void> {
+// AP13: identischer, gesperrter RPC-Pfad wie die Massenzuweisung
+// (assign_incident_monteur_ap13). Konfliktbasis sind incidents.updated_at
+// und die erwartete sortierte Menge aktiver monteur_ids; Statuswechsel
+// nach „Monteur zugewiesen" und Auditierung erledigt die Datenbank.
+export async function addAssignment(_prev: FormState, fd: FormData): Promise<FormState> {
   const session = await getSessionProfile();
-  if (!session || session.role === "monteur") return;
+  if (!session) return { ok: false, error: "Nicht angemeldet." };
+  if (session.role === "monteur")
+    return { ok: false, error: "Zuweisen ist der Disposition/Administration vorbehalten." };
+
   const id = str(fd, "id");
   const monteur_id = str(fd, "monteur_id");
-  if (!id || !monteur_id) return;
+  if (!id || !monteur_id) return { ok: false, error: "Vorgang und Monteur sind erforderlich." };
 
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("incident_assignments")
-    .insert({ incident_id: id, monteur_id, assigned_by: session.userId });
-  // Doppelte aktive Zuweisung wird per Unique-Index verhindert – Fehler ignorieren.
-  if (!error) {
-    await supabase
-      .from("incidents")
-      .update({ status: "monteur_zugewiesen" })
-      .eq("id", id)
-      .eq("status", "neu");
-  }
-  revalidateAll(id);
+  const res = await assignIncidentMonteur(id, monteur_id);
+  if (res.ok) revalidateAll(id);
+  return res;
 }
 
 export async function deactivateAssignment(fd: FormData): Promise<void> {
