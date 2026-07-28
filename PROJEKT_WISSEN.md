@@ -17,7 +17,29 @@ CSV-Export, Offlinebetrieb mit Synchronisation und Konfliktbehandlung.
 - **HEIC:** nicht akzeptiert (keine zuverlässige Browser-Vorschau/Verarbeitung).
 - **Sicherheitsheader (AP7):** harte Header durchsetzend; CSP zunächst Report-Only.
 - **Release:** Semantic Versioning; erster RC `v1.0.0-rc.1`; **Tag/Release nur mit Nutzerfreigabe**.
-- **Migrationen:** additiv/idempotent; `0001`–`0006`.
+- **Migrationen:** additiv/idempotent; aktuell `0001`–`0011`.
+- **Zielplattform (ADR-011):** keine Supabase-Cloud und kein selbst gehostetes Supabase.
+  Ziel sind interne PostgreSQL-18-Dienste, Auth.js v5 mit serverseitigem Sitzungswiderruf,
+  MinIO für Bildobjekte sowie Containerbetrieb hinter dem Unternehmens-Reverse-Proxy.
+
+## AP14 — interne Plattform
+
+**Status 2026-07-28:** Arbeitspaket A ist auf
+`feat/ap14-docker-postgres-ci` technisch verifiziert. Commit `8ec9731` plus
+CI-Korrektur `761ff23`; Pull Request #1; GitHub-CI-Lauf `30380208864` vollständig
+grün:
+
+- Anwendung: ESLint, TypeScript, Produktions-Build, Audit und 11/11 öffentliche
+  Browser-/Accessibility-Tests erfolgreich.
+- Datenbank: PostgreSQL 18, Migrationen `0001`–`0011` und Smokes AP10–AP13 erfolgreich.
+- Container: Hadolint, echter Docker-Build, Startschutz, Secret-Layer-Prüfung,
+  Compose-Validierung und Trivy erfolgreich.
+- Lokal zusätzlich normaler und Standalone-Build sowie Startvalidierung 78/0/78
+  nachgewiesen.
+
+**Noch offen:** Arbeitspaket B ersetzt die verbleibenden Supabase-Abhängigkeiten vollständig.
+Serveradresse, DNS, Ressourcen, Netzwerkdetails und Betriebszugänge liefert die interne IT.
+Bis dahin kein Deployment. V1 bleibt Produktionssperre; kein produktiver Datenanfall.
 
 ## Definitionen und Begriffe
 - **AP1–AP7:** Arbeitspakete (Grundgerüst → Vorgänge → Material → Bilder → Offline/PWA → E2E/Härtung → Release Readiness).

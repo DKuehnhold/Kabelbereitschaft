@@ -1,5 +1,5 @@
 # Entscheidungen (ADR-kompakt)
-> Stand: 2026-07-19 · MVP V0.1
+> Stand: 2026-07-28 · MVP V0.1
 
 | # | Entscheidung | Begründung |
 |---|---|---|
@@ -13,3 +13,4 @@
 | 8 | Branding als klar markierter Platzhalter unter `app/public/branding/logo.svg` | kein Fantasielogo; einfacher Austausch |
 | 9 | Supabase-Projekt wird später angelegt; Entwicklung gegen `.env.example` + Migrationen | Vorgabe Auftraggeber; keine Secrets im Repo |
 | 10 | EXIF serverseitig via `exifr`; fehlende EXIF/GPS kein Fehler | Vorgabe Bild-/EXIF-Logik |
+| 11 | **Zielarchitektur ohne Supabase: ausschließlich PostgreSQL, Auth.js v5 mit Widerrufstabelle, MinIO für Bilder; RLS bleibt Autorisierungsträger** — Details in [[ADR-011-postgres-eigenplattform]] (**Status: Entwurf**) | Zielentscheidung Dennis 2026-07-28: kein Cloud-BaaS, Stage/Produktion selbst betrieben. Ersetzt den Supabase-Anteil von 2, den Durchsetzungsweg von 3 und 9; die Nummern 2, 3, 9 bleiben als historische Ist-Architektur von AP1–AP13 gültig |

@@ -1,6 +1,18 @@
 # Deployment
 
 > Stand: 2026-07-19 · MVP V0.1 · Teil von Arbeitspaket 1
+>
+> **⚠️ TEILWEISE ÜBERHOLT (Kennzeichnung 2026-07-28, AP14/A11).**
+> Die unten beschriebene Zielplattform **Vercel + Supabase Cloud** ist durch die Zielentscheidung
+> vom 2026-07-28 abgelöst: Stage und Produktion laufen als **Docker-Compose-Stack mit
+> ausschließlich PostgreSQL**, TLS und Rate Limiting über **HAProxy**.
+> Führend für den Containerbetrieb ist `deploy/README.md`; die Zielarchitektur steht in
+> `00-Projektsteuerung/ADR-011-postgres-eigenplattform.md` (Status: Entwurf).
+> Ebenfalls überholt: die Nennung von `SUPABASE_SERVICE_ROLE_KEY` als Deploymentvariable — die
+> Webanwendung verwendet keinen Service-Role-Key.
+> Weiterhin gültig: die Trennung App/Doku, die Migrationsreihenfolge, die Deployment-Checkliste
+> und der Rollback-Grundsatz (additive Migrationen, Forward-Fix).
+> Dieser Abschnitt bleibt als historischer Stand erhalten und wird in AP14 fachlich neu geschrieben.
 
 ## Überblick
 

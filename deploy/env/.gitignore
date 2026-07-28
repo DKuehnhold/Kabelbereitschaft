@@ -1,0 +1,4 @@
+# Echte Environment-Dateien werden niemals versioniert.
+# Nur die *.example-Vorlagen bleiben im Repository.
+*.env
+!*.env.example

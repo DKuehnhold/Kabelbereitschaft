@@ -1,6 +1,19 @@
 # Hosting
 
 > Stand: 2026-07-19 · MVP V0.1 · Teil von Arbeitspaket 1
+>
+> **⚠️ ÜBERHOLT (Kennzeichnung 2026-07-28, AP14/A11).**
+> Die Empfehlung **Vercel + Supabase Cloud** ist durch die Zielentscheidung vom 2026-07-28 abgelöst.
+> Zielbetrieb: **Docker-Compose-Stack (Next.js + PostgreSQL) auf eigenem Server, HAProxy als
+> Reverse Proxy mit TLS-Terminierung.** Kein Supabase, kein externer Backend-as-a-Service.
+> Führend: `deploy/README.md` · Zielarchitektur:
+> `00-Projektsteuerung/ADR-011-postgres-eigenplattform.md` (Status: Entwurf).
+>
+> **Richtigstellung zur Variablentabelle unten:** `SUPABASE_SERVICE_ROLE_KEY` ist **keine** Variable
+> dieser Anwendung. Der Quellcode liest ihn nirgends; die Autorisierung läuft über RLS mit
+> Benutzer-/Anon-Session. Die Zeile bleibt nur als historischer Stand stehen.
+> Auch die Versionsangabe „Next.js 15" ist überholt — installiert und im Lockfile festgelegt ist
+> **16.2.12**.
 
 ## Zielarchitektur
 
