@@ -36,9 +36,17 @@ jobs:
         env:
           NEXT_TELEMETRY_DISABLED: "1"
 
-      # Supply-Chain-Audit: bricht nur bei hoch/kritisch ab (moderate = dokumentiertes Risiko,
-      # aktuell postcss build-time via Next; siehe SICHERHEIT.md).
-      - name: Audit (high/critical als Gate)
+      # Supply-Chain-Audit, zweistufig (Entscheidung 2026-07-28, siehe SICHERHEIT.md):
+      #   1. Produktionsabhängigkeiten sind das harte Gate bei hoch/kritisch. postcss und sharp
+      #      werden über `overrides` in package.json auf gepatchte Versionen gezogen.
+      #   2. Die Dev-Kette (eslint 9 → minimatch 3 → brace-expansion 1.x) hat upstream keinen
+      #      Fix ohne Wechsel auf eslint 10 (Breaking Change). Sie wird deshalb ausdrücklich
+      #      ausgenommen und nur informativ berichtet — nicht blockierend, aber sichtbar.
+      - name: Audit Produktion (high/critical als Gate)
+        run: npm audit --audit-level=high --omit=dev
+
+      - name: Audit Entwicklung (informativ, nicht blockierend)
+        continue-on-error: true
         run: npm audit --audit-level=high
 
       - name: Install Playwright (Chromium)
