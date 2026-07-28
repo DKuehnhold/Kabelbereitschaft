@@ -118,8 +118,7 @@ AP1–AP7-Regression unverändert grün. Offen: App-Screenshots + visuelle/Scree
 
 ## AP13 – Umsetzung (2026-07-28)
 
-- **Status: lokal technisch verifiziert; Commit, Push und CI-Nachweis offen.** AP13 ist damit
-  **noch nicht endgültig abgeschlossen.**
+- **Status: technisch abgeschlossen.** Commit, Push und grüner CI-Nachweis liegen vor.
 - Implementiert: Aufgabenmodell `incident_tasks` mit persistierten Ableitungen, minimierter
   Monteur-Sicht sowie auditierbare Massenaktionen für Statusänderung und Monteurzuweisung
   (Migration `0011_ap13_tasks_bulk.sql`).
@@ -129,7 +128,16 @@ AP1–AP7-Regression unverändert grün. Offen: App-Screenshots + visuelle/Scree
   Quittierungsfeldern bei entfallener Ursache, Wiederöffnung bei Wiederauftreten) und E21a–E21c
   (kein frei nutzbarer Informationszugriff auf den Aufgabenstatus). Temporäre Testdatenbank
   anschließend entfernt.
+- Verifiziert: GitHub-CI-Lauf `30376903965` mit Ergebnis `success` (https://github.com/DKuehnhold/Kabelbereitschaft/actions/runs/30376903965) auf
+  `main` = `origin/main` = `5c60031`. Produktions-Audit erfolgreich, Playwright Chromium
+  installiert, alle 11 öffentlichen E2E-/a11y-Tests erfolgreich. Arbeitskopie sauber.
+- Commits: AP13 `76d93ca`, Abhängigkeitskorrektur `e102532`, PWA-Korrektur `5c60031`.
+- **PWA-Korrektur:** Der Reload beim ersten Service-Worker-Controllerwechsel entfällt; ein
+  Reload erfolgt nur, wenn die Seite zuvor bereits kontrolliert war. Die axe-core-Prüfungen
+  auf `/login` und `/offline` sind damit ohne Testabschaltung grün.
 - Einzelheiten: `PROJEKT_WISSEN.md` (Abschnitt „AP13 – Umsetzung") und
-  `00-Projektsteuerung/ROADMAP_AP12_AP15_ENTWURF.md` (B.3, Version 1.14).
-- V1 bleibt Produktionssperre; Branding bleibt separat auf `feat/ap8.1-branding` und ist nicht
-  gemergt; **kein RC1-Tag.**
+  `00-Projektsteuerung/ROADMAP_AP12_AP15_ENTWURF.md` (B.3, Version 1.15).
+- **Nächstes Arbeitspaket: AP14** (reale Supabase-, Browser-, Offline-, Sicherheits- und
+  Betriebsabnahme).
+- V1 bleibt Produktionssperre; Branding bleibt separat auf `feat/ap8.1-branding` (`04253a2`)
+  und ist nicht gemergt; **kein RC1-Tag.**

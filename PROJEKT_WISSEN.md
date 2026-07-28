@@ -204,10 +204,9 @@ Abschnitt.** Details in Roadmap B.3 (Version 1.14).
 - **Liste:** `has_open_task` additiv in `incident_list_view`; offen sind ausschließlich `open` und
   `in_progress`.
 
-## AP13 — Umsetzung: lokal technisch verifiziert (2026-07-28)
+## AP13 — Umsetzung: technisch abgeschlossen (2026-07-28)
 
-**Status: lokal technisch verifiziert; Commit, Push und CI-Nachweis offen.** AP13 ist damit
-**nicht** endgültig abgeschlossen.
+**Status: technisch abgeschlossen.** Commit, Push und grüner CI-Nachweis liegen vor.
 
 ### Umgesetzter Umfang
 
@@ -266,9 +265,24 @@ Abschnitt.** Details in Roadmap B.3 (Version 1.14).
   entzogen (`DELETE` auf `incident_tasks`, `EXECUTE` auf `sync_incident_tasks_internal`), und die
   Auditabfragen nutzen die tatsächlichen Spalten `entity`/`entity_id` im Admin-Kontext.
 
+### Abschluss: Commit, Push und grüne CI (2026-07-28)
+
+- AP13-Commit `76d93cae0764cbfe13d9cbd9bb25b54cb3c9506b`, Abhängigkeitskorrektur
+  `e1025327ab25b72192b59eba73015681a0bd0912`, PWA-Korrektur
+  `5c60031e3765753c6a1df8d7bf8d0a0b97716605`. `main` = `origin/main` =
+  `5c60031e3765753c6a1df8d7bf8d0a0b97716605`, Arbeitskopie sauber.
+- GitHub-CI-Lauf `30376903965`: Ergebnis `success` (https://github.com/DKuehnhold/Kabelbereitschaft/actions/runs/30376903965). Produktions-Audit erfolgreich;
+  TypeScript, ESLint und Produktions-Build erfolgreich; Playwright Chromium installiert;
+  alle 11 öffentlichen E2E-/a11y-Tests erfolgreich.
+- **PWA-Korrektur:** `ServiceWorkerRegister.tsx` merkt sich beim Einrichten, ob die Seite
+  bereits von einem Service Worker kontrolliert wurde. Nur dann löst ein späterer
+  Controllerwechsel einen Reload aus; die erste Aktivierung beim Erstbesuch lädt nicht mehr
+  neu. Die axe-core-Prüfungen auf `/login` und `/offline` sind damit grün, ohne den Service
+  Worker im Test zu blockieren.
+
 ### Offen
 
-Kontrollierter Commit und Push, anschließend der CI-Nachweis auf GitHub. **V1** bleibt
-Produktionssperre (Stage und Test nur mit synthetischen Daten), Branding bleibt separat auf
-`feat/ap8.1-branding` (`04253a2`, nicht gemergt), **kein RC1-Tag**. Browser-E2E der
-Massenaktionen bleibt AP14 vorbehalten (lokal fehlt Playwright-Chromium).
+**V1** bleibt Produktionssperre (Stage und Test nur mit synthetischen Daten), Branding bleibt
+separat auf `feat/ap8.1-branding` (`04253a2`, nicht gemergt), **kein RC1-Tag**. Nächstes
+Arbeitspaket ist **AP14** (reale Supabase-, Browser-, Offline-, Sicherheits- und
+Betriebsabnahme); die Browser-E2E der Massenaktionen gehört dorthin.
