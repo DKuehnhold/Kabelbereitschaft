@@ -35,7 +35,16 @@ export function ServiceWorkerRegister() {
       }
     };
 
+    // Beim ersten Besuch kontrolliert noch kein Service Worker die Seite. Dessen erste
+    // Aktivierung (clients.claim()) löst ein "controllerchange" aus, das KEIN Update ist –
+    // ein Reload würde hier jeden Erstbesucher unnötig neu laden. Nur ein Controllerwechsel
+    // auf einer bereits kontrollierten Seite ist ein echtes Update.
+    let hasController = navigator.serviceWorker.controller !== null;
+
     const onControllerChange = () => {
+      const wasControlled = hasController;
+      hasController = navigator.serviceWorker.controller !== null;
+      if (!wasControlled) return; // Erstaktivierung: kein Reload
       if (reloadedRef.current) return;
       reloadedRef.current = true;
       window.location.reload();
