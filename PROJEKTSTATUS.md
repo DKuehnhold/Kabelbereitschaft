@@ -32,6 +32,12 @@
   SW-Syntax; Playwright `--list` 22 Tests + `@public` 4/7 (Rest browser-/Supabase-abhängig).
 - **AP7** – Vorschläge: CI mit Test-Supabase scharfschalten, Middleware→Proxy mit E2E, Push/Release,
   WebCrypto/Background-Sync.
+- **AP14/A** – interne Plattform- und CI-Grundlage: technisch verifiziert auf
+  `feat/ap14-docker-postgres-ci` (Commits `8ec9731`, `761ff23`, PR #1).
+  GitHub-CI-Lauf `30380208864` vollständig grün: Anwendung, PostgreSQL-18-Smokes
+  und echter Containerbau einschließlich Startschutz, Compose, Hadolint und Trivy.
+  **AP14/B bleibt offen:** vollständige Ablösung der Supabase-Abhängigkeiten durch
+  PostgreSQL/Auth.js/MinIO gemäß ADR-011. Kein Deployment; IT-Zielparameter fehlen noch.
 
 ## Git / Push (VERALTET — siehe „Aktueller Stand 2026-07-26" am Dateiende)
 > Der folgende Absatz beschreibt den Stand vom 2026-07-19 und ist überholt.

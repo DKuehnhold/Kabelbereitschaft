@@ -236,15 +236,15 @@ scripts/db-restore.sh stage <dumpdatei>     # destruktiv, mit ausgeschriebener B
 
 | Nachweis | Status |
 |---|---|
-| `docker build` erfolgreich | **offen** — in dieser Sitzung nicht ausführbar (kein Docker) |
-| Container startet als `node`, nicht root | **offen** |
+| `docker build` erfolgreich | **GitHub-CI erfolgreich** (`30380208864`) |
+| Container startet als `node`, nicht root | **GitHub-CI erfolgreich** |
 | `/api/health` im Container erfolgreich | **offen** |
 | Statische Assets, `sw.js`, `/manifest.webmanifest` erreichbar | **offen** |
 | `read_only: true` ohne Funktionsverlust | **offen** — schreibbare Pfade sind nur abgeleitet |
 | Healthcheck erkennt defekten App-Prozess | **offen** |
 | Rollback auf vorherigen Tag | **offen** |
-| Keine Secrets in `docker history` | in CI vorgesehen, **lokal nicht geprüft** |
-| `docker compose config` gültig | in CI vorgesehen, **lokal nicht geprüft** |
+| Keine Secrets in `docker history` | **GitHub-CI erfolgreich** |
+| `docker compose config` gültig | **GitHub-CI erfolgreich** (Stage und Produktion) |
 | ESLint, TypeScript, normaler Build und Standalone-Build | **lokal erfolgreich** (2026-07-28) |
 | Öffentliche Browser-/Accessibility-Tests | **lokal 11/11 erfolgreich** (2026-07-28) |
 | Startvalidierung ohne/gültige/verbotene Konfiguration | **lokal erfolgreich** (Exit 78/0/78, 2026-07-28) |

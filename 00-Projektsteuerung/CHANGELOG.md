@@ -7,8 +7,8 @@
 
 ## [Unveröffentlicht] – 2026-07-28 – AP14 / Arbeitspaket A (Container- und CI-Grundlage)
 
-> **Auf Feature-Branch implementiert und lokal geprüft; CI-Nachweis, Merge,
-> Deployment und Release offen.**
+> **Auf Feature-Branch implementiert, lokal geprüft und durch GitHub-CI-Lauf
+> `30380208864` vollständig verifiziert; Merge, Deployment und Release offen.**
 > Der Stack ist bis zum Abschluss von Arbeitspaket B ausdrücklich **nicht produktionsfähig**.
 
 ### Entschieden
@@ -63,9 +63,8 @@
   erfolgreich geprüft.
 
 ### Offen
-- `docker build`, realer Containerlauf, `docker compose config`, Hadolint,
-  Trivy und der neue Linux-Datenbankrunner werden durch die GitHub-CI geprüft;
-  Docker ist auf dem lokalen Windows-Rechner nicht installiert.
+- Merge des Pull Requests. Deployment bleibt bis AP14/B und bis zur Übergabe
+  der internen IT-Zielparameter gesperrt.
 
 ## [0.1.0] – 2026-07-19 – Arbeitspaket 1
 ### Hinzugefügt
