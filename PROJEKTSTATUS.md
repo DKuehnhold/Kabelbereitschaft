@@ -38,6 +38,48 @@
   und echter Containerbau einschließlich Startschutz, Compose, Hadolint und Trivy.
   **AP14/B bleibt offen:** vollständige Ablösung der Supabase-Abhängigkeiten durch
   PostgreSQL/Auth.js/MinIO gemäß ADR-011. Kein Deployment; IT-Zielparameter fehlen noch.
+- **AP14/B – Auth-Basis:** implementiert und lokal vollständig verifiziert auf
+  `feat/ap14b-postgres-platform`, **nicht committet**. Auth.js v5 mit Credentials-Provider,
+  Argon2id, transaktionslokaler Benutzer-ID, serverseitig widerrufbaren `auth_sessions`,
+  kurzen verschlüsselten JWTs (nur `sub`/`sid`) und Next-16-`proxy.ts` statt der
+  Supabase-Middleware. Migration `0012` um drei Blocker korrigiert
+  (`auth_accounts.updated_by`, `grant select on public.profiles to app_user`,
+  Widerrufs-Audittrigger). Nachgewiesen (Stand **vor** der Routensperre, siehe die aktuellen
+  Zahlen weiter unten): TypeScript, ESLint und Produktions-Build je Exit 0;
+  25/25 Einheitentests; 19/19 Integrationstests des Anwendungscodes; Migrationen 0001–0013 mit
+  Smokes AP10–AP13 und AP14/B P1–P17 erfolgreich; vollständiger Anmelde-/Abmeldelauf gegen
+  echte PostgreSQL 18 mit nicht privilegierter Rolle (10 Szenarien);
+  Playwright `@public` 18/18 in echtem Chromium.
+  **Sechs Reviewfeststellungen korrigiert (2026-07-28):** Mehrfachanweisungssperre über
+  erzwungenes Extended-Query-Protokoll, Einzelwiderruf nur der eigenen Sitzung, fail-closed
+  gehärteter Massenwiderruf mit Adminbestätigung aus der Datenbank, Bootstrap des ersten
+  Administrators mit verdeckter Kennworteingabe, korrigierte Mengenangaben sowie Entfernen der
+  Sitzungs-ID aus der Antwort von `/api/auth/session`.
+  **Erzwungener Passwortwechsel umgesetzt (2026-07-28, nicht committet):** Ein Konto mit
+  `must_change_password = true` erreicht serverseitig nur noch `/passwort-aendern`, die
+  Auth-Endpunkte und die Abmeldung. Die Sperre liegt in `lib/auth.ts` – `getSessionProfile()`
+  liefert NULL und `requireSession()` leitet um –, nicht in einer Client-Komponente; der
+  Proxy ist nur die grobe Weiche über die pure Funktion `evaluateAccess()`. Der Wechsel
+  verlangt aktuelles Passwort, neues Passwort und Bestätigung, nutzt die zentrale
+  Argon2id-Implementierung und dieselben zentralen Passwortregeln wie das Bootstrap-Werkzeug,
+  setzt Hash, `password_hash_version`, `must_change_password = false` und
+  `password_changed_at` und widerruft in derselben Transaktion alle Sitzungen des Kontos;
+  danach ist eine erneute Anmeldung zwingend. Migration `0012` um Spalte
+  `password_changed_at` und Wechsel-Audittrigger ergänzt. Die Browser-Sitzungsfilterung ist
+  fail-closed: eine nicht auswertbare Antwort des Session-Endpunkts wird durch den neutralen
+  Rumpf `null` ersetzt, Status und alle `Set-Cookie`-Zeilen bleiben erhalten. Keine neue
+  Gestaltung: Karte, Felder und Hinweiskasten sind von der Anmeldeseite übernommen.
+  Nachgewiesen: TypeScript, ESLint und Produktions-Build je Exit 0 (Route
+  `ƒ /passwort-aendern` registriert); **41/41** Einheitentests; **30/30** Integrationstests
+  gegen echtes PostgreSQL 18; Migrationen 0001–0013 mit Smokes AP10–AP13 und AP14/B
+  **P1–P19** erfolgreich; Playwright `@public` **21/21** in echtem Chromium; zusätzlich ein
+  **HTTP-Nachweis zu ADR-011/2.12(e)** gegen laufenden Produktionsserver und temporäres
+  PostgreSQL-Cluster mit 16 erfolgreichen Prüfungen (alle 13 geschützten Seiten und alle 3
+  geschützten APIs gesperrt). Temporäres Cluster, temporärer Server und Hilfsdateien wurden
+  entfernt; der vorhandene Dienst blieb unangetastet.
+  **Offen:** Rechtematrix der Fachtabellen, MinIO-Bildspeicher, administrative
+  Benutzerverwaltung (Reset, Deaktivierung, Rollenwechsel) als eigenes Arbeitspaket.
+  Einzelheiten: `PROJEKT_WISSEN.md`, Abschnitt „AP14/B — Auth-Basis".
 
 ## Git / Push (VERALTET — siehe „Aktueller Stand 2026-07-26" am Dateiende)
 > Der folgende Absatz beschreibt den Stand vom 2026-07-19 und ist überholt.

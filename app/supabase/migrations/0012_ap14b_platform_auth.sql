@@ -38,10 +38,33 @@ create table if not exists public.auth_accounts (
   failed_attempts integer not null default 0 check (failed_attempts >= 0),
   locked_until timestamptz,
   last_login_at timestamptz,
+  -- Zeitpunkt des letzten echten Passwortwechsels (ADR-011 / 2.3).
+  -- Traeger des Auditereignisses "Passwort geaendert": nur ein Wechsel bzw. ein
+  -- administrativer Reset setzt die Spalte. Sie ist notwendig, weil
+  -- `password_hash` sich auch ohne Passwortwechsel aendert - die Anmeldung zieht
+  -- einen veralteten Argon2-Parametersatz nach (needsRehash). Ohne diese
+  -- getrennte Kennzeichnung waere jede Hash-Erneuerung als Passwortwechsel
+  -- auditiert und der Auditsatz damit unbrauchbar.
+  password_changed_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
+  -- Pflicht fuer die gemeinsame Triggerfunktion public.tg_touch_updated():
+  -- sie setzt updated_at UND updated_by. Ohne diese Spalte scheitert JEDER
+  -- UPDATE auf auth_accounts mit 'record "new" has no field "updated_by"' -
+  -- und damit die Zaehlung der Fehlversuche, das Zuruecksetzen nach
+  -- erfolgreicher Anmeldung und die Hash-Erneuerung.
+  -- Fachliche Bedeutung: der zuletzt handelnde Administrator. Bei einer
+  -- Selbstaenderung ohne gesetzte Identitaet bleibt der Wert NULL.
+  updated_by uuid references public.profiles(id),
   constraint auth_accounts_email_trimmed check (email = btrim(email) and email <> '')
 );
+
+-- Wiederholbarkeit: eine bereits ohne diese Spalte angelegte Tabelle wird
+-- nachgezogen.
+alter table public.auth_accounts
+  add column if not exists updated_by uuid references public.profiles(id);
+alter table public.auth_accounts
+  add column if not exists password_changed_at timestamptz;
 
 create unique index if not exists auth_accounts_email_lower_uidx
   on public.auth_accounts (lower(email));
@@ -77,6 +100,100 @@ create trigger trg_touch_auth_accounts
 
 revoke all on public.auth_accounts, public.auth_sessions from public, anon, authenticated;
 grant select, insert, update, delete on public.auth_accounts, public.auth_sessions to app_user;
+
+-- Mindestrecht fuer die Sitzungsauswertung: die Anwendung muss Rolle,
+-- Anzeigename und Aktivstatus des eigenen Profils lesen koennen (ADR-011 / 2.2,
+-- Schritt 4). Ohne dieses Tabellenrecht liefert die Auswertung unter der nicht
+-- privilegierten Rolle app_user keine Zeile und niemand koennte sich anmelden.
+--
+-- Es wird ausschliesslich das TABELLENRECHT erteilt. Die Zeilensichtbarkeit
+-- bleibt unveraendert bei der Policy `profiles_select`
+-- (`id = app.current_user_id() or is_staff()`); kein Policy-Inhalt wird
+-- gelockert. Die vollstaendige Rechtematrix fuer die uebrigen Fachtabellen
+-- gehoert zur Migration der Datenmodule und ist hier bewusst nicht enthalten.
+grant select on public.profiles to app_user;
+
+-- Auditierung des Sitzungswiderrufs (ADR-011 / 2.2: "Jeder Widerruf erzeugt
+-- einen Auditeintrag").
+--
+-- Warum als Trigger und nicht in der Anwendung:
+--   * public.audit_events besitzt bewusst KEINE Insert-Policy - geschrieben
+--     wird ausschliesslich ueber SECURITY-DEFINER-Trigger (Entscheidung aus
+--     0001). Ein direkter Insert der Anwendung wuerde unter app_user an RLS
+--     scheitern.
+--   * Der Trigger kann nicht vergessen werden: jeder Weg, der revoked_at
+--     setzt, erzeugt den Eintrag.
+--
+-- Warum ein eigener Trigger und nicht public.tg_audit: tg_audit protokolliert
+-- jede Aenderung. auth_sessions wird pro Sitzung bis zu einmal pro Minute mit
+-- last_seen_at fortgeschrieben; das ergaebe eine Auditflut ohne Aussagewert.
+-- Ausgeloest wird deshalb ausschliesslich der Uebergang NULL -> gesetzt.
+--
+-- detail enthaelt ausschliesslich technische Merkmale. Kein Passwort, kein
+-- Hash, kein Token und keine Kopfzeile.
+create or replace function public.tg_audit_auth_session_revoked()
+returns trigger language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  if old.revoked_at is null and new.revoked_at is not null then
+    insert into public.audit_events (entity, entity_id, action, detail, actor)
+    values (
+      'auth_sessions',
+      new.id,
+      'revoke',
+      jsonb_build_object(
+        'reason', new.revoked_reason,
+        'account_id', new.account_id,
+        'expires_at', new.expires_at
+      ),
+      app.current_user_id()
+    );
+  end if;
+  return new;
+end $$;
+revoke all on function public.tg_audit_auth_session_revoked() from public, anon, authenticated;
+
+drop trigger if exists trg_audit_auth_session_revoked on public.auth_sessions;
+create trigger trg_audit_auth_session_revoked
+  after update on public.auth_sessions
+  for each row execute function public.tg_audit_auth_session_revoked();
+
+-- Auditierung des Passwortwechsels (ADR-011 / 2.3: auditiert werden die
+-- Ereignisse "Reset durch Administrator" und "Passwort geaendert" mit Zeitpunkt,
+-- handelndem und betroffenem Konto).
+--
+-- Ausgeloest wird ausschliesslich die Aenderung von password_changed_at. Ein
+-- Trigger auf password_hash waere falsch: die Anmeldung erneuert den Hash, wenn
+-- der Argon2-Parametersatz veraltet ist (needsRehash), und das ist kein
+-- Passwortwechsel.
+--
+-- detail enthaelt ausschliesslich technische Merkmale. Kein Passwort, kein Hash.
+create or replace function public.tg_audit_auth_password_changed()
+returns trigger language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  if new.password_changed_at is not null
+     and new.password_changed_at is distinct from old.password_changed_at then
+    insert into public.audit_events (entity, entity_id, action, detail, actor)
+    values (
+      'auth_accounts',
+      new.id,
+      'password_changed',
+      jsonb_build_object(
+        'account_id', new.id,
+        'changed_at', new.password_changed_at,
+        'password_hash_version', new.password_hash_version,
+        'must_change_password', new.must_change_password
+      ),
+      app.current_user_id()
+    );
+  end if;
+  return new;
+end $$;
+revoke all on function public.tg_audit_auth_password_changed() from public, anon, authenticated;
+
+drop trigger if exists trg_audit_auth_password_changed on public.auth_accounts;
+create trigger trg_audit_auth_password_changed
+  after update on public.auth_accounts
+  for each row execute function public.tg_audit_auth_password_changed();
 
 -- Synthetische Konten aus der endlichen Kompatibilitaetsschicht uebernehmen.
 -- Der Marker ist absichtlich kein gueltiger Argon2-Hash; diese Konten koennen
