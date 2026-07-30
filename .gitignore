@@ -11,6 +11,14 @@ app/next-env.d.ts
 **/.env.local
 **/.env.*.local
 
+# Automationslaufzeit: Zustandsdateien, Umleitungsprotokolle und Berichte eines
+# laufenden Agentenauftrags. Sie sind fluechtig und koennen Auszuege aus
+# Fehlermeldungen enthalten; sie gehoeren nicht in die Versionsgeschichte.
+# Quellskript (.claude/automation/run-programmer.ps1), Rollenregeln und
+# Aufgabenbeschreibungen (.claude/automation/tasks/) bleiben ausdruecklich
+# versionierbar.
+/.claude/automation/runtime/
+
 # Betriebssystem / Editor
 .DS_Store
 Thumbs.db

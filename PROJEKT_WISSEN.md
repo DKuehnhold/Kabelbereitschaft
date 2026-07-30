@@ -8,7 +8,15 @@ CSV-Export, Offlinebetrieb mit Synchronisation und Konfliktbehandlung.
 
 ## Getroffene Entscheidungen
 - **Eigenständiges Repo** `DKuehnhold/Kabelbereitschaft` (Branch `main`), keine ManagementOS-Verbindung.
-- **Stack:** Next.js 16 (App Router, RSC + Server Actions), Supabase (PostgreSQL, RLS, Storage), Tailwind.
+- **Arbeitsmodell (Entscheidung Dennis, 2026-07-28):** Claude ist der Programmierer;
+  ChatGPT/Codex ist Architekt und unabhängige Qualitätsinstanz. Der technische Kreislauf aus
+  Auftrag → Implementierung/Test → Review → Korrekturrücklauf läuft bis zur GUI-Phase autonom.
+  Dennis wird nur bei sichtbaren GUI-/Designentscheidungen, zwingend fehlenden IT-Zugängen,
+  V1 oder einer endgültigen Releasefreigabe einbezogen. Operative Regeln stehen in
+  `AGENTS.md` und `CLAUDE.md`.
+- **Ziel-Stack:** Next.js 16 (App Router, RSC + Server Actions), PostgreSQL 18 mit
+  RLS, Auth.js v5, MinIO und Tailwind. Noch vorhandene Supabase-Bibliotheken und
+  -Zugriffe sind ausschließlich abzulösender Altbestand aus AP1–AP13.
 - **Sicherheit:** RLS ist maßgeblich; signierte URLs für private Bilder; keine Secrets im Client/Offline-Speicher.
 - **CSV:** Semikolon + UTF-8-BOM (deutsches Excel), Formel-Injektionsschutz.
 - **PWA/Offline:** handgeschriebener Service Worker (kein next-pwa), IndexedDB-Outbox/Upload-Queue,
@@ -40,6 +48,237 @@ grün:
 **Noch offen:** Arbeitspaket B ersetzt die verbleibenden Supabase-Abhängigkeiten vollständig.
 Serveradresse, DNS, Ressourcen, Netzwerkdetails und Betriebszugänge liefert die interne IT.
 Bis dahin kein Deployment. V1 bleibt Produktionssperre; kein produktiver Datenanfall.
+
+## AP14/B — Auth-Basis (2026-07-28, nicht committet)
+
+**Status:** implementiert und lokal vollständig verifiziert auf `feat/ap14b-postgres-platform`.
+Kein Commit, kein Push, kein Merge, kein Tag.
+
+### Umgesetzter Umfang
+
+- **Datenbankzugriff** `app/src/lib/db/`: modulprivater `pg`-Pool ohne Export einer rohen
+  Verbindung; jede Operation in einer expliziten Transaktion; Identität transaktionslokal über
+  `set_config('app.user_id', $1, true)`; fehlende oder unplausible Benutzer-ID bricht **vor**
+  dem SQL-Lauf ab; Client-Fassade erlaubt nur parametrisierte Abfragen und blockiert
+  Transaktions-/Sitzungssteuerung (`statement-guard.ts`); Poolfehler- und Laufzeitgrenzen
+  (`statement_timeout`, `idle_in_transaction_session_timeout`).
+- **Argon2id** `auth-password.ts`: OWASP-Mindestsatz `m=19456, t=2, p=1`, Version über
+  `password_hash_version` nachziehbar (Rehash beim nächsten Login); Aufwandsangleichung gegen
+  Benutzeraufzählung; der Migrationsmarker ist nicht prüfbar.
+- **Zweistufige Sitzungsauswertung** `auth-service.ts` genau nach ADR-011/2.2: Stufe 1 ohne
+  Identität (`auth_accounts`/`auth_sessions`, rechtegeschützt), Stufe 2 mit der dadurch
+  bestätigten Identität (`profiles`, RLS-geschützt). Kontosperre nach 5 Fehlversuchen für
+  15 Minuten; abgelaufene Sperre setzt den Zähler zurück; `locked_until` beendet **keine**
+  laufende Sitzung (sonst wäre Fremdaussperrung möglich).
+- **Auth.js v5** `auth.ts`: verschlüsselte JWTs (JWE A256CBC-HS512) mit ausschließlich `sub` und
+  `sid`, Lebensdauer 10 Minuten, stille Erneuerung über den Proxy; Widerrufsprüfung bei **jeder**
+  Auswertung; `jwt`-Callback gibt bei Ungültigkeit `null` zurück und löscht das Cookie; Rolle und
+  Anzeigename stammen aus der Datenbank, nie aus einem Claim.
+- **Login-Action und Abmeldung**: `/login` mit neutraler Fehlermeldung (keine
+  Benutzeraufzählung), Betriebsdiagnose nur im Serverprotokoll; `/auth/signout` widerruft
+  serverseitig **vor** dem Löschen des Cookies, mit Same-Origin-Prüfung (Logout-CSRF) und
+  sichtbarem Fehlschlag; `events.signOut` bleibt idempotentes Sicherheitsnetz.
+- **Next-16-Proxy** `app/src/proxy.ts` ersetzt `middleware.ts` und
+  `lib/supabase/middleware.ts` (beide entfernt). Präfixe wirken nur an Pfadgrenzen — die
+  abgelöste Middleware hielt `/loginfremd` oder `/authentifizierung` versehentlich für
+  öffentlich. Auth-Endpunkte bleiben unberührt, damit der Proxy kein frisches
+  Anmeldecookie überschreibt.
+- **Migration `0012` korrigiert** (drei Blocker, ohne die die Auth-Basis nicht lauffähig wäre):
+  1. `auth_accounts.updated_by` ergänzt — der gemeinsame Trigger `tg_touch_updated()` setzt
+     `updated_at` **und** `updated_by`; ohne die Spalte scheitert **jeder** `UPDATE` mit
+     `record "new" has no field "updated_by"` (Fehlversuchszähler, Login-Reset, Rehash).
+  2. `grant select on public.profiles to app_user` — ohne dieses Tabellenrecht liefert die
+     Sitzungsauswertung unter der nicht privilegierten Rolle keine Zeile. **Kein
+     Policy-Inhalt wurde gelockert**, `profiles_select` gilt unverändert.
+  3. Trigger `trg_audit_auth_session_revoked` — `audit_events` hat bewusst keine
+     Insert-Policy; der Auditsatz zum Widerruf muss vom `SECURITY DEFINER`-Trigger kommen und
+     entsteht nur beim Übergang `revoked_at` NULL → gesetzt (kein Auditrauschen durch
+     `last_seen_at`).
+- **Entfernte Supabase-Auth-Zugriffe:** `src/middleware.ts`, `src/lib/supabase/middleware.ts`,
+  der Supabase-Anmeldepfad in `login/actions.ts`, der Supabase-Abmeldepfad in
+  `auth/signout/route.ts` und `supabase.auth.getUser()` in `lib/auth.ts`. Die Datenmodule
+  bleiben unverändert auf Supabase (eigene Folgeaufträge); deshalb sind derzeit **beide**
+  Variablengruppen Laufzeitpflicht.
+
+### Prüfergebnisse (tatsächlich erhoben, 2026-07-28)
+
+> Die Mengenangaben dieses Abschnitts beschreiben den Stand **vor** der Routensperre für
+> `must_change_password`. Maßgeblich sind die Zahlen im Abschnitt „Prüfergebnisse dieses
+> Laufs" weiter unten (41 Einheitentests, 30 Integrationstests, 21 `@public`-Browsertests,
+> Smokes P1–P19).
+
+- TypeScript `tsc --noEmit`: Exit 0.
+- ESLint: Exit 0, 0 Fehler, 0 Warnungen.
+- Next.js-Produktions-Build: Exit 0; `ƒ Proxy (Middleware)` wird registriert.
+- Einheitentests `app/test/ap14b-auth.test.mjs` (`npm run test:unit`): **25/25**, Exit 0.
+- Datenbanklauf gegen eine temporäre PostgreSQL-18-Instanz (`run_ap14b_local.ps1`-Kette):
+  Bootstrap, Migrationen **0001–0013**, Smokes **AP10–AP13** und **AP14/B P1–P17** erfolgreich,
+  Abschlusszeile `ERGEBNIS: AP10/AP11/AP12/AP13/AP14B DATENBANKTESTS ERFOLGREICH.`
+  P15–P17 laufen ausdrücklich **unter `app_user` mit aktiver RLS** — genau die Prüfung, die die
+  beiden RLS-Blocker aufgedeckt hat.
+- Integrationstests des Anwendungscodes `app/test/integration/ap14b-platform.int.mjs`
+  (Teil derselben Kette, **echter** Anwendungscode gegen synthetisches PostgreSQL):
+  **19/19**, Exit 0. Nachgewiesen: Mehrfachanweisungssperre, Einzelwiderruf nur der eigenen
+  Sitzung, fail-closed Massenwiderruf und das Bootstrap des ersten Administrators.
+- **Anmeldelauf gegen eine echte PostgreSQL-18-Datenbank** mit nicht privilegierter Anmelderolle
+  (kein `SUPERUSER`, kein `BYPASSRLS`) und laufendem Produktionsserver, 10 Szenarien erfolgreich:
+  falsches Passwort (Zähler +1, keine Sitzung), unbekannte Adresse, erfolgreiche Anmeldung
+  (genau eine Sitzung, Zähler zurückgesetzt, pseudonymisierte Merkmale gesetzt, Cookie),
+  geschützte Seiten 200 und `/login` → `/dashboard`, Rollenwechsel in der Datenbank wirkt
+  sofort, serverseitiger Widerruf wirkt beim nächsten Request, inaktives Profil verweigert die
+  Anmeldung **ohne** ausgestellte Sitzung, Abmeldung widerruft mit korrektem Grund und Urheber,
+  Kontosperre nach 5 Fehlversuchen weist auch das richtige Passwort ab sowie
+  **transaktionslokale Laufzeitgrenzen** (`statement_timeout` und
+  `idle_in_transaction_session_timeout` gelten innerhalb der Wrapper-Transaktion, bleiben laut
+  `pg_settings.reset_val` Sitzungsvorgabe, brechen eine zu lange Anweisung mit `57014` ab, und
+  dieselbe Poolverbindung ist danach mit erneut gesetzten Grenzen und ohne Reste der
+  vorherigen Identität wieder brauchbar).
+- Playwright `@public` in echtem Chromium gegen den Produktionsserver: **18/18** erfolgreich
+  (11 Bestandstests plus 7 neue in `e2e/auth-proxy.spec.ts`), einschließlich axe-core auf
+  `/login` und `/offline`.
+- Temporäre Testdatenbanken und das temporäre Cluster-Datenverzeichnis wurden entfernt; der
+  vorhandene Dienst `postgresql-x64-18` blieb unangetastet.
+
+### Korrekturen nach Architekturreview (2026-07-28, nicht committet)
+
+Sechs abgegrenzte Reviewfeststellungen, ohne GUI-Änderung:
+
+1. **Mehrfachanweisung strukturell gesperrt.** `DatabaseClient.query()` erzwingt jetzt das
+   Extended-Query-Protokoll (`queryMode: "extended"`), unabhängig davon, ob Werte übergeben
+   werden. Vorher wählte `pg` bei leerer Werteliste das Simple-Query-Protokoll, das mehrere
+   durch Semikolon getrennte Anweisungen ausführt — die Schlüsselwortprüfung sah nur das erste
+   Wort. Zusätzlich weist `statement-guard.ts` mehrere Anweisungen **vor** dem Verbindungsaufbau
+   ab (Literale, Dollar-Quotes und Kommentare werden korrekt übersprungen). Beide Ebenen sind
+   getrennt geprüft: I1 belegt, dass die Lücke real ist, I2 die Protokollsperre, I3 die
+   strukturelle Sperre, I4 dass eine angehängte `set_config`-Anweisung die transaktionslokale
+   Identität nicht übernehmen kann. `query()` ist jetzt `async`, damit eine Verletzung als
+   abgelehntes Promise und nicht synchron erscheint.
+2. **Einzelwiderruf nur der eigenen Sitzung.** `revokeSession()` filtert zusätzlich auf
+   `account_id = actorUserId`. Notwendig, weil `auth_sessions` rechte- und nicht RLS-geschützt
+   ist und `app_user` jede Zeile ändern darf; eine bekannte fremde Sitzungs-ID hätte sonst eine
+   Fremdsitzung beenden können. Negativtest I5 (fremde Sitzung bleibt offen, kein Auditeintrag).
+3. **Massenwiderruf fail-closed.** `revokeAllSessionsForAccount()` erlaubt Selbstwiderruf oder
+   einen Handelnden, dessen Profil **in derselben Transaktion** mit `role = 'admin'` und
+   `is_active` aus der Datenbank bestätigt wird; jeder andere Fall wirft
+   `SessionRevokeDeniedError` und rollt zurück. Es gibt bewusst **keinen** Rollenparameter, die
+   Rolle stammt nie aus Aufruf oder JWT. Tests I8 (Selbstwiderruf), I9 (ohne Adminrolle),
+   I10 (inaktiver Administrator), I11 (aktiver Administrator, Urheber im Audit), I12 (Signatur).
+4. **Bootstrap des ersten Administrators** (`app/scripts/bootstrap-admin.mjs`, ADR-011/2.11):
+   verdeckte, doppelte Kennworteingabe am Terminal; kein Klartext in Argumenten, Dateien, Logs,
+   Dokumentation oder Git; Argon2id über die zentrale Implementierung; eine Transaktion mit
+   `pg_advisory_xact_lock`; idempotent und fail-closed; nur für eine leere bzw. eindeutig
+   zulässige Ausgangslage. Betreiberablauf in `07-Betrieb/BENUTZERVERWALTUNG.md`. Tests I13–I19.
+5. **Dokumentation:** die Mengenangaben des Anmeldelaufs und der Einheitentests waren falsch
+   (siehe Prüfergebnisse).
+6. **Sitzungs-ID verlässt den Server nicht mehr.** Auth.js v5 kann ein Feld nicht rein
+   serverseitig führen — `auth()` liest dieselbe JSON-Antwort wie der Browser. Getrennt wird
+   deshalb dort, wo sich die Wege wirklich unterscheiden: `auth()` umgeht den eigenen Route
+   Handler, der Browser nicht. `app/src/app/api/auth/[...nextauth]/route.ts` entfernt `sid` aus
+   der Antwort von `/api/auth/session` (Status, Statustext und alle `Set-Cookie`-Zeilen bleiben
+   erhalten, die stille Erneuerung also unberührt). Serverseitig steht `sid` weiter zur
+   Verfügung, die Abmeldung widerruft unverändert genau die eigene Sitzung. **Keine
+   Cookie-Decodierung.**
+
+Zusätzlich wurde `run_ap14b_local.ps1` handle-sicher gemacht: Start und Stopp des temporären
+Clusters laufen über `Start-Process` mit Umleitung in Dateien statt in eine PowerShell-Pipeline.
+Ursache des vorherigen Stillstands war die vererbte Standardausgabe — der langlebige
+`postgres.exe` hielt das Schreibende der Pipeline offen, das Leseende sah nie ein Dateiende.
+Ergänzt sind Bereitschaftsprüfung mit `pg_isready`, Portprüfung vor dem Start und nach dem
+Stopp, endliche Zeitlimits und das Entfernen der Hilfsdateien.
+
+### Erzwungener Passwortwechsel — Routensperre umgesetzt (2026-07-28, nicht committet)
+
+Damit ist die letzte offene Anforderung aus ADR-011/2.3 und der Pflichtnachweis 2.12(e)
+erfüllt. Keine Gestaltungsentscheidung: der Wechsel übernimmt Karte, Felder, Hinweiskasten
+und Schaltflächen unverändert von der bestehenden Anmeldeseite.
+
+- **Serverseitige Sperre in zwei Ebenen, nicht in einer Client-Komponente.**
+  `getSessionProfile()` liefert **NULL**, solange `must_change_password` gilt — damit weisen
+  **alle** bestehenden Server Actions und geschützten Route Handler fail-closed ab, ohne dass
+  dort eine Zeile ergänzt wurde (sie behandeln NULL bereits als „nicht berechtigt").
+  `requireSession()` leitet jede geschützte Seite auf `/passwort-aendern` um. Die rohe
+  Auswertung ist modulprivat; es gibt keinen zweiten Weg zur Sitzung. Ausnahme ist
+  ausschließlich `getSessionProfileForPasswordChange()` für den Wechsel selbst und die
+  Abmeldung — sonst wäre das Konto handlungsunfähig.
+- **Grobe Weiche im Proxy** über die neue pure Funktion `evaluateAccess()` in
+  `lib/auth-paths.ts` (Proxy ist nur noch deren HTTP-Hülle). Fail-closed: nur ein
+  ausdrückliches `false` aus der Datenbank hebt den Zwang auf; ein fehlender Wert gilt als
+  Zwang. `/login` führt bei Zwang auf den Wechselpfad statt ins Dashboard.
+- **Wechsel `/passwort-aendern`** außerhalb der Routengruppe `(app)` — deren Layout ruft
+  `requireSession()` und würde eine Umleitungsschleife erzeugen. Drei Felder (aktuelles,
+  neues, Bestätigung), Zugriffsschutz in der Server-Komponente **und** in der Server Action.
+- **Zentrale Passwortregeln** (`MIN_PASSWORD_LENGTH = 12`, Obergrenze 1024, kein reiner
+  Leerraum) liegen jetzt in `auth-password.ts` und werden vom Bootstrap-Werkzeug **und** vom
+  Wechsel benutzt; die Meldungstexte kommen aus derselben Quelle. Keine zweite Kryptologik:
+  Argon2id ausschließlich über `hashPassword()`/`verifyPassword()`.
+- **`changeOwnPassword()`** ist ein Aufruf und eine Transaktion: Konto sperrend lesen
+  (`for no key update`), Konto nicht deaktiviert und Profil aktiv, aktuelles Passwort in
+  derselben Transaktion prüfen, dann Hash, `password_hash_version`,
+  `must_change_password = false`, `password_changed_at`, Zähler/Sperre zurücksetzen und
+  **alle** offenen Sitzungen widerrufen. Der neue Hash entsteht vor der Transaktion, damit
+  Argon2id keine Verbindung mit offener Transaktion hält. Danach beendet die Action die
+  Auth.js-Sitzung; die erneute Anmeldung ist zwingend.
+- **Migration `0012` ergänzt:** Spalte `password_changed_at` und Trigger
+  `trg_audit_auth_password_changed`. Ausgelöst wird ausschließlich die Änderung dieses
+  Zeitpunkts — ein Trigger auf `password_hash` wäre falsch, weil die Anmeldung einen
+  veralteten Argon2-Parametersatz nachzieht und das kein Passwortwechsel ist. `detail` enthält
+  weder Kennwort noch Hash.
+- **Fail-closed nach außen:** falsches aktuelles Passwort, deaktiviertes Konto und inaktives
+  Profil ergeben dieselbe neutrale Meldung; ein technischer Fehler eine zweite, ebenso
+  neutrale. Keine Aussage über den Kontozustand, kein Klartext in Meldung, Protokoll oder
+  Audit. Fehlversuche werden hier bewusst **nicht** gezählt: die Anmeldesperre schützt den
+  Anmeldeweg, ein Zähler hier ermöglichte nur eine Selbstaussperrung.
+- **Browser-Sitzungsfilterung jetzt fail-closed** (`auth-session-response.ts`): unverändert
+  weitergegeben wird nur eine Antwort, die als Sitzungsauskunft lesbar ist und nachweislich
+  kein `sid` enthält (ohne Rumpf, JSON `null` als ausdrückliches „keine Sitzung“, JSON-Objekt
+  mit `user`-Objekt ohne `sid`). Jedes andere nichtleere Format — kein JSON, unlesbares JSON,
+  kein Objekt, Objekt **ohne** `user`, `user: null`, `user` kein Objekt — wird durch den
+  neutralen Rumpf `null` ersetzt; ein Objekt ohne geprüftes `user` kann beliebige weitere
+  Felder tragen (z. B. ein `sid` auf oberster Ebene). Status, Statustext und **alle**
+  `Set-Cookie`-Zeilen bleiben in jedem Fall erhalten, die stille Tokenerneuerung also unberührt.
+- **`.gitignore`:** `/.claude/automation/runtime/` ist ausgeschlossen. Quellskript,
+  Rollenregeln und Aufgabenbeschreibungen bleiben versionierbar.
+
+#### Prüfergebnisse dieses Laufs (tatsächlich erhoben, 2026-07-28)
+
+- TypeScript `tsc --noEmit`: Exit 0. ESLint: Exit 0, 0 Fehler, 0 Warnungen.
+- Next.js-Produktions-Build: Exit 0; Route `ƒ /passwort-aendern` und
+  `ƒ Proxy (Middleware)` werden registriert.
+- Einheitentests `npm run test:unit`: **41/41**, Exit 0 (34 in `ap14b-auth.test.mjs`,
+  7 in der neuen `ap14b-session-guard.test.mjs`). Letztere prüft den **echten**
+  `src/lib/auth.ts`; ersetzt sind nur `@/auth` und `next/navigation`.
+- Datenbanklauf `run_ap14b_local.ps1 -TemporaryCluster`: Bootstrap, Migrationen 0001–0013,
+  Smokes AP10–AP13 und AP14/B **P1–P19** erfolgreich, Abschlusszeile
+  `ERGEBNIS: AP10/AP11/AP12/AP13/AP14B DATENBANKTESTS ERFOLGREICH.`, Exit 0. Neu: **P18**
+  (Wechsel auditiert, Hash-Erneuerung nicht) und **P19** (Wechsel beendet alle Sitzungen).
+- Integrationstests gegen echtes PostgreSQL 18 mit nicht privilegierter Anmelderolle:
+  **30/30**, Exit 0. Neu **I20–I30**: 2.12(e) aus der Datenbank heraus, falsches aktuelles
+  Passwort, zu kurzes Passwort, identischer Wert, deaktiviertes Konto, inaktives Profil,
+  unbrauchbare Kennung, **echter Datenbankfehler rollt alles zurück** (dem Anwendungsbenutzer
+  wird `update` auf `auth_sessions` entzogen — Hash und Wechselzwang bleiben unverändert),
+  Erfolgsfall, Auditvollständigkeit, kein Klartext, sowie erneute Anmeldung mit dem neuen
+  Passwort ohne Wechselzwang.
+- Playwright `@public` in echtem Chromium: **21/21**, Exit 0 (18 Bestand plus 3 neue:
+  Wechselpfad ohne Sitzung gesperrt, ähnliches Präfix ist nicht der Wechselpfad,
+  Serveraktion ohne Sitzung nicht nutzbar).
+- **HTTP-Nachweis 2.12(e) gegen laufenden Produktionsserver und echtes PostgreSQL 18**
+  (temporäres Cluster, synthetisches Konto, anschließend vollständig entfernt): 16 Prüfungen
+  erfolgreich — Anmeldung des gesperrten Kontos, genau eine serverseitige Sitzung,
+  Sitzungsauskunft meldet den Zwang aus der Datenbank und enthält kein `sid`, **alle 13
+  geschützten Seiten** und **alle 3 geschützten APIs** gesperrt, `/login` führt auf den
+  Wechselpfad, der Wechselpfad selbst liefert 200 mit den drei Feldern, Aufhebung des Zwangs
+  in der Datenbank wirkt bei derselben Sitzung sofort und die Wiederaufnahme ebenso, die
+  Abmeldung bleibt offen, widerruft serverseitig und ist auditiert, danach ist auch der
+  Wechselpfad gesperrt.
+- Temporäres Cluster, temporärer Server, temporäre Datenbanken, Rollen und Hilfsdateien
+  wurden entfernt; der vorhandene Dienst `postgresql-x64-18` blieb unangetastet.
+
+### Offene Punkte und Blocker
+
+- Vollständige Rechtematrix für `app_user` auf den Fachtabellen: gehört zur Migration der
+  Datenmodule, hier ist nur das Mindestrecht auf `profiles` enthalten.
+- CSP und `connect-src` nennen weiterhin Supabase, weil die Datenmodule noch dorthin sprechen.
+- `@app`-E2E weiterhin offen: sie brauchen den vollständigen Stack einschließlich MinIO.
 
 ## Definitionen und Begriffe
 - **AP1–AP7:** Arbeitspakete (Grundgerüst → Vorgänge → Material → Bilder → Offline/PWA → E2E/Härtung → Release Readiness).

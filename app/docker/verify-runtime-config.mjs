@@ -8,12 +8,18 @@
 // Der Anon-Key ist kein Geheimnis im kryptografischen Sinn, wird aber
 // dennoch nicht ins Log geschrieben.
 //
-// Stand Arbeitspaket A: die Anwendung nutzt weiterhin Supabase. Mit
-// Arbeitspaket B entfallen die beiden Supabase-Variablen und werden durch
-// DATABASE_URL, AUTH_SECRET und die MinIO-Zugangsdaten ersetzt. Diese Liste
-// ist dann entsprechend zu aktualisieren (siehe ADR-011).
+// Stand Arbeitspaket B / Auth-Basis: Authentifizierung und Sitzungen laufen
+// gegen PostgreSQL (DATABASE_URL) mit Auth.js (AUTH_SECRET). Die noch nicht
+// migrierten Datenmodule (Vorgaenge, Material, Bilder) nutzen weiterhin
+// Supabase; deshalb sind derzeit BEIDE Gruppen Pflicht. Die Supabase-Variablen
+// entfallen mit dem Abschluss der Datenmigration (ADR-011 / 4).
+//
+// Die MinIO-Zugangsdaten sind noch nicht Pflicht: der Bildspeicher wird in
+// einem eigenen Arbeitspaket umgestellt.
 
 const REQUIRED = [
+  "DATABASE_URL",
+  "AUTH_SECRET",
   "NEXT_PUBLIC_SUPABASE_URL",
   "NEXT_PUBLIC_SUPABASE_ANON_KEY",
 ];
