@@ -1,5 +1,15 @@
 # Projektwissen – Kabelbereitschaft
-> Stand: 2026-07-28 · Nur bestätigte Ergebnisse. Nicht ausgeführte Prüfungen sind als offen markiert.
+> Stand: 2026-07-30 · Nur bestätigte Ergebnisse. Nicht ausgeführte Prüfungen sind als offen markiert.
+
+> **Aktueller Stand (2026-07-30).** Zielplattform bleibt ADR-011: PostgreSQL 18, Auth.js v5, MinIO
+> und Containerbetrieb hinter dem internen Reverse-Proxy; Supabase ist kein Ziel. Der gemergte
+> Auth.js/PostgreSQL-Stand auf `main` `22db6dad8958146be4de667a55e89ba170e73b7c` ist bestätigt; die
+> weiter unten mit „(2026-07-28, nicht committet)“ gekennzeichneten AP14/B-Abschnitte beschreiben
+> den Stand jenes Tages, sind in diesem Merge enthalten und behalten ihre historischen
+> Prüfnachweise unverändert. Nächstes nicht-visuelles Fachpaket ist AP14B `data-incidents-tasks-sync`:
+> Ablösung der verbliebenen Supabase-Zugriffe in Vorgängen, Aufgaben und Offline-Sync durch
+> PostgreSQL/RLS. V1 bleibt Produktionssperre, Branding bleibt separat, GUI-/Designarbeit wartet
+> auf Dennis.
 
 ## Projektziel
 Offlinefähige Web-Anwendung (PWA) zur Erfassung und Dokumentation von Kabel-Bereitschaftsvorgängen:
@@ -8,11 +18,15 @@ CSV-Export, Offlinebetrieb mit Synchronisation und Konfliktbehandlung.
 
 ## Getroffene Entscheidungen
 - **Eigenständiges Repo** `DKuehnhold/Kabelbereitschaft` (Branch `main`), keine ManagementOS-Verbindung.
-- **Arbeitsmodell (Entscheidung Dennis, 2026-07-28):** Claude ist der Programmierer;
-  ChatGPT/Codex ist Architekt und unabhängige Qualitätsinstanz. Der technische Kreislauf aus
-  Auftrag → Implementierung/Test → Review → Korrekturrücklauf läuft bis zur GUI-Phase autonom.
-  Dennis wird nur bei sichtbaren GUI-/Designentscheidungen, zwingend fehlenden IT-Zugängen,
-  V1 oder einer endgültigen Releasefreigabe einbezogen. Operative Regeln stehen in
+- **Arbeitsmodell (Entscheidung Dennis, 2026-07-30, ersetzt die Fassung vom 2026-07-28):**
+  Claude ist der **ausführende Orchestrator** und delegiert Teilaufgaben an spezialisierte
+  Claude-Ausführungs-Agents (`.claude/agents/`); ChatGPT/Codex ist Architekt und unabhängiger
+  Qualitätsprüfer und startet selbst keine Ausführungs-Agents. Im Vault schreibt höchstens
+  ein Agent gleichzeitig; read-only Prüfagents dürfen parallel laufen. Der technische Kreislauf
+  aus Auftrag → Orchestrierung/Implementierung/Test → Review → Korrekturrücklauf läuft bis zur
+  GUI-Phase autonom. Dennis wird nur bei sichtbaren GUI-/Designentscheidungen, zwingend
+  fehlenden IT-Zugängen, V1 oder einer endgültigen Releasefreigabe einbezogen. Weder Claude
+  noch ein Agent führt Commit, Push, Merge, Tag oder Release aus. Operative Regeln stehen in
   `AGENTS.md` und `CLAUDE.md`.
 - **Ziel-Stack:** Next.js 16 (App Router, RSC + Server Actions), PostgreSQL 18 mit
   RLS, Auth.js v5, MinIO und Tailwind. Noch vorhandene Supabase-Bibliotheken und
@@ -286,7 +300,10 @@ und Schaltflächen unverändert von der bestehenden Anmeldeseite.
 - **Upload-Queue:** IndexedDB-Warteschlange für Bild-Uploads.
 - **Client-Action-ID:** stabile Idempotenz-ID je Offline-Aktion.
 - **Konflikt:** serverseitige Änderung (`updated_at`) seit lokaler Erfassung → keine stille Überschreibung.
-- **@public/@app:** E2E-Testklassen ohne bzw. mit Test-Supabase.
+- **@public/@app:** E2E-Testklassen ohne bzw. mit authentifiziertem Anwendungsstack. `@public`
+  läuft lokal und in der CI ohne externes Backend; `@app` läuft später gegen die interne
+  PostgreSQL-/Auth.js-Testumgebung mit synthetischen Daten. Eine Test-Supabase ist durch ADR-011
+  aufgehoben.
 
 ## Wichtige Änderungen (mit Datum)
 - 2026-07-19 AP3: Material-/Lagerverwaltung (Migration 0004), Commit `ac7b4d1`.
@@ -297,7 +314,10 @@ und Schaltflächen unverändert von der bestehenden Anmeldeseite.
 
 ## Offene Punkte (nicht verifiziert / benötigt Infrastruktur)
 - **Push AP4–AP7 nach GitHub** (Zugangsdaten) – lokal committet, nicht gepusht.
-- Vollständige Browser-E2E + `@app`-E2E (Browser-Systembibliotheken + Test-Supabase).
+- Öffentliche Browsertests laufen lokal und in der CI ohne externes Backend. Die authentifizierten
+  `@app`-E2E folgen später gegen die interne PostgreSQL-/Auth.js-Testumgebung mit synthetischen
+  Daten (Browser-Systembibliotheken erforderlich). Keine Supabase-Stage, kein Supabase-Zugang zu
+  beschaffen.
 - a11y-Browserlauf, PWA-Installation/SW-Update-Runtime, Benutzerwechsel im Browser.
 - Deployment- und Recovery-Test (Zielinfrastruktur), Performance-Messungen.
 - CSP auf durchsetzend umstellen (nach Browser-Verifikation).
@@ -311,7 +331,8 @@ und Schaltflächen unverändert von der bestehenden Anmeldeseite.
   Seitenleiste, No-FOUC-Init. App-Chrome (AppShell) theme-fähig; Skeleton-Ladezustände; Fokus/A11y/
   Safe-Area verbessert. Keine Fachfunktion geändert.
 - **Entscheidung:** Politur bewusst konservativ und buildsicher; volle `dark:`-Ausgestaltung aller
-  Altscreens + App-Screenshots/visuelle Feinabnahme sind Folgeausbau (Browser + Test-Supabase nötig).
+  Altscreens + App-Screenshots/visuelle Feinabnahme sind Folgeausbau (Browser + interne
+  PostgreSQL-/Auth.js-Testumgebung nötig; keine Test-Supabase).
 - Commit AP8: siehe CHANGELOG. Push weiterhin offen (Zugangsdaten).
 
 ## Nachtrag AP9 (Stammdaten & Einstellungen)
@@ -545,5 +566,6 @@ Abschnitt.** Details in Roadmap B.3 (Version 1.14).
 
 **V1** bleibt Produktionssperre (Stage und Test nur mit synthetischen Daten), Branding bleibt
 separat auf `feat/ap8.1-branding` (`04253a2`, nicht gemergt), **kein RC1-Tag**. Nächstes
-Arbeitspaket ist **AP14** (reale Supabase-, Browser-, Offline-, Sicherheits- und
-Betriebsabnahme); die Browser-E2E der Massenaktionen gehört dorthin.
+nicht-visuelles Fachpaket ist **AP14B `data-incidents-tasks-sync`** (Ablösung der verbliebenen
+Supabase-Zugriffe in Vorgängen, Aufgaben und Offline-Sync durch PostgreSQL/RLS); die Browser-E2E
+der Massenaktionen bleibt dieser Ablösung nachgeordnet.

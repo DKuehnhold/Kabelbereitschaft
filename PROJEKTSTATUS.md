@@ -4,7 +4,16 @@
 > (`00-Projektsteuerung/ROADMAP_AP12_AP15_ENTWURF.md`, B.1/B.8). Abgelöste Dublette:
 > `00-Projektsteuerung/PROJEKTSTATUS.md` (als historisch markiert, nicht gelöscht).
 > Endgültige Konsolidierung und Archivierung erfolgen in AP15.
-> Stand: 2026-07-28
+> Stand: 2026-07-30
+
+> **Aktueller Stand (2026-07-30).** Zielplattform bleibt ADR-011: PostgreSQL 18, Auth.js v5, MinIO
+> und Containerbetrieb hinter dem internen Reverse-Proxy; Supabase ist kein Ziel. Der gemergte
+> Auth.js/PostgreSQL-Stand auf `main` `22db6dad8958146be4de667a55e89ba170e73b7c` ist bestätigt; die
+> weiter unten mit „2026-07-28“ datierten AP14/B-Angaben beschreiben den Stand jenes Tages, sind in
+> diesem Merge enthalten und behalten ihre historischen Prüfnachweise unverändert. Nächstes
+> nicht-visuelles Fachpaket ist AP14B `data-incidents-tasks-sync`: Ablösung der verbliebenen
+> Supabase-Zugriffe in Vorgängen, Aufgaben und Offline-Sync durch PostgreSQL/RLS. V1 bleibt
+> Produktionssperre, Branding bleibt separat, GUI-/Designarbeit wartet auf Dennis.
 
 ## Repository
 - Repository: Kabelbereitschaft
@@ -30,17 +39,22 @@
   (Migration `0006`), Konfliktauflösung, SW-Update, Benutzertrennung, Diagnose, CI-Workflow.
   Geprüft: lint/tsc/build, Migration 0001–0006 (leer + AP5-Bestand), Smokes 10–13, CSV 12/12,
   SW-Syntax; Playwright `--list` 22 Tests + `@public` 4/7 (Rest browser-/Supabase-abhängig).
-- **AP7** – Vorschläge: CI mit Test-Supabase scharfschalten, Middleware→Proxy mit E2E, Push/Release,
-  WebCrypto/Background-Sync.
+- **AP7** – Vorschläge (Stand 2026-07-19, teilweise überholt): authentifizierte CI-E2E gegen die
+  interne PostgreSQL-/Auth.js-Testumgebung mit synthetischen Daten scharfschalten (die frühere
+  Idee einer Test-Supabase ist durch ADR-011 aufgehoben); Middleware→Proxy mit E2E (der Proxy ist
+  mit AP14/B umgesetzt); Push/Release; WebCrypto/Background-Sync.
 - **AP14/A** – interne Plattform- und CI-Grundlage: technisch verifiziert auf
   `feat/ap14-docker-postgres-ci` (Commits `8ec9731`, `761ff23`, PR #1).
   GitHub-CI-Lauf `30380208864` vollständig grün: Anwendung, PostgreSQL-18-Smokes
   und echter Containerbau einschließlich Startschutz, Compose, Hadolint und Trivy.
-  **AP14/B bleibt offen:** vollständige Ablösung der Supabase-Abhängigkeiten durch
-  PostgreSQL/Auth.js/MinIO gemäß ADR-011. Kein Deployment; IT-Zielparameter fehlen noch.
-- **AP14/B – Auth-Basis:** implementiert und lokal vollständig verifiziert auf
-  `feat/ap14b-postgres-platform`, **nicht committet**. Auth.js v5 mit Credentials-Provider,
-  Argon2id, transaktionslokaler Benutzer-ID, serverseitig widerrufbaren `auth_sessions`,
+  **AP14/B – Auth-Basis ist gemergt** (siehe folgender Punkt). **Offen bleibt aus AP14/B nur
+  noch die Ablösung der Datenmodule:** Vorgänge, Aufgaben und Offline-Sync
+  (AP14B `data-incidents-tasks-sync`) nach PostgreSQL/RLS gemäß ADR-011.
+  Kein Deployment; IT-Zielparameter fehlen noch.
+- **AP14/B – Auth-Basis:** implementiert, lokal vollständig verifiziert und inzwischen auf `main`
+  gemergt, Stand `22db6dad8958146be4de667a55e89ba170e73b7c` (2026-07-30). Auth.js v5 mit
+  Credentials-Provider, Argon2id, transaktionslokaler Benutzer-ID, serverseitig
+  widerrufbaren `auth_sessions`,
   kurzen verschlüsselten JWTs (nur `sub`/`sid`) und Next-16-`proxy.ts` statt der
   Supabase-Middleware. Migration `0012` um drei Blocker korrigiert
   (`auth_accounts.updated_by`, `grant select on public.profiles to app_user`,
@@ -55,7 +69,7 @@
   gehärteter Massenwiderruf mit Adminbestätigung aus der Datenbank, Bootstrap des ersten
   Administrators mit verdeckter Kennworteingabe, korrigierte Mengenangaben sowie Entfernen der
   Sitzungs-ID aus der Antwort von `/api/auth/session`.
-  **Erzwungener Passwortwechsel umgesetzt (2026-07-28, nicht committet):** Ein Konto mit
+  **Erzwungener Passwortwechsel umgesetzt (2026-07-28, inzwischen auf `main` gemergt):** Ein Konto mit
   `must_change_password = true` erreicht serverseitig nur noch `/passwort-aendern`, die
   Auth-Endpunkte und die Abmeldung. Die Sperre liegt in `lib/auth.ts` – `getSessionProfile()`
   liefert NULL und `requireSession()` leitet um –, nicht in einer Client-Komponente; der
@@ -87,8 +101,11 @@ Lokaler `main` ist Remote (`origin/main` = `8d83371`) voraus: **AP4, AP5, AP6 si
 gepusht** (kein Git-Zugang in der Build-Umgebung). Push durch den Nutzer erforderlich.
 
 ## Offen
-- Manuelle UI-/Browser-Abnahme gegen ein verbundenes Supabase-Projekt (Upload/Vorschau/signierte URLs,
-  CSV-Download, Offline-Start/Cache/Installation/Reconnect/Konflikt-UI).
+- Manuelle UI-/Browser-Abnahme: öffentliche Browsertests laufen lokal und in der CI ohne externes
+  Backend; die authentifizierte Abnahme (Upload/Vorschau/geschützter Bildabruf, CSV-Download,
+  Offline-Start/Cache/Installation/Reconnect/Konflikt-UI) folgt später gegen die interne
+  PostgreSQL-/Auth.js-Testumgebung mit synthetischen Daten. Keine Supabase-Stage und kein
+  Supabase-Zugang sind zu beschaffen.
 
 ## AP7 – Release Readiness (2026-07-19)
 Umgesetzt: Security Review, HTTP-Sicherheitsheader (CSP Report-Only), Health-Check `/api/health`,
@@ -104,7 +121,8 @@ Umgesetzt (additiv, ohne Fachfunktionsänderung): zentrales Designsystem (Tokens
 Dark Mode (Light/Dark/System), theme-fähiges App-Chrome, Skeleton-Ladezustände, Accessibility
 (Fokus/aria/Touch/reduced-motion), Safe-Area. Geprüft: lint (0), tsc (0), build (PASS);
 AP1–AP7-Regression unverändert grün. Offen: App-Screenshots + visuelle/Screenreader-Feinabnahme
-(benötigen Browser + Test-Supabase). Details: `04-UI-UX/GUI.md`, `04-UI-UX/DESIGNSYSTEM.md`.
+(benötigen Browser + interne PostgreSQL-/Auth.js-Testumgebung mit synthetischen Daten).
+Details: `04-UI-UX/GUI.md`, `04-UI-UX/DESIGNSYSTEM.md`.
 
 ## Aktueller Stand 2026-07-26
 
@@ -185,7 +203,7 @@ AP1–AP7-Regression unverändert grün. Offen: App-Screenshots + visuelle/Scree
   auf `/login` und `/offline` sind damit ohne Testabschaltung grün.
 - Einzelheiten: `PROJEKT_WISSEN.md` (Abschnitt „AP13 – Umsetzung") und
   `00-Projektsteuerung/ROADMAP_AP12_AP15_ENTWURF.md` (B.3, Version 1.15).
-- **Nächstes Arbeitspaket: AP14** (reale Supabase-, Browser-, Offline-, Sicherheits- und
-  Betriebsabnahme).
+- **Nächstes nicht-visuelles Fachpaket: AP14B `data-incidents-tasks-sync`** (Ablösung der
+  verbliebenen Supabase-Zugriffe in Vorgängen, Aufgaben und Offline-Sync durch PostgreSQL/RLS).
 - V1 bleibt Produktionssperre; Branding bleibt separat auf `feat/ap8.1-branding` (`04253a2`)
   und ist nicht gemergt; **kein RC1-Tag.**

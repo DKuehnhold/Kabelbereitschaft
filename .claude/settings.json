@@ -1,0 +1,38 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(git commit)",
+      "Bash(git commit:*)",
+      "Bash(git push)",
+      "Bash(git push:*)",
+      "Bash(git merge)",
+      "Bash(git merge:*)",
+      "Bash(git tag)",
+      "Bash(git tag:*)",
+      "Bash(git rebase)",
+      "Bash(git rebase:*)",
+      "Bash(git reset)",
+      "Bash(git reset:*)",
+      "Bash(git clean)",
+      "Bash(git clean:*)",
+      "Bash(git stash)",
+      "Bash(git stash:*)",
+      "Bash(git am)",
+      "Bash(git am:*)",
+      "Bash(git cherry-pick)",
+      "Bash(git cherry-pick:*)",
+      "Bash(git revert)",
+      "Bash(git revert:*)",
+      "Bash(git filter-branch)",
+      "Bash(git filter-branch:*)",
+      "Bash(git update-ref)",
+      "Bash(git update-ref:*)",
+      "Bash(gh pr)",
+      "Bash(gh pr:*)",
+      "Bash(gh release)",
+      "Bash(gh release:*)",
+      "Bash(gh api)",
+      "Bash(gh api:*)"
+    ]
+  }
+}

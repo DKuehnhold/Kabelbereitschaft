@@ -1,5 +1,16 @@
 # Architektenübersicht – Kabelbereitschaft
 
+> [!WARNING]
+> **Aktualitätshinweis (2026-07-30): Dieses Dokument ist historisch.**
+> Der unten dokumentierte Stand **2026-07-25** beschreibt den damaligen Einstieg und wird nicht
+> nachgeführt. Maßgeblich für **Zielplattform und aktuellen Arbeitsstand** sind
+> `00-Projektsteuerung/ADR-011-postgres-eigenplattform.md` (Status: angenommen / verbindlich),
+> `PROJEKT_WISSEN.md` und `PROJEKTSTATUS.md`.
+> **Alle Supabase-Aussagen in diesem Dokument beschreiben den AP1–AP13-Altbestand und sind keine
+> Zielarchitektur.** Zielplattform ist PostgreSQL 18, Auth.js v5, MinIO und Containerbetrieb
+> hinter dem internen Reverse-Proxy; eine Supabase-Cloud, ein selbst gehostetes Supabase, eine
+> Supabase-Stage und eine Test-Supabase sind ausgeschlossen bzw. aufgehoben.
+
 > Stand: 2026-07-25 · Adressat: Architekt · Zweck: Einstieg in den aktuellen Stand ohne
 > Vorkenntnisse des Projektverlaufs.
 > Alle Angaben sind aus dem Repository verifiziert (Git, Migrationen, `package.json`, Quellcode)

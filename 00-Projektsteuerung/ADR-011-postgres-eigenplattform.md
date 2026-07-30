@@ -1,9 +1,15 @@
 # ADR-011 – Ablösung Supabase durch PostgreSQL-basierte Eigenplattform
 
-> **Status: Entwurf.** Stand: 2026-07-28 18:30 · Entscheider: Dennis Kühnhold
-> Der Status wechselt erst nach vollständiger technischer Umsetzung, bestandener Prüfung und
-> Gate-Review auf **angenommen**. Bis dahin ist dieser ADR die verbindliche **Zielarchitektur**,
-> nicht der Ist-Zustand.
+> **Status: angenommen / verbindlich.** Beschlossen am 2026-07-30 · Entscheider: Dennis Kühnhold
+> (Erstfassung als Entwurf: 2026-07-28 18:30)
+> Die Zielplattform ist damit verbindlich entschieden: **PostgreSQL 18, Auth.js v5, MinIO und
+> Containerbetrieb hinter dem internen Reverse-Proxy.** Supabase Cloud und selbst gehostetes
+> Supabase sind ausgeschlossen.
+> **Umsetzungsstand (nicht Entscheidungsstand):** Die technische Umsetzung ist noch nicht
+> vollständig — auf `main` ist die AP14/B-Auth-Basis gemergt, offen sind die Ablösung der
+> Datenmodule (AP14B `data-incidents-tasks-sync`), MinIO und der Betrieb. Dieser offene
+> Umsetzungsstand ist ausdrücklich **kein** Grund, die Architekturentscheidung weiter
+> „Entwurf“ zu nennen.
 
 **Verhältnis zum Bestand.** Die Supabase-Architektur (ADR 2, 3, 9 in `ENTSCHEIDUNGEN.md`) bleibt die
 **historische Ist-Architektur** von AP1–AP13 und war für den damaligen Auftragsstand richtig: sie hat
