@@ -1,6 +1,6 @@
 # Roadmap AP12–AP15 und Git-Sicherungsplan
 
-> **Version 1.16** · Stand: 2026-07-28 ·
+> **Version 1.16** · Kopfstand nachgezogen: 2026-07-30 ·
 > **Verbindlicher Arbeitsort (Entscheidung Dennis, 2026-07-26):** einziger Projekt- und
 > Arbeitsort ist der Kabelbereitschaft-Vault
 > `C:\Users\DennisKühnhold\OneDrive - W & S Technik GmbH\Kabelbereitschaft-App\Kabelbereitschaft-App`.
@@ -20,6 +20,16 @@
 > Grundlage: read-only Git-Prüfung vom 2026-07-25, `00-Projektsteuerung/ARCHITEKTEN_UEBERSICHT.md`
 > und die Freigabeentscheidungen vom 2026-07-25 (V0-Auflagen und AP12-Detailentscheidungen).
 > Dieses Dokument überschreibt nichts und ersetzt kein bestehendes Dokument.
+> **Nachtrag 2026-07-30 (Kopfstand):** Die AP14/B-Auth-Basis ist auf `main` gemergt. Laufendes
+> Arbeitspaket ist **AP14B `data-incidents-tasks-sync`** — die schrittweise Ablösung des
+> Supabase-Altbestands in Vorgängen, Aufgaben und Offline-Sync durch PostgreSQL/RLS.
+> **Die früher geplante Supabase-Stage und die Supabase-Abnahme sind durch ADR-011
+> (Status: angenommen / verbindlich) aufgehoben.** Alle weiter unten stehenden Nennungen eines
+> Supabase-Projekts, einer Supabase-Stage oder einer Test-Supabase sind historischer
+> Planungsstand, gelten als aufgehoben und sind **nicht erneut auszuführen**; die historischen
+> Abschnitte bleiben inhaltlich als Historie erhalten. Einzige redaktionelle Ausnahme ist der
+> AP12-Testabschnitt weiter unten: die dort genannte Test-Supabase ist auf den internen
+> Teststack umgestellt, weil die Zeile ausdrücklich auf die noch laufende AP14-Arbeit vorausweist.
 
 ---
 
@@ -441,8 +451,8 @@ Bestandsspalten, **kein** automatischer Backfill, **kein** `DELETE` von Altdaten
   berechtigter Benutzer); zusätzlich Nachweis, dass ein Monteur **weder direkt noch über die
   Projektion** weitere Kontaktspalten oder weitere Telefonnummern erhält.
 
-Regression 11/13/14/15/16. E2E-Spec `incidents.spec.ts` erweitern (@app, lauffähig erst mit
-Test-Supabase → wird in AP14 nachgeholt).
+Regression 11/13/14/15/16. E2E-Spec `incidents.spec.ts` erweitern (@app, lauffähig erst mit dem
+vollständigen internen Teststack aus PostgreSQL 18/Auth.js und MinIO → wird in AP14 nachgeholt).
 
 **Abbruch- / Freigabekriterien.** Abbruch, wenn die neuen `*_ap12`-RPCs nicht einführbar sind,
 ohne Bestandsvorgänge zu brechen, oder wenn der `EXECUTE`-Entzug der AP10-RPCs nicht atomar mit

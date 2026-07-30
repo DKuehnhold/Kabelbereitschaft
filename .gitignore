@@ -14,9 +14,10 @@ app/next-env.d.ts
 # Automationslaufzeit: Zustandsdateien, Umleitungsprotokolle und Berichte eines
 # laufenden Agentenauftrags. Sie sind fluechtig und koennen Auszuege aus
 # Fehlermeldungen enthalten; sie gehoeren nicht in die Versionsgeschichte.
-# Quellskript (.claude/automation/run-programmer.ps1), Rollenregeln und
-# Aufgabenbeschreibungen (.claude/automation/tasks/) bleiben ausdruecklich
-# versionierbar.
+# Quellskripte (.claude/automation/run-orchestrator.ps1 und der veraltete
+# Weiterleiter run-programmer.ps1), die Agentenprofile (.claude/agents/),
+# Rollenregeln und Aufgabenbeschreibungen (.claude/automation/tasks/) bleiben
+# ausdruecklich versionierbar.
 /.claude/automation/runtime/
 
 # Betriebssystem / Editor
