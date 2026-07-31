@@ -227,7 +227,16 @@ Verbindlich fuer diesen Lauf:
     Ersatzordner oder fremden Dienste. Keine ManagementOS-Datei aendern.
 11. Nenne ausschliesslich tatsaechlich erhobene Ergebnisse mit Exit-Code bzw.
     exakter Ausgabe. Keine erfundenen Nachweise.
-12. Beende den Lauf mit dem Uebergabeformat aus CLAUDE.md, einschliesslich der
+12. Lies zu Laufbeginn .claude/automation/status/fortschritt.json. Sie ist die
+    operative Datenquelle des Fortschritts-Dashboards, aber keine fachliche
+    Projektwahrheit; fuehrend bleiben PROJEKT_WISSEN.md und PROJEKTSTATUS.md.
+    Aktualisiere genau diese eine Datei vor deiner Abschlussuebergabe
+    wahrheitsgemaess (Staffelstab, aktuelles Todo, Blocker) und ebenso bei
+    Teilfortschritt und bei einem Blocker. Bestehende Feldnamen bleiben
+    unveraendert; keine erfundenen Prozentwerte oder Nachweise. Es gibt keine
+    zweite Statusdatei und keine parallele Schreiblogik. Im read-only Dry-Run
+    entfaellt diese Aktualisierung.
+13. Beende den Lauf mit dem Uebergabeformat aus CLAUDE.md, einschliesslich der
     eingesetzten Agentenprofile mit ihrem jeweiligen Teil-Scope.
 
 --- AUFTRAG ($([System.IO.Path]::GetFileName($task))) ---

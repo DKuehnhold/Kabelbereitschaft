@@ -20,6 +20,14 @@ app/next-env.d.ts
 # ausdruecklich versionierbar.
 /.claude/automation/runtime/
 
+# Operative Datenquelle des Fortschritts-Dashboards. Sie muss im Vault und ueber
+# OneDrive erhalten bleiben, gehoert aber nicht in Fach-Commits: sie ist
+# fluechtiger Betriebszustand, keine fachliche Projektwahrheit. Fuehrend bleiben
+# PROJEKT_WISSEN.md und PROJEKTSTATUS.md (siehe AGENTS.md). Nur diese eine Datei
+# wird ignoriert; das Verzeichnis selbst bleibt fuer kuenftige versionierbare
+# Inhalte offen.
+/.claude/automation/status/fortschritt.json
+
 # Betriebssystem / Editor
 .DS_Store
 Thumbs.db
