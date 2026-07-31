@@ -1,15 +1,18 @@
 # Projektwissen – Kabelbereitschaft
-> Stand: 2026-07-30 · Nur bestätigte Ergebnisse. Nicht ausgeführte Prüfungen sind als offen markiert.
+> Stand: 2026-07-31 · Nur bestätigte Ergebnisse. Nicht ausgeführte Prüfungen sind als offen markiert.
 
-> **Aktueller Stand (2026-07-30).** Zielplattform bleibt ADR-011: PostgreSQL 18, Auth.js v5, MinIO
-> und Containerbetrieb hinter dem internen Reverse-Proxy; Supabase ist kein Ziel. Der gemergte
-> Auth.js/PostgreSQL-Stand auf `main` `22db6dad8958146be4de667a55e89ba170e73b7c` ist bestätigt; die
-> weiter unten mit „(2026-07-28, nicht committet)“ gekennzeichneten AP14/B-Abschnitte beschreiben
-> den Stand jenes Tages, sind in diesem Merge enthalten und behalten ihre historischen
-> Prüfnachweise unverändert. Nächstes nicht-visuelles Fachpaket ist AP14B `data-incidents-tasks-sync`:
-> Ablösung der verbliebenen Supabase-Zugriffe in Vorgängen, Aufgaben und Offline-Sync durch
-> PostgreSQL/RLS. V1 bleibt Produktionssperre, Branding bleibt separat, GUI-/Designarbeit wartet
-> auf Dennis.
+> **Aktueller Stand (2026-07-31).** Zielplattform bleibt ADR-011: PostgreSQL 18, Auth.js v5, MinIO
+> und Containerbetrieb hinter dem internen Reverse-Proxy; Supabase ist kein Ziel. Bestätigter
+> Repository-Stand ist `main` = `origin/main` = `6b9d8dd7b4b937b3a2cb055b509557ed17313430`
+> (`feat: migrate incident and task data paths to PostgreSQL`); der frühere Stand
+> `22db6dad8958146be4de667a55e89ba170e73b7c` ist ein Vorfahre und damit überholt. Die Datenpfade
+> für **Vorgänge, Aufgaben und Offline-Sync** sind auf PostgreSQL 18 migriert, lokal und in der CI
+> verifiziert. Die weiter unten mit „(2026-07-28, nicht committet)“ gekennzeichneten
+> AP14/B-Abschnitte beschreiben den Stand jenes Tages, sind in diesen Merges enthalten und behalten
+> ihre historischen Prüfnachweise unverändert. Nächster nicht-visueller Arbeitsblock ist die
+> Ablösung der verbliebenen Supabase-Datenpfade in **Stammdaten und Inventar** nach
+> PostgreSQL/RLS; Bilder und Uploads folgen mit dem MinIO-Bildspeicher. V1 bleibt
+> Produktionssperre, Branding bleibt separat, GUI-/Designarbeit wartet auf Dennis.
 
 ## Projektziel
 Offlinefähige Web-Anwendung (PWA) zur Erfassung und Dokumentation von Kabel-Bereitschaftsvorgängen:
@@ -39,7 +42,7 @@ CSV-Export, Offlinebetrieb mit Synchronisation und Konfliktbehandlung.
 - **HEIC:** nicht akzeptiert (keine zuverlässige Browser-Vorschau/Verarbeitung).
 - **Sicherheitsheader (AP7):** harte Header durchsetzend; CSP zunächst Report-Only.
 - **Release:** Semantic Versioning; erster RC `v1.0.0-rc.1`; **Tag/Release nur mit Nutzerfreigabe**.
-- **Migrationen:** additiv/idempotent; aktuell `0001`–`0011`.
+- **Migrationen:** additiv/idempotent; aktuell `0001`–`0014` (Stand 2026-07-31).
 - **Zielplattform (ADR-011):** keine Supabase-Cloud und kein selbst gehostetes Supabase.
   Ziel sind interne PostgreSQL-18-Dienste, Auth.js v5 mit serverseitigem Sitzungswiderruf,
   MinIO für Bildobjekte sowie Containerbetrieb hinter dem Unternehmens-Reverse-Proxy.
@@ -59,7 +62,10 @@ grün:
 - Lokal zusätzlich normaler und Standalone-Build sowie Startvalidierung 78/0/78
   nachgewiesen.
 
-**Noch offen:** Arbeitspaket B ersetzt die verbleibenden Supabase-Abhängigkeiten vollständig.
+**Noch offen (Präzisierung 2026-07-31):** Arbeitspaket B löst die verbleibenden
+Supabase-Abhängigkeiten schrittweise ab. Auth-Basis sowie Vorgänge, Aufgaben und Offline-Sync sind
+abgelöst (siehe „AP14/B — Datenpfade …“); Stammdaten, Inventar sowie Bilder und Uploads laufen
+weiterhin über Supabase.
 Serveradresse, DNS, Ressourcen, Netzwerkdetails und Betriebszugänge liefert die interne IT.
 Bis dahin kein Deployment. V1 bleibt Produktionssperre; kein produktiver Datenanfall.
 
@@ -290,9 +296,52 @@ und Schaltflächen unverändert von der bestehenden Anmeldeseite.
 ### Offene Punkte und Blocker
 
 - Vollständige Rechtematrix für `app_user` auf den Fachtabellen: gehört zur Migration der
-  Datenmodule, hier ist nur das Mindestrecht auf `profiles` enthalten.
+  Datenmodule, hier ist nur das Mindestrecht auf `profiles` enthalten. **Nachtrag 2026-07-31:**
+  für Vorgänge, Aufgaben und Offline-Sync mit Migration `0014_ap14b_data_grants.sql` geliefert;
+  offen bleibt sie für Stammdaten, Inventar sowie Bilder und Uploads.
 - CSP und `connect-src` nennen weiterhin Supabase, weil die Datenmodule noch dorthin sprechen.
 - `@app`-E2E weiterhin offen: sie brauchen den vollständigen Stack einschließlich MinIO.
+
+## AP14/B — Datenpfade Vorgänge, Aufgaben, Offline-Sync (2026-07-31, gemergt)
+
+**Status:** technisch abgeschlossen und auf `main` gemergt, Commit
+`6b9d8dd7b4b937b3a2cb055b509557ed17313430` (`feat: migrate incident and task data paths to
+PostgreSQL`), 18 Dateien, +4422/-583. **Kein Tag, kein Release, keine V1-Freigabe.**
+
+- **Umfang:** in `app/src` auf PostgreSQL umgestellt sind `lib/incidents.ts`,
+  `lib/incident-actions.ts`, `lib/incident-list-actions.ts`, `lib/tasks.ts`, `lib/task-actions.ts`,
+  `lib/db/pg-errors.ts`, `app/api/sync/route.ts` und `app/api/incidents/[id]/meta/route.ts`; dazu
+  Migration `0014_ap14b_data_grants.sql`, die Smokes `19a_ap14b_grant_reset.sql` und
+  `20_ap14b_data.sql`, die Erweiterung von `18_ap13_tasks.sql` sowie die Runner
+  `run_ap14b_local.ps1` und `run_db_tests.sh`.
+- **Rechtematrix (`0014`):** alle Rechte gehen ausschließlich an `app_user`, kein Grant an
+  `public`, `anon` oder `authenticated`; Schreibrechte sind eng geschnitten (`incident_notes` und
+  `sync_actions` ohne `update`/`delete`, `incident_tasks` ohne `delete`, kein Recht auf
+  `audit_events`); genau ein `revoke` entzieht `refresh_incident_tasks_ap13` für `public`, `anon`,
+  `authenticated` und `app_user`; **vier** fail-closed Prüfblöcke am Migrationsende belegen zwei
+  Positivfälle (Tabellen- und Ausführungsrechte vorhanden) und zwei Negativfälle (kein
+  unerwartetes Ausführungsrecht, kein Delete- oder `audit_events`-Recht) und brechen mit
+  `raise exception` ab. Die Migration ändert **nur Rechte** — keine Policy,
+  View oder Funktion; die Zeilensichtbarkeit bleibt unverändert Sache der bestehenden RLS-Policies.
+- **Transaktionsabsicherung:** jeder Lese- und Schreibpfad läuft über
+  `withUserTransaction(session.userId, …)` mit der Identität ausschließlich aus
+  `getSessionProfile()`; mehrschrittige Aktionen liegen in **einer** Transaktion, `/api/sync`
+  führt bewusst je Eintrag eine eigene; Konflikterkennung über den `updated_at`-Vergleich vor dem
+  RPC-Aufruf; Idempotenz über den Unique-Index `(actor, client_action_id)` auf `sync_actions`, ein
+  Duplikat gilt als `applied` ohne erneute Wirkung; Fehlerabbildung ausschließlich über SQLSTATE
+  (`lib/db/pg-errors.ts`), Klartext-Datenbankmeldungen verlassen den Server nicht.
+- **Nachweis lokal:** PostgreSQL-18-Gesamtlauf mit Prozess-Exitcode 0 — Bootstrap, Migrationen
+  0001–0014, Smokes 15–20 einschließlich 19a, 30/30 Node-Integrationstests, R1/R2/D13/D26/D27
+  grün, vollständige Bereinigung belegt.
+- **Nachweis unabhängige Wiederholung durch Codex:** TypeScript 0, ESLint 0, 41/41 Einheitentests,
+  Produktions-Build 0, `git diff --check` 0.
+- **Nachweis CI:** die beiden **durch Codex bestätigten** Push-Läufe zu `6b9d8dd` — CI-Lauf
+  `30635566629` completed/success und Container-Image-Lauf `30635566645` completed/success.
+- **Grenze:** Stammdaten, Inventar sowie Bilder und Uploads laufen unverändert über Supabase
+  (u. a. `masterdata.ts`, `masterdata-actions.ts`, `inventory.ts`, `inventory-actions.ts`,
+  `image-actions.ts`, `image-upload-core.ts`, `images-server.ts`, `lib/supabase/server.ts`,
+  `lib/supabase/client.ts`, `database.types.ts`). AP14 insgesamt ist **nicht** abgeschlossen:
+  Browser-/Offline-Abnahme, CSP-Durchsetzung, MinIO sowie Betrieb und Deployment bleiben offen.
 
 ## Definitionen und Begriffe
 - **AP1–AP7:** Arbeitspakete (Grundgerüst → Vorgänge → Material → Bilder → Offline/PWA → E2E/Härtung → Release Readiness).
@@ -565,7 +614,8 @@ Abschnitt.** Details in Roadmap B.3 (Version 1.14).
 ### Offen
 
 **V1** bleibt Produktionssperre (Stage und Test nur mit synthetischen Daten), Branding bleibt
-separat auf `feat/ap8.1-branding` (`04253a2`, nicht gemergt), **kein RC1-Tag**. Nächstes
-nicht-visuelles Fachpaket ist **AP14B `data-incidents-tasks-sync`** (Ablösung der verbliebenen
-Supabase-Zugriffe in Vorgängen, Aufgaben und Offline-Sync durch PostgreSQL/RLS); die Browser-E2E
-der Massenaktionen bleibt dieser Ablösung nachgeordnet.
+separat auf `feat/ap8.1-branding` (`04253a2`, nicht gemergt), **kein RC1-Tag**. AP14B
+`data-incidents-tasks-sync` ist seit dem 2026-07-31 gemergt (Commit `6b9d8dd`). Nächster
+nicht-visueller Arbeitsblock ist die Ablösung der verbliebenen Supabase-Datenpfade in
+**Stammdaten und Inventar** nach PostgreSQL/RLS; Bilder und Uploads folgen mit dem
+MinIO-Bildspeicher. Die Browser-E2E der Massenaktionen bleibt diesen Ablösungen nachgeordnet.

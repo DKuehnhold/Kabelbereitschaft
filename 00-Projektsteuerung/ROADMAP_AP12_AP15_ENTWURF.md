@@ -1,6 +1,6 @@
 # Roadmap AP12–AP15 und Git-Sicherungsplan
 
-> **Version 1.16** · Kopfstand nachgezogen: 2026-07-30 ·
+> **Version 1.17** · Kopfstand nachgezogen: 2026-07-31 ·
 > **Verbindlicher Arbeitsort (Entscheidung Dennis, 2026-07-26):** einziger Projekt- und
 > Arbeitsort ist der Kabelbereitschaft-Vault
 > `C:\Users\DennisKühnhold\OneDrive - W & S Technik GmbH\Kabelbereitschaft-App\Kabelbereitschaft-App`.
@@ -11,7 +11,9 @@
 > durch Dennis am 2026-07-27 ausdrücklich freigegeben und ist technisch abgeschlossen.**
 > **AP13 ist seit 2026-07-28 technisch abgeschlossen** (grüner CI-Lauf `30376903965`).
 > **AP14 Arbeitspaket A ist umgesetzt und technisch verifiziert** (PR #1, grüner CI-Lauf
-> `30380208864`); Arbeitspaket B zur vollständigen Supabase-Ablösung ist offen.
+> `30380208864`); Arbeitspaket B löst den Supabase-Altbestand schrittweise ab — Auth-Basis sowie
+> die Datenpfade für Vorgänge, Aufgaben und Offline-Sync sind gemergt, Stammdaten, Inventar sowie
+> Bilder und Uploads sind offen.
 > Die Entscheidungen **V2, V3, V4**, zur **Repository-Struktur** sowie die vier AP12-Detailpunkte
 > **Menge/Einheit, `condition_code`, Monteur-Kontaktzugriff und Infrastrukturzeitpunkt** sind
 > getroffen (siehe B.1/B.7); **V1 (Datenschutz) bleibt offen und wirkt als Produktionssperre.**
@@ -30,6 +32,14 @@
 > Abschnitte bleiben inhaltlich als Historie erhalten. Einzige redaktionelle Ausnahme ist der
 > AP12-Testabschnitt weiter unten: die dort genannte Test-Supabase ist auf den internen
 > Teststack umgestellt, weil die Zeile ausdrücklich auf die noch laufende AP14-Arbeit vorausweist.
+> **Nachtrag 2026-07-31 (Kopfstand):** Die AP14B-Datenschicht ist technisch abgeschlossen und auf
+> `main` gemergt — `main` = `origin/main` = `6b9d8dd7b4b937b3a2cb055b509557ed17313430`
+> (`feat: migrate incident and task data paths to PostgreSQL`), mit Migration
+> `0014_ap14b_data_grants.sql`. Damit sind Vorgänge, Aufgaben und Offline-Sync auf PostgreSQL/RLS
+> umgestellt. **Der Supabase-Restbestand in Stammdaten, Inventar sowie Bildern und Uploads ist
+> offen** (Bilder und Uploads folgen mit dem MinIO-Bildspeicher). AP14 insgesamt und RC1 sind
+> **nicht** abgeschlossen; V1 bleibt Produktionssperre, Branding bleibt separat, GUI-/Designarbeit
+> wartet auf Dennis.
 
 ---
 
@@ -670,6 +680,18 @@ bis zur Freigabe deaktiviert.
 > Verbindliche Zielarchitektur für B ist ADR-011. Alle nachfolgenden älteren Aussagen, die
 > ein Supabase-Projekt als Zielumgebung verlangen, sind dadurch ersetzt und nur historischer
 > Planungsstand.
+>
+> **Statusfortschreibung (2026-07-31):** Arbeitspaket A bleibt technisch verifiziert. Aus
+> Arbeitspaket B sind die Auth-Basis und die **AP14B-Datenschicht technisch abgeschlossen
+> (Commit `6b9d8dd`, gemergt)**: Vorgänge, Aufgaben und Offline-Sync laufen über PostgreSQL 18 mit
+> der Rechtematrix aus Migration `0014_ap14b_data_grants.sql`; nachgewiesen durch einen lokalen
+> PostgreSQL-18-Gesamtlauf mit Exitcode 0, eine unabhängige Wiederholung durch Codex und die
+> beiden durch Codex bestätigten Push-Läufe `30635566629` (CI) und `30635566645`
+> (Container-Image), je completed/success. **Offen aus B:** Stammdaten, Inventar sowie Bilder und
+> Uploads (letztere mit dem MinIO-Bildspeicher). **AP14 insgesamt ist nicht abgeschlossen** —
+> die Browser- und Offline-Abnahme, die CSP-Durchsetzung, MinIO sowie Betrieb und Deployment
+> stehen aus; die untenstehenden Akzeptanzkriterien gelten unverändert weiter. **RC1 ist nicht
+> abgeschlossen**, es gibt kein Tag und kein Release; V1 bleibt Produktionssperre.
 
 **Ziel und fachlicher Nutzen.** Der Nachweis, dass die Anwendung tatsächlich funktioniert. Alle
 bisherigen Freigaben beruhen auf Build- und Datenbankprüfungen; Upload, signierte URLs,
@@ -977,3 +999,4 @@ durch Dennis steht weiterhin aus.
 | 1.14 | 2026-07-28 | **AP13 implementiert und lokal technisch verifiziert; Commit, Push und CI-Nachweis offen — AP13 damit noch nicht endgueltig abgeschlossen.** Umgesetzt: Migration `0011_ap13_tasks_bulk.sql` (Tabelle `incident_tasks` mit `text`-Check-Constraints, Kohaerenz-Constraint fuer `acknowledged_at`/`acknowledged_by`, partieller Unique-Index fuer `derived`, Indizes, `tg_touch_updated`, `tg_audit`, dreifache Loeschsperre, RLS nur `is_staff()`); gehaertete `SECURITY DEFINER`-Reconciliation `sync_incident_tasks_internal` mit `EXECUTE`-Entzug fuer `public`/`anon`/`authenticated` und Triggern auf `incidents`, `incident_assignments`, `incident_images`, `incident_cable_positions` plus idempotentem Backfill und Staff-Refresh; Ableitung setzt entfallene Ursachen **immer** auf `void` und leert dabei beide Quittierungsfelder atomar, quittierte Aufgaben bleiben nur bei fortbestehender Ursache `acknowledged`; minimierte `SECURITY DEFINER`-RPC `get_assigned_incident_tasks`; `has_open_task` **RLS-konform innerhalb** der `security_invoker`-View statt ueber einen frei aufrufbaren Definer-Helfer; `SECURITY INVOKER`-Bulk-RPCs mit Obergrenze 200, abgefangenen Subtransaktionen je Eintrag und stabilen Codes; gemeinsamer gesperrter Zuweisungspfad mit Vergleich von `expected_updated_at` und erwarteter aktiver Monteurmenge; Oberflaeche, Server Actions, Filter, aktivierte Massenaktionsleiste mit Teilerfolgsbericht und Entfernung von `deriveOpenHints()`. Nachgewiesen: TypeScript, ESLint und Next.js-Produktions-Build erfolgreich; lokaler PostgreSQL-Lauf mit Migrationen 0001-0011 und Smokes AP10-AP13 erfolgreich, keine `SMOKE ... FAIL`-, `ERROR`- oder `FATAL`-Meldung, E20a-E20c und E21a-E21c ausdruecklich erfolgreich, Abschlusszeile `ERGEBNIS: AP10/AP11/AP12/AP13 DATENBANKTESTS ERFOLGREICH.`, temporaere Testdatenbank `kabelbereitschaft_ap12_test_20260728_104535` entfernt. Zwei Testaufbaufehler behoben (kein Produktfehler): `ON_ERROR_STOP on`, gezielter Entzug der Pauschalrechte fruehrerer Smokes fuer `app_user`, Auditabfragen auf `entity`/`entity_id` im Admin-Kontext. V1 bleibt Produktionssperre, Branding separat, kein RC1-Tag | Claude (KI) nach Vorgaben von Dennis |
 | 1.15 | 2026-07-28 | **AP13 endgültig abgeschlossen: grüner CI-Nachweis erbracht.** AP13-Commit `76d93cae0764cbfe13d9cbd9bb25b54cb3c9506b`, Abhängigkeitskorrektur `e1025327ab25b72192b59eba73015681a0bd0912`, PWA-Korrektur `5c60031e3765753c6a1df8d7bf8d0a0b97716605`; `main` = `origin/main` = `5c60031`, Arbeitskopie sauber. GitHub-CI-Lauf `30376903965` mit Ergebnis `success` (https://github.com/DKuehnhold/Kabelbereitschaft/actions/runs/30376903965): Produktions-Audit erfolgreich, Dev-Audit informativ, TypeScript, ESLint und Produktions-Build erfolgreich, Playwright Chromium installiert, alle 11 öffentlichen E2E-/a11y-Tests erfolgreich. Zusätzlich lokaler Datenbanklauf mit Migration 0011, Smokes 15–18 sowie E20a–E20c und E21a–E21c erfolgreich. **PWA-Korrektur:** `ServiceWorkerRegister.tsx` hält beim Einrichten fest, ob die Seite bereits von einem Service Worker kontrolliert wurde; nur dann löst ein späterer Controllerwechsel einen Reload aus. Damit entfällt der unnötige Reload bei der ersten Service-Worker-Aktivierung und die beiden axe-core-Prüfungen auf `/login` und `/offline` bestehen, ohne den Service Worker im Test zu blockieren. B.3 auf „technisch abgeschlossen“ gesetzt, B.4 als nächstes Arbeitspaket gekennzeichnet. V1 bleibt Produktionssperre, Branding bleibt separat auf `04253a2` und ungemergt, kein RC1-Tag und kein Release | Claude (KI) nach Vorgaben von Dennis |
 | 1.16 | 2026-07-28 | **AP14 Arbeitspaket A technisch verifiziert.** Interne PostgreSQL-/Container-Zielplattform gemäß ADR-011 vorbereitet; Supabase ausdrücklich weder Cloud- noch Self-Hosting-Ziel. Commits `8ec9731` und `761ff23`, Pull Request #1, GitHub-CI-Lauf `30380208864` vollständig grün: Anwendung einschließlich 11 öffentlicher Browser-/a11y-Tests, PostgreSQL 18 mit Migrationen 0001–0011 und Smokes AP10–AP13 sowie echter Docker-Build mit Hadolint, Startschutz, Secret-Layer-Prüfung, Compose-Validierung und Trivy. AP14/B zur vollständigen Supabase-Ablösung bleibt offen; kein Deployment, V1 bleibt Produktionssperre | Codex (KI) |
+| 1.17 | 2026-07-31 | **AP14B-Datenschicht technisch abgeschlossen und gemergt.** `main` = `origin/main` = `6b9d8dd7b4b937b3a2cb055b509557ed17313430` (`feat: migrate incident and task data paths to PostgreSQL`), 18 Dateien, +4422/-583; der frühere Stand `22db6dad8958146be4de667a55e89ba170e73b7c` ist ein Vorfahre und damit überholt. Umgestellt sind die Datenpfade für Vorgänge, Aufgaben und Offline-Sync (`incidents.ts`, `incident-actions.ts`, `incident-list-actions.ts`, `tasks.ts`, `task-actions.ts`, `db/pg-errors.ts`, `/api/sync`, `/api/incidents/[id]/meta`) mit Migration `0014_ap14b_data_grants.sql`, den Smokes `19a_ap14b_grant_reset.sql` und `20_ap14b_data.sql`, der Erweiterung von `18_ap13_tasks.sql` sowie den Runnern `run_ap14b_local.ps1` und `run_db_tests.sh`. Rechtematrix `0014`: Rechte ausschließlich an `app_user`, kein Grant an `public`/`anon`/`authenticated`, eng geschnittene Schreibrechte (`incident_notes` und `sync_actions` ohne `update`/`delete`, `incident_tasks` ohne `delete`, kein Recht auf `audit_events`), genau ein `revoke` auf `refresh_incident_tasks_ap13`, vier fail-closed Prüfblöcke mit `raise exception` (zwei Positivprüfungen auf Tabellen- und Ausführungsrechte, zwei Negativprüfungen auf unerwartete Ausführungs- sowie Delete-/`audit_events`-Rechte); nur Rechte geändert, keine Policy/View/Funktion, Zeilensichtbarkeit weiterhin über die bestehenden RLS-Policies. Transaktionsabsicherung: alle Lese-/Schreibpfade über `withUserTransaction()` mit der Identität aus `getSessionProfile()`, mehrschrittige Aktionen in einer Transaktion, `/api/sync` bewusst je Eintrag, Konflikterkennung über `updated_at`, Idempotenz über `(actor, client_action_id)` auf `sync_actions`, Fehlerabbildung ausschließlich über SQLSTATE. Nachgewiesen: lokaler PostgreSQL-18-Gesamtlauf mit Prozess-Exitcode 0 (Migrationen 0001–0014, Smokes 15–20 einschließlich 19a, 30/30 Node-Integrationstests, R1/R2/D13/D26/D27 grün, vollständige Bereinigung), unabhängige Wiederholung durch Codex (TypeScript 0, ESLint 0, 41/41 Einheitentests, Produktions-Build 0, `git diff --check` 0) sowie die beiden durch Codex bestätigten Push-Läufe `30635566629` (CI) und `30635566645` (Container-Image), je completed/success. Kopf, Zeile zu Arbeitspaket B und B.4-Status entsprechend fortgeschrieben, keine Akzeptanzkriterien entfernt. Offen bleibt der Supabase-Restbestand in Stammdaten, Inventar sowie Bildern und Uploads (letztere mit MinIO); AP14 insgesamt und RC1 sind **nicht** abgeschlossen, kein Tag, kein Release, V1 bleibt Produktionssperre, Branding bleibt separat auf `04253a2` und ungemergt, GUI-/Designarbeit wartet auf Dennis | Claude (KI) |

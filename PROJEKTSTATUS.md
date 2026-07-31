@@ -4,16 +4,20 @@
 > (`00-Projektsteuerung/ROADMAP_AP12_AP15_ENTWURF.md`, B.1/B.8). Abgelöste Dublette:
 > `00-Projektsteuerung/PROJEKTSTATUS.md` (als historisch markiert, nicht gelöscht).
 > Endgültige Konsolidierung und Archivierung erfolgen in AP15.
-> Stand: 2026-07-30
+> Stand: 2026-07-31
 
-> **Aktueller Stand (2026-07-30).** Zielplattform bleibt ADR-011: PostgreSQL 18, Auth.js v5, MinIO
-> und Containerbetrieb hinter dem internen Reverse-Proxy; Supabase ist kein Ziel. Der gemergte
-> Auth.js/PostgreSQL-Stand auf `main` `22db6dad8958146be4de667a55e89ba170e73b7c` ist bestätigt; die
-> weiter unten mit „2026-07-28“ datierten AP14/B-Angaben beschreiben den Stand jenes Tages, sind in
-> diesem Merge enthalten und behalten ihre historischen Prüfnachweise unverändert. Nächstes
-> nicht-visuelles Fachpaket ist AP14B `data-incidents-tasks-sync`: Ablösung der verbliebenen
-> Supabase-Zugriffe in Vorgängen, Aufgaben und Offline-Sync durch PostgreSQL/RLS. V1 bleibt
-> Produktionssperre, Branding bleibt separat, GUI-/Designarbeit wartet auf Dennis.
+> **Aktueller Stand (2026-07-31).** Zielplattform bleibt ADR-011: PostgreSQL 18, Auth.js v5, MinIO
+> und Containerbetrieb hinter dem internen Reverse-Proxy; Supabase ist kein Ziel. Bestätigter
+> Repository-Stand ist `main` = `origin/main` = `6b9d8dd7b4b937b3a2cb055b509557ed17313430`
+> (`feat: migrate incident and task data paths to PostgreSQL`); der frühere Stand
+> `22db6dad8958146be4de667a55e89ba170e73b7c` ist ein Vorfahre und damit überholt. Die Datenpfade
+> für Vorgänge, Aufgaben und Offline-Sync sind auf PostgreSQL 18 migriert, lokal und in der CI
+> verifiziert. Die weiter unten mit „2026-07-28“ datierten AP14/B-Angaben beschreiben den Stand
+> jenes Tages, sind in diesen Merges enthalten und behalten ihre historischen Prüfnachweise
+> unverändert. Nächster nicht-visueller Arbeitsblock ist die Ablösung der verbliebenen
+> Supabase-Datenpfade in Stammdaten und Inventar nach PostgreSQL/RLS; Bilder und Uploads folgen
+> mit dem MinIO-Bildspeicher. V1 bleibt Produktionssperre, Branding bleibt separat,
+> GUI-/Designarbeit wartet auf Dennis.
 
 ## Repository
 - Repository: Kabelbereitschaft
@@ -47,12 +51,16 @@
   `feat/ap14-docker-postgres-ci` (Commits `8ec9731`, `761ff23`, PR #1).
   GitHub-CI-Lauf `30380208864` vollständig grün: Anwendung, PostgreSQL-18-Smokes
   und echter Containerbau einschließlich Startschutz, Compose, Hadolint und Trivy.
-  **AP14/B – Auth-Basis ist gemergt** (siehe folgender Punkt). **Offen bleibt aus AP14/B nur
-  noch die Ablösung der Datenmodule:** Vorgänge, Aufgaben und Offline-Sync
-  (AP14B `data-incidents-tasks-sync`) nach PostgreSQL/RLS gemäß ADR-011.
-  Kein Deployment; IT-Zielparameter fehlen noch.
+  **AP14/B – Auth-Basis ist gemergt** (siehe folgender Punkt). **Stand 2026-07-31:** auch die
+  Datenpfade für Vorgänge, Aufgaben und Offline-Sync (AP14B `data-incidents-tasks-sync`) sind
+  gemäß ADR-011 auf PostgreSQL/RLS umgestellt und mit Commit `6b9d8dd` gemergt (siehe Abschnitt
+  „AP14/B – Datenpfade"). **Offen bleibt aus AP14/B die Ablösung der übrigen Datenmodule:**
+  Stammdaten, Inventar sowie Bilder und Uploads (letztere mit dem MinIO-Bildspeicher).
+  Kein Deployment; IT-Zielparameter fehlen noch. AP14 insgesamt ist nicht abgeschlossen:
+  Browser-/Offline-Abnahme, CSP-Durchsetzung, MinIO sowie Betrieb und Deployment stehen aus.
 - **AP14/B – Auth-Basis:** implementiert, lokal vollständig verifiziert und inzwischen auf `main`
-  gemergt, Stand `22db6dad8958146be4de667a55e89ba170e73b7c` (2026-07-30). Auth.js v5 mit
+  gemergt, Stand `22db6dad8958146be4de667a55e89ba170e73b7c` (2026-07-30; inzwischen Vorfahre des
+  aktuellen Stands `6b9d8dd`). Auth.js v5 mit
   Credentials-Provider, Argon2id, transaktionslokaler Benutzer-ID, serverseitig
   widerrufbaren `auth_sessions`,
   kurzen verschlüsselten JWTs (nur `sub`/`sid`) und Next-16-`proxy.ts` statt der
@@ -91,7 +99,9 @@
   PostgreSQL-Cluster mit 16 erfolgreichen Prüfungen (alle 13 geschützten Seiten und alle 3
   geschützten APIs gesperrt). Temporäres Cluster, temporärer Server und Hilfsdateien wurden
   entfernt; der vorhandene Dienst blieb unangetastet.
-  **Offen:** Rechtematrix der Fachtabellen, MinIO-Bildspeicher, administrative
+  **Offen (Stand 2026-07-31):** Rechtematrix der Fachtabellen für Stammdaten, Inventar sowie
+  Bilder und Uploads — für Vorgänge, Aufgaben und Offline-Sync ist sie mit Migration
+  `0014_ap14b_data_grants.sql` geliefert; MinIO-Bildspeicher; administrative
   Benutzerverwaltung (Reset, Deaktivierung, Rollenwechsel) als eigenes Arbeitspaket.
   Einzelheiten: `PROJEKT_WISSEN.md`, Abschnitt „AP14/B — Auth-Basis".
 
@@ -203,7 +213,43 @@ Details: `04-UI-UX/GUI.md`, `04-UI-UX/DESIGNSYSTEM.md`.
   auf `/login` und `/offline` sind damit ohne Testabschaltung grün.
 - Einzelheiten: `PROJEKT_WISSEN.md` (Abschnitt „AP13 – Umsetzung") und
   `00-Projektsteuerung/ROADMAP_AP12_AP15_ENTWURF.md` (B.3, Version 1.15).
-- **Nächstes nicht-visuelles Fachpaket: AP14B `data-incidents-tasks-sync`** (Ablösung der
-  verbliebenen Supabase-Zugriffe in Vorgängen, Aufgaben und Offline-Sync durch PostgreSQL/RLS).
+- **Nächstes nicht-visuelles Fachpaket war AP14B `data-incidents-tasks-sync`** (Ablösung der
+  verbliebenen Supabase-Zugriffe in Vorgängen, Aufgaben und Offline-Sync durch PostgreSQL/RLS);
+  seit 2026-07-31 gemergt — siehe Abschnitt „AP14/B – Datenpfade (2026-07-31)".
 - V1 bleibt Produktionssperre; Branding bleibt separat auf `feat/ap8.1-branding` (`04253a2`)
   und ist nicht gemergt; **kein RC1-Tag.**
+
+## AP14/B – Datenpfade (2026-07-31)
+
+- **Status: technisch abgeschlossen und gemergt.** `main` = `origin/main` =
+  `6b9d8dd7b4b937b3a2cb055b509557ed17313430` (`feat: migrate incident and task data paths to
+  PostgreSQL`), 18 Dateien, +4422/-583.
+- Umgestellt sind die Datenpfade für Vorgänge, Aufgaben und Offline-Sync (u. a. `incidents.ts`,
+  `incident-actions.ts`, `incident-list-actions.ts`, `tasks.ts`, `task-actions.ts`,
+  `db/pg-errors.ts`, `/api/sync`, `/api/incidents/[id]/meta`), Migration
+  `0014_ap14b_data_grants.sql` sowie die Smokes `19a_ap14b_grant_reset.sql` und `20_ap14b_data.sql`.
+- **Rechtematrix `0014`:** Rechte ausschließlich an `app_user`, kein Grant an `public`, `anon` oder
+  `authenticated`, eng geschnittene Schreibrechte, kein Recht auf `audit_events`, ein `revoke` auf
+  `refresh_incident_tasks_ap13`, vier fail-closed Prüfblöcke (zwei Positiv-, zwei
+  Negativprüfungen); nur Rechte geändert, RLS-Policies und
+  Zeilensichtbarkeit unverändert.
+- **Transaktionsabsicherung:** alle Pfade über `withUserTransaction()` mit der Identität aus
+  `getSessionProfile()`, mehrschrittige Aktionen in einer Transaktion, `/api/sync` bewusst je
+  Eintrag; Konflikterkennung über `updated_at`, Idempotenz über `(actor, client_action_id)`,
+  Fehlerabbildung ausschließlich über SQLSTATE.
+- **Verifiziert lokal:** PostgreSQL-18-Gesamtlauf mit Exitcode 0 (Migrationen 0001–0014, Smokes
+  15–20 einschließlich 19a, 30/30 Node-Integrationstests, R1/R2/D13/D26/D27 grün, Bereinigung
+  belegt). **Unabhängig durch Codex wiederholt:** TypeScript 0, ESLint 0, 41/41 Einheitentests,
+  Produktions-Build 0, `git diff --check` 0. **Durch Codex bestätigte Push-Läufe zu `6b9d8dd`:**
+  CI-Lauf `30635566629` completed/success, Container-Image-Lauf `30635566645` completed/success.
+- **Grenze:** Stammdaten, Inventar sowie Bilder und Uploads laufen weiterhin über Supabase. AP14
+  insgesamt ist **nicht** abgeschlossen (Browser-/Offline-Abnahme, CSP-Durchsetzung, MinIO,
+  Betrieb/Deployment), es gibt **kein** Tag, **kein** Release und keine V1-Freigabe.
+- **Nächster nicht-visueller Arbeitsblock:** Ablösung der verbliebenen Supabase-Datenpfade in
+  Stammdaten und Inventar nach PostgreSQL/RLS; Bilder und Uploads folgen mit dem
+  MinIO-Bildspeicher. **GUI-/Designarbeit wartet weiter auf Dennis.**
+- Offen bleiben außerdem die Rechtematrix für Stammdaten, Inventar sowie Bilder und Uploads, der
+  MinIO-Bildspeicher, die administrative Benutzerverwaltung (Reset, Deaktivierung, Rollenwechsel),
+  AP15 und V1 als Produktionssperre.
+- Einzelheiten: `PROJEKT_WISSEN.md` (Abschnitt „AP14/B — Datenpfade Vorgänge, Aufgaben,
+  Offline-Sync") und `00-Projektsteuerung/ROADMAP_AP12_AP15_ENTWURF.md` (B.4, Version 1.17).
