@@ -54,7 +54,9 @@ und **keine ManagementOS-Datei wird geändert**.
 
 1. Codex setzt Architekturgrenzen und formuliert das abgegrenzte Arbeitspaket.
 2. Claude liest `AGENTS.md`, `CLAUDE.md`, `PROJEKT_WISSEN.md`,
-   `PROJEKTSTATUS.md`, die führende Architektur und den Git-Stand.
+   `PROJEKTSTATUS.md`, die führende Architektur, den Git-Stand und die operative
+   Statusdatei `.claude/automation/status/fortschritt.json` (keine
+   Projektwahrheit).
 3. Claude zerlegt das Paket in Teil-Scopes und legt je Teil-Scope den
    Agentenvertrag fest (Positivliste, Negativliste, DoD, Stopppunkt).
 4. Claude führt die Teil-Scopes aus: **ein** Schreibagent je Teilpaket
@@ -155,6 +157,17 @@ Primärer nicht-interaktiver Startpunkt:
   Git-Status prüfen.
 - `PROJEKT_WISSEN.md` bleibt die zentrale kompakte Projektübersicht; keine
   parallele Statusübersicht anlegen.
+- `.claude/automation/status/fortschritt.json` ist die operative Datenquelle des
+  Fortschritts-Dashboards, aber **keine fachliche Projektwahrheit**; führend
+  bleiben `PROJEKT_WISSEN.md` und `PROJEKTSTATUS.md`. Die Datei bleibt im Vault
+  erhalten, gehört aber nicht in Fach-Commits. Zuständigkeit: während eines
+  aktiven Claude-Laufs `staffelstab = "Claude"`, Claude hält Todo und Hinweise
+  aktuell; mit seiner Abschlussübergabe setzt Claude selbst auf
+  `staffelstab = "Codex"`; während Codex-Review, CI und Merge hält Codex den
+  Reviewzustand aktuell; nach bestandenem Merge aktualisiert Codex den
+  abgeschlossenen Stand, bevor ein neuer Claude-Lauf übernimmt. Es gibt genau
+  diese eine Statusdatei; keine zweite Statusdatei und keine parallele
+  Schreiblogik.
 - GUI-Arbeit beginnt gemeinsam mit Dennis. Bis dahin werden vorhandene
   Oberflächen nur technisch funktionsfähig gehalten, nicht gestalterisch neu
   entschieden.

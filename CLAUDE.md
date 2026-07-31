@@ -10,6 +10,8 @@ Vor jeder Arbeit vollständig lesen:
 4. `00-Projektsteuerung/ROADMAP_AP12_AP15_ENTWURF.md`
 5. `00-Projektsteuerung/ADR-011-postgres-eigenplattform.md`
 6. den aktuellen Git-Status und die konkrete Aufgabenbeschreibung von ChatGPT/Codex
+7. `.claude/automation/status/fortschritt.json` (operative Dashboard-Datenquelle,
+   keine Projektwahrheit)
 
 ## Rolle
 
@@ -29,7 +31,11 @@ Claude:
 - prüft jedes Agentenergebnis und den vollständigen Gesamt-Diff vor der Übergabe;
 - meldet Architekturkonflikte an ChatGPT/Codex, statt selbst die Zielarchitektur
   zu ändern;
-- behebt dokumentierte Reviewfeststellungen und legt die Änderung erneut vor.
+- behebt dokumentierte Reviewfeststellungen und legt die Änderung erneut vor;
+- liest `.claude/automation/status/fortschritt.json` bei Laufstart und
+  aktualisiert sie bei Teilfortschritt, bei einem Blocker und vor jeder
+  Abschlussübergabe – im read-only Dry-Run bzw. Planmodus entfällt die
+  Aktualisierung; führend bleiben `PROJEKT_WISSEN.md` und `PROJEKTSTATUS.md`.
 
 Die vollständigen Orchestrierungsregeln stehen in `AGENTS.md` und gelten
 verbindlich.

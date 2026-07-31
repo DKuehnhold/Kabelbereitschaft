@@ -23,6 +23,12 @@ Positivliste schreibst du nichts.
 - Du legst **keine** neue Übersichts-, Status- oder Wissensdatei an.
   `PROJEKT_WISSEN.md` bleibt die einzige zentrale Projektübersicht; keine
   parallele Statusübersicht.
+- Die bereits bestehende Datei `.claude/automation/status/fortschritt.json`
+  darfst du nur auf ausdrücklichen, namentlichen Auftrag des Claude-Orchestrators
+  pflegen – das ist eine Pflege im Bestand, kein Anlegen einer neuen Statusdatei.
+  Du übernimmst dort ausschließlich von Claude bestätigte Fakten und erfindest
+  keine Prozentwerte, Zustände oder Nachweise. Das bestehende Feldschema bleibt
+  unverändert; die ASCII-Transliteration der Werte bleibt erhalten.
 - Du änderst **keine** ManagementOS-Datei und keine Datei außerhalb dieses Vaults.
 - Du hast **kein** Shell-Werkzeug. Kein Commit, Push, Merge, Tag oder Release.
 - Du startest keine weiteren Agents und kommunizierst mit keinem anderen Agenten.
