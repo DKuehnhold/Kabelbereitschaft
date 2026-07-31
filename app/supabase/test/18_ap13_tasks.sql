@@ -508,3 +508,34 @@ end $$;
 
 reset role;
 select set_config('test.uid', '', false);
+
+-- ---------------------------------------------------------------------
+-- Abschluss: Testgeruest zuruecknehmen, bevor die AP14/B-Migrationen laufen.
+--
+-- Die pauschalen Grants der frueheren Smokes (17:20 und 22 dieser Datei,
+-- `grant select, insert, update, delete on all tables in schema public`) sind
+-- Testgeruest und NICHT der Produktzustand. Migration 0014 prueft den
+-- Zielzustand Least Privilege ausdruecklich auch NEGATIV, und
+-- has_table_privilege beruecksichtigt die Gruppenmitgliedschaft aus
+-- bootstrap/01_roles.sql:21 (`grant authenticated to app_user`). Ohne diese
+-- Ruecknahme scheitert 0014 an Rechten, die es nie vergeben hat.
+--
+-- Der Block steht bewusst hier am DATEIENDE und nicht oben beim REVOKE des
+-- Aufgaben-Loeschrechts: E13 (:266) und E17 (:373) lesen public.audit_events
+-- unter `set role app_user` (gesetzt in :228, zurueckgenommen erst in :509).
+-- Ein Revoke vor diesen Bloecken wuerde beide mit SQLSTATE 42501 abbrechen -
+-- sie haben keinen Exception-Handler, und diese Datei laeuft mit
+-- ON_ERROR_STOP.
+--
+-- Folge fuer 19_ap14b_platform.sql P16 (:488-495): die Abweisung des direkten
+-- INSERT in audit_events bleibt 42501, ihr Grund wechselt aber vom fehlenden
+-- Insert-Policy-Treffer (0012:122-124) zum fehlenden Tabellenrecht. Das
+-- Verhalten ist unveraendert, die Ursache ist eine andere.
+revoke delete on public.incidents from app_user;
+revoke delete on public.incident_notes from app_user;
+-- Kein delete auf sync_actions: die Offline-Synchronisation rollt eine
+-- fehlgeschlagene Aktion zurueck, statt den Dedup-Marker zu kompensieren
+-- (0014:56-58). Die Delete-Policy aus 0006:39-42 besteht weiter; allein das
+-- fehlende Tabellenrecht verhindert die Kompensation.
+revoke delete on public.sync_actions from app_user;
+revoke all on public.audit_events from app_user;

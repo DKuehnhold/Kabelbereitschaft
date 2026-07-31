@@ -1,7 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { withUserTransaction } from "@/lib/db";
+import { pgErrorCode, PG_FOREIGN_KEY_VIOLATION, PG_INSUFFICIENT_PRIVILEGE } from "@/lib/db/pg-errors";
 import { getSessionProfile } from "@/lib/auth";
 import { ROLE_LABELS, type UserRole } from "@/lib/roles";
 import { TASK_EDIT_STATUS, TASK_PRIORITIES, type TaskPriority, type TaskStatus } from "@/lib/status";
@@ -15,6 +16,13 @@ import type { CreateIncidentTaskInput, UpdateIncidentTaskInput } from "@/lib/tas
 // erzwingt die RLS-Policy is_staff() dasselbe in der Datenbank. Kein
 // Service-Role-Zugriff, keine Umgehung von Audit- oder Chroniktriggern.
 // Löschen ist nicht vorgesehen (nur Statuswechsel, u. a. "Entfallen").
+//
+// AP14/B: jede Aktion schreibt über withUserTransaction() mit der Identität
+// aus der geprüften Auth.js-Sitzung (ADR-011 / 2.5). Die Ableitung der
+// derived-Aufgaben bleibt Sache der Datenbanktrigger; hier wird keine
+// Reconciliation-Funktion aufgerufen. Eine Datenbankmeldung wird
+// ausschließlich serverseitig zur Klassifizierung ausgewertet (mapTaskError)
+// und gelangt nie in ein Aktionsergebnis.
 // =====================================================================
 
 const STAFF_ONLY = "Aufgaben dürfen nur von Disposition und Administration bearbeitet werden.";
@@ -58,6 +66,34 @@ function mapTaskError(message?: string): string {
   return "Speichern der Aufgabe fehlgeschlagen. Bitte Eingaben prüfen.";
 }
 
+/**
+ * Fachmeldung zu einem Datenbankfehler – ohne die Datenbankmeldung nach außen.
+ *
+ * Wo der SQLSTATE die Einordnung eindeutig macht (42501 keine Berechtigung,
+ * 23503 fehlende Zuständigkeit), wird ausschließlich der Code an mapTaskError()
+ * gegeben; dessen Muster enthalten genau diese Codes. Andernfalls dient die
+ * Datenbankmeldung serverseitig als Einordnungsgrundlage, weil nur sie den
+ * verletzten Constraint benennt (ack_coherence, task_type_chk, status_chk).
+ * Zurück geht immer nur die bestehende deutsche Konstante.
+ */
+function taskErrorMessage(error: unknown): string {
+  const code = pgErrorCode(error);
+  if (code === PG_INSUFFICIENT_PRIVILEGE || code === PG_FOREIGN_KEY_VIOLATION) return mapTaskError(code);
+  return mapTaskError(error instanceof Error ? error.message : undefined);
+}
+
+/**
+ * Bindet einen Wert und liefert AUSSCHLIESSLICH dessen Platzhalter ($1, $2, …).
+ *
+ * Damit bleibt der zusammengesetzte SQL-Text frei von Eingabewerten: in den
+ * Text gelangt nur die Nummer des Platzhalters, der Wert ausschließlich in die
+ * Werteliste.
+ */
+function bind(values: unknown[], value: unknown): string {
+  values.push(value);
+  return `$${values.length}`;
+}
+
 // Vorgangsdetail (Aufgabenliste) und die Listen, die has_open_task zeigen.
 function revalidateTasks(incidentId: string) {
   revalidatePath(`/vorgaenge/${incidentId}`);
@@ -80,6 +116,26 @@ type TaskPatch = {
   acknowledged_at?: string | null;
   acknowledged_by?: string | null;
 } & AssigneePatch;
+
+/**
+ * Feste Spalten-Allow-List der änderbaren Felder.
+ *
+ * Nur die hier im Quelltext stehenden Spaltennamen und Typumwandlungen können
+ * in die SET-Liste gelangen; alle Werte werden über bind() als Parameter
+ * übergeben. Ein Patchfeld ohne Eintrag wird verworfen.
+ */
+const TASK_UPDATE_COLUMNS: Record<keyof TaskPatch, { column: string; cast: string }> = {
+  title: { column: "title", cast: "" },
+  body: { column: "body", cast: "" },
+  priority: { column: "priority", cast: "" },
+  due_at: { column: "due_at", cast: "::timestamptz" },
+  status: { column: "status", cast: "" },
+  acknowledged_at: { column: "acknowledged_at", cast: "::timestamptz" },
+  acknowledged_by: { column: "acknowledged_by", cast: "::uuid" },
+  assignee_profile_id: { column: "assignee_profile_id", cast: "::uuid" },
+  assignee_team_id: { column: "assignee_team_id", cast: "::uuid" },
+  assignee_role: { column: "assignee_role", cast: "::public.user_role" },
+};
 
 // Zuständigkeit auswerten. Nur übergebene Felder werden verändert;
 // null löscht die jeweilige Zuständigkeit.
@@ -117,22 +173,33 @@ export async function createIncidentTask(input: CreateIncidentTaskInput): Promis
   const assignee = assigneePatch(input);
   if ("error" in assignee) return { ok: false, error: assignee.error };
 
-  const supabase = await createClient();
-  const { error } = await supabase.from("incident_tasks").insert({
-    incident_id: incidentId,
-    // Manuelle Aufgaben tragen zwingend task_type = 'manual' (Check-Constraint).
-    task_type: "manual",
-    source: "manual",
-    title,
-    body: trimOrNull(input.body),
-    status: "open",
-    priority,
-    due_at: due,
-    assignee_profile_id: assignee.assignee_profile_id ?? null,
-    assignee_team_id: assignee.assignee_team_id ?? null,
-    assignee_role: assignee.assignee_role ?? null,
-  });
-  if (error) return { ok: false, error: mapTaskError(error.message) };
+  try {
+    // task_type, source und status sind feste Werte im Anweisungstext
+    // (Check-Constraints task_type_chk und source_type_chk); alles Übrige ist
+    // Parameter.
+    await withUserTransaction(staff.userId, (client) =>
+      client.query(
+        `insert into public.incident_tasks (
+           incident_id, task_type, source, title, body, status, priority, due_at,
+           assignee_profile_id, assignee_team_id, assignee_role
+         )
+         values ($1::uuid, 'manual', 'manual', $2, $3, 'open', $4, $5::timestamptz,
+                 $6::uuid, $7::uuid, $8::public.user_role)`,
+        [
+          incidentId,
+          title,
+          trimOrNull(input.body),
+          priority,
+          due,
+          assignee.assignee_profile_id ?? null,
+          assignee.assignee_team_id ?? null,
+          assignee.assignee_role ?? null,
+        ],
+      ),
+    );
+  } catch (error) {
+    return { ok: false, error: taskErrorMessage(error) };
+  }
 
   revalidateTasks(incidentId);
   return { ok: true, error: null };
@@ -181,11 +248,30 @@ export async function updateIncidentTask(input: UpdateIncidentTaskInput): Promis
   if ("error" in assignee) return { ok: false, error: assignee.error };
   Object.assign(patch, assignee);
 
-  if (Object.keys(patch).length === 0) return { ok: true, error: null };
+  // SET-Liste ausschließlich aus der Allow-List; die Werte als Parameter.
+  const values: unknown[] = [];
+  const setClauses: string[] = [];
+  for (const key of Object.keys(patch) as (keyof TaskPatch)[]) {
+    if (!Object.prototype.hasOwnProperty.call(TASK_UPDATE_COLUMNS, key)) continue;
+    const target = TASK_UPDATE_COLUMNS[key];
+    setClauses.push(`${target.column} = ${bind(values, patch[key] ?? null)}${target.cast}`);
+  }
+  // Leere Patchmenge: wie bisher ohne Datenbankzugriff erfolgreich.
+  if (setClauses.length === 0) return { ok: true, error: null };
+  const idPlaceholder = bind(values, id);
 
-  const supabase = await createClient();
-  const { error } = await supabase.from("incident_tasks").update(patch).eq("id", id);
-  if (error) return { ok: false, error: mapTaskError(error.message) };
+  try {
+    await withUserTransaction(staff.userId, (client) =>
+      client.query(
+        `update public.incident_tasks
+            set ${setClauses.join(", ")}
+          where id = ${idPlaceholder}::uuid`,
+        values,
+      ),
+    );
+  } catch (error) {
+    return { ok: false, error: taskErrorMessage(error) };
+  }
 
   revalidateTasks(incidentId);
   return { ok: true, error: null };
@@ -199,16 +285,22 @@ export async function acknowledgeIncidentTask(taskId: string, incidentId: string
   const incident = (incidentId ?? "").trim();
   if (!id || !incident) return { ok: false, error: "Aufgabe oder Vorgang fehlt." };
 
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("incident_tasks")
-    .update({
-      status: "acknowledged",
-      acknowledged_at: new Date().toISOString(),
-      acknowledged_by: staff.userId,
-    })
-    .eq("id", id);
-  if (error) return { ok: false, error: mapTaskError(error.message) };
+  try {
+    // Status, Zeitpunkt und Person gemeinsam in EINER Anweisung – die
+    // Kohärenzbedingung ack_coherence lässt keinen Zwischenzustand zu.
+    await withUserTransaction(staff.userId, (client) =>
+      client.query(
+        `update public.incident_tasks
+            set status = 'acknowledged',
+                acknowledged_at = $1::timestamptz,
+                acknowledged_by = $2::uuid
+          where id = $3::uuid`,
+        [new Date().toISOString(), staff.userId, id],
+      ),
+    );
+  } catch (error) {
+    return { ok: false, error: taskErrorMessage(error) };
+  }
 
   revalidateTasks(incident);
   return { ok: true, error: null };
@@ -222,12 +314,20 @@ export async function reopenIncidentTask(taskId: string, incidentId: string): Pr
   const incident = (incidentId ?? "").trim();
   if (!id || !incident) return { ok: false, error: "Aufgabe oder Vorgang fehlt." };
 
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("incident_tasks")
-    .update({ status: "open", acknowledged_at: null, acknowledged_by: null })
-    .eq("id", id);
-  if (error) return { ok: false, error: mapTaskError(error.message) };
+  try {
+    // Quittierung zurücknehmen: außerhalb von 'acknowledged' sind beide
+    // Quittierfelder NULL (ack_coherence).
+    await withUserTransaction(staff.userId, (client) =>
+      client.query(
+        `update public.incident_tasks
+            set status = 'open', acknowledged_at = null, acknowledged_by = null
+          where id = $1::uuid`,
+        [id],
+      ),
+    );
+  } catch (error) {
+    return { ok: false, error: taskErrorMessage(error) };
+  }
 
   revalidateTasks(incident);
   return { ok: true, error: null };

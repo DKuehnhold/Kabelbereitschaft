@@ -1,17 +1,9 @@
-import { createClient } from "@/lib/supabase/server";
-import type { IncidentStatus, ConditionRating } from "@/lib/status";
-import type { Priority } from "@/lib/priority";
+import { getSessionProfile } from "@/lib/auth";
+import { isUuid, withUserTransaction, type DatabaseClient } from "@/lib/db";
+import { isPgError, PG_INSUFFICIENT_PRIVILEGE } from "@/lib/db/pg-errors";
+import { INCIDENT_STATUS, type IncidentStatus, type ConditionRating } from "@/lib/status";
+import { PRIORITIES, type Priority } from "@/lib/priority";
 import type { AssignMonteurAp13Code } from "@/lib/database.types";
-import {
-  getActiveCustomers,
-  listStages,
-  listVzgLines,
-  getActiveOnCallOptions,
-  listCableTypes,
-  getAppSettings,
-  listProfileOptions,
-  listContacts,
-} from "@/lib/masterdata";
 import {
   INCIDENT_PAGE_SIZES,
   INCIDENT_EXPORT_CAP,
@@ -24,8 +16,25 @@ import {
   type IncidentListFilterOptions,
 } from "@/lib/incident-list";
 
-// Sichtmodelle (View-Types) – bewusst entkoppelt von den generischen
-// Supabase-Embed-Typen; Ergebnisse werden gecastet.
+// AP14/B: Vorgangs-Reads auf PostgreSQL (ADR-011 / 2.5).
+//
+// Jeder Zugriff laeuft ueber withUserTransaction(); die Identitaet stammt
+// ausschliesslich aus der serverseitig geprueften Auth.js-Sitzung. Fehlt sie,
+// wird kein SQL ausgefuehrt: das Ergebnis ist dasselbe wie bisher (ohne
+// Identitaet liefert die RLS keine Zeile), der Abbruch erfolgt aber schon vor
+// dem Verbindungsaufbau.
+//
+// Warum die Zeilen als JSON projiziert werden (`to_json`): der Treiber liefert
+// `bigint` und `numeric` als Zeichenkette und `timestamptz` als JS-Date. Beides
+// widerspraeche den unten deklarierten Sichtmodellen. Die JSON-Serialisierung
+// von PostgreSQL erzeugt stattdessen genau die bisherigen Werte - Zahlen als
+// Zahlen und Zeitstempel als ISO-8601-Text in VOLLER Mikrosekundengenauigkeit.
+// Die Genauigkeit ist fachlich notwendig: `updated_at` ist die Konfliktbasis
+// der Zuweisungen und Massenaktionen, ein auf Millisekunden gekuerzter Wert
+// wuerde dort dauerhaft 'conflict' ergeben.
+
+// Sichtmodelle (View-Types) – bewusst entkoppelt von der SQL-Projektion;
+// Ergebnisse werden gecastet.
 export type StageRef = { id: string; name: string; code: string | null } | null;
 export type OnCallRef = { id: string; number: string; label: string | null } | null;
 export type MonteurRef = { id: string; full_name: string | null } | null;
@@ -129,136 +138,244 @@ export type IncidentContactProjection = {
 };
 
 export async function getAssignedIncidentContact(id: string): Promise<IncidentContactProjection | null> {
-  const supabase = await createClient();
-  const { data } = await supabase.rpc("get_assigned_incident_contact", { p_incident_id: id });
-  return ((data ?? [])[0] as IncidentContactProjection | undefined) ?? null;
+  const session = await getSessionProfile();
+  // Fail-closed und wie bisher ohne Ausnahme: eine fehlende Sitzung oder eine
+  // unbrauchbare Kennung ergibt „kein Treffer".
+  if (!session || !isUuid(id)) return null;
+  return withUserTransaction(session.userId, async (client) => {
+    const result = await client.query<IncidentContactProjection>(
+      `select incident_id, contact_name, contact_function, operative_phone
+         from public.get_assigned_incident_contact($1::uuid)`,
+      [id],
+    );
+    return result.rows[0] ?? null;
+  });
 }
+
+type StaffContactRow = {
+  contact_name: string | null;
+  contact_function: string | null;
+  operative_phone: string | null;
+};
 
 export async function getStaffIncidentContact(
   contactId: string | null,
   phoneId: string | null,
 ): Promise<Omit<IncidentContactProjection, "incident_id"> | null> {
   if (!contactId) return null;
-  const supabase = await createClient();
-  const [{ data: contact }, { data: phone }] = await Promise.all([
-    supabase.from("contacts").select("name, function").eq("id", contactId).maybeSingle(),
-    phoneId
-      ? supabase.from("contact_phone_numbers").select("phone").eq("id", phoneId).maybeSingle()
-      : Promise.resolve({ data: null }),
-  ]);
-  if (!contact) return null;
-  return {
-    contact_name: (contact as { name: string }).name,
-    contact_function: (contact as { function: string | null }).function,
-    operative_phone: (phone as { phone: string } | null)?.phone ?? null,
-  };
+  const session = await getSessionProfile();
+  if (!session || !isUuid(contactId)) return null;
+  // Eine unbrauchbare Telefonkennung wirkt wie eine fehlende: der Left Join
+  // findet keine Zeile und `operative_phone` bleibt NULL.
+  const phone = isUuid(phoneId) ? phoneId : null;
+  return withUserTransaction(session.userId, async (client) => {
+    const result = await client.query<StaffContactRow>(
+      `select c.name as contact_name,
+              c.function as contact_function,
+              p.phone as operative_phone
+         from public.contacts c
+         left join public.contact_phone_numbers p on p.id = $2::uuid
+        where c.id = $1::uuid`,
+      [contactId, phone],
+    );
+    return result.rows[0] ?? null;
+  });
 }
 
-const INCIDENT_SELECT = `
-  id, incident_no, status, priority, condition_rating,
-  customer_id, vzg_line_id, vzg_line_number, km_from, km_to, operating_point, track, direction,
-  object_type, object_designation, location_description, external_reference,
-  caller_name, caller_contact, contact_id, contact_phone_number_id,
-  contact_name_snapshot, contact_function_snapshot, contact_phone_snapshot,
-  title, description, internal_note, closing_note,
-  on_call_number_id, call_received_at, construction_stage_id,
-  closed_at, closed_by, created_at, updated_at,
-  stage:construction_stages(id, name, code),
-  oncall:on_call_numbers(id, number, label),
-  customer:customers(id, name),
-  vzgline:vzg_lines(id, line_number),
-  cable_positions:incident_cable_positions(id, cable_type_id, sort_order, quantity_value, quantity_unit, condition_code, cable_type:cable_types(id, code, name)),
-  assignments:incident_assignments(id, monteur_id, is_active, assigned_at, monteur:profiles(id, full_name))
+// Projektion einer Vorgangszeile in der Form von IncidentRow.
+//
+// Die skalaren Referenzen kommen über Left Joins, die Sammlungen über
+// korrelierte Unterabfragen. Beide Sammlungen und die eingebetteten Objekte
+// bleiben bewusst „links": ein Monteur darf fremde Profile und ggf. Kabelarten
+// nicht lesen, die RLS liefert dort keine Zeile. Ein Inner Join würde die
+// Position bzw. Zuweisung dann ganz verschlucken, statt wie bisher nur das
+// eingebettete Objekt auf NULL zu setzen.
+const INCIDENT_ROW_COLUMNS = `
+  i.id, i.incident_no, i.status, i.priority, i.condition_rating,
+  i.customer_id, i.vzg_line_id, i.vzg_line_number, i.km_from, i.km_to,
+  i.operating_point, i.track, i.direction,
+  i.object_type, i.object_designation, i.location_description, i.external_reference,
+  i.caller_name, i.caller_contact, i.contact_id, i.contact_phone_number_id,
+  i.contact_name_snapshot, i.contact_function_snapshot, i.contact_phone_snapshot,
+  i.title, i.description, i.internal_note, i.closing_note,
+  i.on_call_number_id, i.call_received_at, i.construction_stage_id,
+  i.closed_at, i.closed_by, i.created_at, i.updated_at,
+  (
+    select min(h.changed_at)
+    from public.incident_status_history h
+    where h.incident_id = i.id
+      and h.new_status = 'technisch_abgeschlossen'
+  ) as technisch_abgeschlossen_at,
+  case when cs.id is null then null
+       else json_build_object('id', cs.id, 'name', cs.name, 'code', cs.code) end as stage,
+  case when ocn.id is null then null
+       else json_build_object('id', ocn.id, 'number', ocn.number, 'label', ocn.label) end as oncall,
+  case when c.id is null then null
+       else json_build_object('id', c.id, 'name', c.name) end as customer,
+  case when vl.id is null then null
+       else json_build_object('id', vl.id, 'line_number', vl.line_number) end as vzgline,
+  (
+    select coalesce(
+             json_agg(
+               json_build_object(
+                 'id', cp.id,
+                 'cable_type_id', cp.cable_type_id,
+                 'sort_order', cp.sort_order,
+                 'quantity_value', cp.quantity_value,
+                 'quantity_unit', cp.quantity_unit,
+                 'condition_code', cp.condition_code,
+                 'cable_type', case when ct.id is null then null
+                                    else json_build_object('id', ct.id, 'code', ct.code, 'name', ct.name) end
+               )
+               order by cp.sort_order
+             ),
+             '[]'::json
+           )
+    from public.incident_cable_positions cp
+    left join public.cable_types ct on ct.id = cp.cable_type_id
+    where cp.incident_id = i.id
+  ) as cable_positions,
+  (
+    select coalesce(
+             json_agg(
+               json_build_object(
+                 'id', a.id,
+                 'monteur_id', a.monteur_id,
+                 'is_active', a.is_active,
+                 'assigned_at', a.assigned_at,
+                 'monteur', case when p.id is null then null
+                                 else json_build_object('id', p.id, 'full_name', p.full_name) end
+               )
+               order by a.assigned_at
+             ),
+             '[]'::json
+           )
+    from public.incident_assignments a
+    left join public.profiles p on p.id = a.monteur_id
+    where a.incident_id = i.id
+  ) as assignments
 `;
+
+const INCIDENT_ROW_FROM = `
+  from public.incidents i
+  left join public.construction_stages cs on cs.id = i.construction_stage_id
+  left join public.on_call_numbers ocn on ocn.id = i.on_call_number_id
+  left join public.customers c on c.id = i.customer_id
+  left join public.vzg_lines vl on vl.id = i.vzg_line_id
+`;
+
+// Nur feste Bausteine werden zusammengesetzt; es gelangt kein Eingabewert in
+// den SQL-Text.
+const LIST_INCIDENTS_SQL = `
+  select to_json(r) as incident
+  from (select ${INCIDENT_ROW_COLUMNS} ${INCIDENT_ROW_FROM}) r
+  order by r.updated_at desc`;
+
+const INCIDENT_DETAIL_SQL = `
+  select to_json(r) as incident
+  from (select ${INCIDENT_ROW_COLUMNS} ${INCIDENT_ROW_FROM} where i.id = $1::uuid) r`;
+
+const INCIDENT_HISTORY_SQL = `
+  select to_json(r) as event
+  from (
+    select h.id, h.old_status, h.new_status, h.note, h.changed_by, h.changed_at
+    from public.incident_status_history h
+    where h.incident_id = $1::uuid
+  ) r
+  order by r.changed_at asc`;
+
+const INCIDENT_NOTES_SQL = `
+  select to_json(r) as entry
+  from (
+    select n.id, n.note_type, n.body, n.created_by, n.created_at
+    from public.incident_notes n
+    where n.incident_id = $1::uuid
+  ) r
+  order by r.created_at asc`;
+
+type IncidentRowResult = { incident: IncidentRow };
+type StatusEventResult = { event: StatusEvent };
+type NoteEventResult = { entry: NoteEvent };
 
 // Sichtbarkeit wird durch RLS erzwungen: Disposition/Admin sehen alle,
 // Monteur nur zugewiesene Vorgänge.
 export async function listIncidents(): Promise<IncidentRow[]> {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("incidents")
-    .select(INCIDENT_SELECT)
-    .order("updated_at", { ascending: false });
-  const rows = (data ?? []) as unknown as IncidentRow[];
-  if (rows.length === 0) return rows;
-
-  // Technischer Abschlusszeitpunkt (frühester Wechsel nach technisch_abgeschlossen).
-  const ids = rows.map((r) => r.id);
-  const { data: hist } = await supabase
-    .from("incident_status_history")
-    .select("incident_id, changed_at")
-    .eq("new_status", "technisch_abgeschlossen")
-    .in("incident_id", ids)
-    .order("changed_at", { ascending: true });
-  const techMap = new Map<string, string>();
-  for (const h of (hist ?? []) as { incident_id: string; changed_at: string }[]) {
-    if (!techMap.has(h.incident_id)) techMap.set(h.incident_id, h.changed_at);
-  }
-  for (const r of rows) r.technisch_abgeschlossen_at = techMap.get(r.id) ?? null;
-  return rows;
+  const session = await getSessionProfile();
+  if (!session) return [];
+  return withUserTransaction(session.userId, async (client) => {
+    // Der technische Abschlusszeitpunkt (frühester Wechsel nach
+    // technisch_abgeschlossen) kommt als Unterabfrage aus derselben Anweisung.
+    const result = await client.query<IncidentRowResult>(LIST_INCIDENTS_SQL);
+    return result.rows.map((row) => row.incident);
+  });
 }
 
 export async function getIncidentDetail(id: string): Promise<IncidentDetail | null> {
-  const supabase = await createClient();
-  const { data: incident } = await supabase
-    .from("incidents")
-    .select(INCIDENT_SELECT)
-    .eq("id", id)
-    .maybeSingle();
-  if (!incident) return null;
+  const session = await getSessionProfile();
+  if (!session || !isUuid(id)) return null;
+  // Vorgang, Chronik und Notizen in EINER Transaktion – drei Anweisungen,
+  // damit der Anweisungsschutz je Aufruf genau eine Anweisung sieht.
+  return withUserTransaction(session.userId, async (client) => {
+    const incidentResult = await client.query<IncidentRowResult>(INCIDENT_DETAIL_SQL, [id]);
+    const incident = incidentResult.rows[0]?.incident;
+    if (!incident) return null;
 
-  const { data: history } = await supabase
-    .from("incident_status_history")
-    .select("id, old_status, new_status, note, changed_by, changed_at")
-    .eq("incident_id", id)
-    .order("changed_at", { ascending: true });
+    const historyResult = await client.query<StatusEventResult>(INCIDENT_HISTORY_SQL, [id]);
+    const notesResult = await client.query<NoteEventResult>(INCIDENT_NOTES_SQL, [id]);
+    const history = historyResult.rows.map((row) => row.event);
+    const notes = notesResult.rows.map((row) => row.entry);
 
-  const { data: notes } = await supabase
-    .from("incident_notes")
-    .select("id, note_type, body, created_by, created_at")
-    .eq("incident_id", id)
-    .order("created_at", { ascending: true });
+    incident.technisch_abgeschlossen_at =
+      history.find((h) => h.new_status === "technisch_abgeschlossen")?.changed_at ?? null;
 
-  const inc = incident as unknown as IncidentRow;
-  inc.technisch_abgeschlossen_at =
-    (history ?? []).find((h) => h.new_status === "technisch_abgeschlossen")?.changed_at ?? null;
-
-  return {
-    incident: inc,
-    history: (history ?? []) as StatusEvent[],
-    notes: (notes ?? []) as NoteEvent[],
-  };
+    return { incident, history, notes };
+  });
 }
 
+type MonteurOptionRow = { id: string; full_name: string | null };
+type StageOptionRow = { id: string; name: string; code: string | null };
+type OnCallOptionRow = { id: string; number: string; label: string | null };
+
 export async function getMonteure(): Promise<{ id: string; full_name: string | null }[]> {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("profiles")
-    .select("id, full_name")
-    .eq("role", "monteur")
-    .eq("is_active", true)
-    .order("full_name", { ascending: true });
-  return (data ?? []) as { id: string; full_name: string | null }[];
+  const session = await getSessionProfile();
+  if (!session) return [];
+  return withUserTransaction(session.userId, async (client) => {
+    const result = await client.query<MonteurOptionRow>(
+      `select id, full_name
+         from public.profiles
+        where role = 'monteur' and is_active
+        order by full_name asc`,
+    );
+    return result.rows;
+  });
 }
 
 export async function getStages(): Promise<{ id: string; name: string; code: string | null }[]> {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("construction_stages")
-    .select("id, name, code")
-    .eq("is_active", true)
-    .order("name", { ascending: true });
-  return (data ?? []) as { id: string; name: string; code: string | null }[];
+  const session = await getSessionProfile();
+  if (!session) return [];
+  return withUserTransaction(session.userId, async (client) => {
+    const result = await client.query<StageOptionRow>(
+      `select id, name, code
+         from public.construction_stages
+        where is_active
+        order by name asc`,
+    );
+    return result.rows;
+  });
 }
 
 export async function getOnCallNumbers(): Promise<{ id: string; number: string; label: string | null }[]> {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("on_call_numbers")
-    .select("id, number, label")
-    .eq("is_active", true)
-    .order("number", { ascending: true });
-  return (data ?? []) as { id: string; number: string; label: string | null }[];
+  const session = await getSessionProfile();
+  if (!session) return [];
+  return withUserTransaction(session.userId, async (client) => {
+    const result = await client.query<OnCallOptionRow>(
+      `select id, number, label
+         from public.on_call_numbers
+        where is_active
+        order by number asc`,
+    );
+    return result.rows;
+  });
 }
 
 // Aktive Monteurnamen eines Vorgangs.
@@ -272,7 +389,8 @@ export type FormState = { ok: boolean; error: string | null };
 
 // ---------------------------------------------------------------------
 // AP10: Optionen für Erfassungs-/Bearbeitungsmaske (nur aktive Stammdaten).
-// Nutzt die AP9-Reads – keine parallele Incident-Datenzugriffsschicht.
+// Seit AP14/B über withUserTransaction() direkt aus PostgreSQL – siehe die
+// Begründung unter den Typen.
 // ---------------------------------------------------------------------
 export type IncidentFormStage = { id: string; label: string; default_on_call_number_id: string | null };
 export type IncidentFormVzg = { id: string; line_number: string; construction_stage_id: string };
@@ -294,41 +412,153 @@ export type IncidentFormOptions = {
   defaults: { customer_id: string | null; on_call_number_id: string | null };
 };
 
-export async function getIncidentFormOptions(): Promise<IncidentFormOptions> {
-  const [customers, stages, vzg, onCall, cableTypes, contacts, settings] = await Promise.all([
-    getActiveCustomers(),
-    listStages(),
-    listVzgLines(),
-    getActiveOnCallOptions(),
-    listCableTypes(),
-    listContacts(),
-    getAppSettings(),
-  ]);
+// AP14/B: Die Optionen der Erfassungs-/Bearbeitungsmaske kommen ab hier direkt
+// aus PostgreSQL statt aus @/lib/masterdata. Gelesen wird ausschliesslich der
+// tatsaechliche Bedarf dieser Datei - die vollen masterdata-Rueckgabetypen
+// (stage_ids, customer_name, default_on_call_label, email, description ...)
+// werden bewusst NICHT nachgebaut.
+//
+// Fehlermodell - zweigeteilt und bewusst so:
+//   * Fehlende Sitzung (getSessionProfile() liefert null): leere Sammlungen und
+//     defaults = { customer_id: null, on_call_number_id: null }. Das ist genau
+//     das bisher sichtbare Ergebnis ohne Identitaet (ohne sie liefert die RLS
+//     keine Zeile) und haelt die aufrufenden Seiten fehlerfrei.
+//   * Ein echter Datenbankfehler wird NICHT gefangen und NICHT geschluckt. Er
+//     propagiert wie bei den uebrigen AP14B-Lesewegen dieser Datei
+//     (listIncidents, getMonteure, getStages, getOnCallNumbers). Ein fehlendes
+//     Tabellenrecht muss laut scheitern, nicht still eine leere Auswahl ergeben.
+//
+// Die Zeilensichtbarkeit bleibt ausschliesslich Sache der RLS; hier wird KEINE
+// Rollenpruefung in TypeScript nachgebaut. Dass ein Monteur keine
+// Ansprechpartner sieht, folgt aus contacts_select bzw.
+// contact_phone_numbers_select (0010:45-50, an public.is_staff() gebunden).
+type CustomerOptionRow = { id: string; name: string };
+type FormStageRow = {
+  id: string;
+  code: string | null;
+  name: string;
+  default_on_call_number_id: string | null;
+};
+type VzgLineOptionRow = { id: string; line_number: string; construction_stage_id: string };
+type CableTypeOptionRow = { id: string; code: string; name: string };
+type ContactOptionResult = { contact: IncidentFormContact };
+type AppSettingsRow = { default_customer_id: string | null; default_on_call_number_id: string | null };
+type CreatorOptionRow = { id: string; full_name: string | null; role: string };
+
+// Ansprechpartner samt Telefonnummern in EINER Anweisung.
+//
+// `coalesce(json_agg(...), '[]'::json)` ist zwingend: json_agg ueber eine leere
+// Menge liefert NULL, und die Aufrufer arbeiten unmittelbar auf `phones`.
+// `as "function"` haelt den JSON-Schluessel exakt bei `function`.
+const FORM_CONTACTS_SQL = `
+  select to_json(r) as contact
+  from (
+    select c.id, c.customer_id, c.name, c.function as "function",
+           (
+             select coalesce(
+                      json_agg(
+                        json_build_object('id', p.id, 'phone', p.phone, 'phone_type', p.phone_type)
+                        order by p.sort_order asc, p.id asc
+                      ),
+                      '[]'::json
+                    )
+             from public.contact_phone_numbers p
+             where p.contact_id = c.id
+           ) as phones
+    from public.contacts c
+    where c.is_active
+  ) r
+  order by r.name asc`;
+
+function emptyIncidentFormOptions(): IncidentFormOptions {
   return {
-    customers: customers.map((c) => ({ id: c.id, name: c.name })),
-    stages: stages
-      .filter((s) => s.is_active)
-      .map((s) => ({
+    customers: [],
+    stages: [],
+    vzgLines: [],
+    onCall: [],
+    cableTypes: [],
+    contacts: [],
+    defaults: { customer_id: null, on_call_number_id: null },
+  };
+}
+
+export async function getIncidentFormOptions(): Promise<IncidentFormOptions> {
+  const session = await getSessionProfile();
+  if (!session) return emptyIncidentFormOptions();
+  // EINE Transaktion, mehrere Anweisungen: sequenziell auf demselben client,
+  // je client.query genau eine Anweisung (Anweisungsschutz in
+  // @/lib/db/statement-guard). Kein Promise.all auf demselben client.
+  return withUserTransaction(session.userId, async (client) => {
+    const customers = await client.query<CustomerOptionRow>(
+      `select id, name
+         from public.customers
+        where is_active
+        order by name asc`,
+    );
+    const stages = await client.query<FormStageRow>(
+      `select id, code, name, default_on_call_number_id
+         from public.construction_stages
+        where is_active
+        order by name asc`,
+    );
+    // line_number ist text; die Sortierung ist damit eine Textsortierung.
+    const vzg = await client.query<VzgLineOptionRow>(
+      `select id, line_number, construction_stage_id
+         from public.vzg_lines
+        where is_active
+        order by line_number asc`,
+    );
+    const onCall = await client.query<OnCallOptionRow>(
+      `select id, number, label
+         from public.on_call_numbers
+        where is_active
+        order by number asc`,
+    );
+    // Zweistufige Sortierung: sort_order ist die fachliche Reihenfolge, name
+    // nur der Tiebreaker. Beide Stufen sind noetig.
+    const cableTypes = await client.query<CableTypeOptionRow>(
+      `select id, code, name
+         from public.cable_types
+        where is_active
+        order by sort_order asc, name asc`,
+    );
+    const contacts = await client.query<ContactOptionResult>(FORM_CONTACTS_SQL);
+    // Singleton der Anwendungsvorgaben. Fehlt die Zeile, gilt wie bisher die
+    // leere Vorbelegung - niemals eine Ausnahme.
+    const settings = await client.query<AppSettingsRow>(
+      `select default_customer_id, default_on_call_number_id
+         from public.app_settings
+        where id = 1`,
+    );
+    const defaults = settings.rows[0] ?? {
+      default_customer_id: null,
+      default_on_call_number_id: null,
+    };
+
+    return {
+      customers: customers.rows.map((c) => ({ id: c.id, name: c.name })),
+      stages: stages.rows.map((s) => ({
         id: s.id,
         label: s.code ? `${s.code} – ${s.name}` : s.name,
         default_on_call_number_id: s.default_on_call_number_id,
       })),
-    vzgLines: vzg
-      .filter((v) => v.is_active)
-      .map((v) => ({ id: v.id, line_number: v.line_number, construction_stage_id: v.construction_stage_id })),
-    onCall,
-    cableTypes: cableTypes.filter((t) => t.is_active).map((t) => ({ id: t.id, code: t.code, name: t.name })),
-    contacts: contacts
-      .filter((c) => c.is_active)
-      .map((c) => ({
-        id: c.id,
-        customer_id: c.customer_id,
-        name: c.name,
-        function: c.function,
-        phones: c.phones.map((p) => ({ id: p.id, phone: p.phone, phone_type: p.phone_type })),
+      vzgLines: vzg.rows.map((v) => ({
+        id: v.id,
+        line_number: v.line_number,
+        construction_stage_id: v.construction_stage_id,
       })),
-    defaults: { customer_id: settings.default_customer_id, on_call_number_id: settings.default_on_call_number_id },
-  };
+      onCall: onCall.rows.map((o) => ({
+        id: o.id,
+        label: o.label ? `${o.number} – ${o.label}` : o.number,
+      })),
+      cableTypes: cableTypes.rows.map((t) => ({ id: t.id, code: t.code, name: t.name })),
+      contacts: contacts.rows.map((row) => row.contact),
+      defaults: {
+        customer_id: defaults.default_customer_id,
+        on_call_number_id: defaults.default_on_call_number_id,
+      },
+    };
+  });
 }
 
 // =====================================================================
@@ -351,88 +581,253 @@ const SORT_COLUMN: Record<IncidentListSortField, string> = {
   updated_at: "updated_at",
 };
 
+// Allow-List der Sortierrichtung: nur diese beiden festen Zeichenketten
+// können in den SQL-Text gelangen.
+const SORT_DIRECTION = { asc: "asc", desc: "desc" } as const;
+
+// Aktivitätsfilter „aktiv": diese Status sind ausgeschlossen.
+const CLOSED_STATUS = ["abgeschlossen", "storniert"] as const;
+
 function escapeLike(term: string): string {
   return term.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
 }
 
-function sortOrders(sort: IncidentListSort): [string, boolean][] {
-  return [
-    ...sort.map((s) => [SORT_COLUMN[s.field], s.dir === "asc"] as [string, boolean]),
-    // Stabile Standard-/Tiebreaker-Sortierung
-    ["updated_at", false],
-    ["incident_no", false],
-  ];
+/**
+ * Bindet einen Wert und liefert AUSSCHLIESSLICH dessen Platzhalter ($1, $2, …).
+ *
+ * Damit bleibt der zusammengesetzte SQL-Text frei von Eingabewerten: in den
+ * Text gelangt nur die Nummer des Platzhalters, der Wert ausschliesslich in die
+ * Werteliste.
+ */
+function bind(values: unknown[], value: unknown): string {
+  values.push(value);
+  return `$${values.length}`;
 }
 
+/**
+ * Kennungsfilter, der nur kanonische UUIDs zulaesst.
+ *
+ * Die Filterwerte kommen aus der Adresszeile und sind dort nicht auf UUIDs
+ * geprueft. Ein unbrauchbarer Wert wird als NULL gebunden: der Vergleich ist
+ * dann niemals wahr und die Liste bleibt leer - genau das bisherige Ergebnis,
+ * nur ohne Ausnahme aus der Typumwandlung.
+ */
+function uuidOrNull(value: string | undefined): string | null {
+  return isUuid(value) ? value : null;
+}
+
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * True fuer einen kanonisch geschriebenen, tatsaechlich existierenden Kalendertag.
+ *
+ * Die Datumsfilter stammen aus der Adresszeile bzw. beim Export aus dem vom
+ * Client uebergebenen IncidentListQuery und sind dort nicht geprueft. Die
+ * Musterpruefung allein genuegt nicht: '2026-02-31' passt auf das Muster, wird
+ * von `::date` aber mit 22008 abgewiesen. Der Wert wird deshalb zusaetzlich
+ * zurueckgerechnet - nur ein Tag, der unveraendert wieder herauskommt, gilt.
+ */
+function isIsoDate(value: string | undefined): boolean {
+  if (!value || !ISO_DATE_PATTERN.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
+/**
+ * Sortierklausel aus der Allow-List.
+ *
+ * Ein nicht hinterlegtes Feld wird verworfen; die Richtung stammt aus
+ * SORT_DIRECTION. Es kann kein Wert aus der Anfrage in den SQL-Text gelangen.
+ */
+function orderBy(sort: IncidentListSort): string {
+  const parts: string[] = [];
+  for (const entry of sort) {
+    if (!Object.prototype.hasOwnProperty.call(SORT_COLUMN, entry.field)) continue;
+    const column = SORT_COLUMN[entry.field];
+    parts.push(`r.${column} ${SORT_DIRECTION[entry.dir === "asc" ? "asc" : "desc"]}`);
+  }
+  // Stabile Standard-/Tiebreaker-Sortierung
+  parts.push("r.updated_at desc", "r.incident_no desc");
+  return parts.join(", ");
+}
+
+type IncidentListPageRow = { list_row: IncidentListRow; total_count: number };
+type IncidentListPage = { rows: IncidentListRow[]; total: number };
+
+/**
+ * Eine Seite der Liste samt Gesamtzahl.
+ *
+ * `count(*) over ()` wird nach den Filtern und vor LIMIT/OFFSET ausgewertet und
+ * liefert deshalb die vollständige Treffermenge – aber nur als Spalte AUF einer
+ * zurückgegebenen Zeile. Liefert der OFFSET keine Zeile, gibt es auch keine
+ * Zelle mit der Gesamtzahl; der Normalfall kostet dennoch keine zweite
+ * Anweisung. Für genau diesen Randfall zählt fetchList unten nach, damit die
+ * Gesamtzahl unabhängig vom angeforderten Bereich stimmt. `created_date_local`
+ * und `search_text` werden nur gefiltert (in der inneren Abfrage) und bewusst
+ * nicht projiziert.
+ */
 async function fetchList(
-  supabase: Awaited<ReturnType<typeof createClient>>,
+  client: DatabaseClient,
   filters: IncidentListFilters,
   sort: IncidentListSort,
-  from: number,
-  to: number,
-) {
+  offset: number,
+  limit: number,
+): Promise<IncidentListPage> {
   const f = filters;
-  let q = supabase.from("incident_list_view").select(LIST_SELECT, { count: "exact" });
-  if (f.status) q = q.eq("status", f.status);
-  else if (f.activity === "active") q = q.not("status", "in", "(abgeschlossen,storniert)");
-  else if (f.activity === "closed") q = q.eq("status", "abgeschlossen");
-  if (f.priority) q = q.eq("priority", f.priority);
-  if (f.customer_id) q = q.eq("customer_id", f.customer_id);
-  if (f.stage_id) q = q.eq("construction_stage_id", f.stage_id);
-  if (f.vzg_line_id) q = q.eq("vzg_line_id", f.vzg_line_id);
-  if (f.on_call_number_id) q = q.eq("on_call_number_id", f.on_call_number_id);
-  if (f.created_by) q = q.eq("created_by", f.created_by);
-  if (f.monteur_id) q = q.contains("monteur_ids", [f.monteur_id]);
-  if (f.images === "with") q = q.gt("image_count", 0);
-  else if (f.images === "without") q = q.eq("image_count", 0);
-  // AP13: „hat offene Aufgabe" wird serverseitig auf der View gefiltert.
-  if (f.hasOpenTask) q = q.eq("has_open_task", true);
-  if (f.date_from) q = q.gte("created_date_local", f.date_from);
-  if (f.date_to) q = q.lte("created_date_local", f.date_to);
-  const term = (f.q ?? "").trim();
-  if (term) q = q.ilike("search_text", `%${escapeLike(term.toLowerCase())}%`);
 
-  const orders = sortOrders(sort);
-  let t = q.order(orders[0][0], { ascending: orders[0][1] });
-  for (let k = 1; k < orders.length; k++) t = t.order(orders[k][0], { ascending: orders[k][1] });
-  return t.range(from, to);
+  // Aufzählungsfilter gegen die bestehenden Allow-Lists prüfen, BEVOR SQL läuft.
+  //
+  // `status` und `priority` werden unten als Aufzählungstyp gebunden; ein Wert
+  // außerhalb der Aufzählung löst dort eine Umwandlungsausnahme (22P02) aus. Die
+  // Werte sind von außen erreichbar: sie stammen aus der Adresszeile bzw. beim
+  // Export aus dem vom Client übergebenen IncidentListQuery und sind dort nicht
+  // gegen die Aufzählung geprüft. Ein unbrauchbarer Wert ergibt deshalb eine
+  // leere Treffermenge statt einer Ausnahme – genau das bisher sichtbare
+  // Verhalten (leere Liste, total = 0), nur ohne Fehlerpfad.
+  if (f.status && !INCIDENT_STATUS.includes(f.status)) return { rows: [], total: 0 };
+  if (f.priority && !PRIORITIES.includes(f.priority)) return { rows: [], total: 0 };
+  // Dieselbe Vorabpruefung fuer die Datumsfilter. Ohne sie brach ein
+  // unbrauchbarer Wert aus der Adresszeile die Umwandlung nach `::date` ab; die
+  // Ausnahme verliess listIncidentsPaged()/listIncidentsForExport() ungefangen
+  // und ergab eine Fehlerseite bzw. eine unbehandelte Server-Action-Ausnahme.
+  // Der abgeloeste Supabase-Pfad lieferte hier `data ?? []`, also eine leere
+  // Liste. Dieses sichtbare Verhalten bleibt damit unveraendert.
+  if (f.date_from && !isIsoDate(f.date_from)) return { rows: [], total: 0 };
+  if (f.date_to && !isIsoDate(f.date_to)) return { rows: [], total: 0 };
+
+  const values: unknown[] = [];
+  const conditions: string[] = [];
+
+  if (f.status) conditions.push(`status = ${bind(values, f.status)}::public.incident_status`);
+  else if (f.activity === "active")
+    conditions.push(`status <> all(${bind(values, [...CLOSED_STATUS])}::public.incident_status[])`);
+  else if (f.activity === "closed")
+    conditions.push(`status = ${bind(values, "abgeschlossen")}::public.incident_status`);
+  if (f.priority) conditions.push(`priority = ${bind(values, f.priority)}::public.incident_priority`);
+  if (f.customer_id) conditions.push(`customer_id = ${bind(values, uuidOrNull(f.customer_id))}::uuid`);
+  if (f.stage_id) conditions.push(`construction_stage_id = ${bind(values, uuidOrNull(f.stage_id))}::uuid`);
+  if (f.vzg_line_id) conditions.push(`vzg_line_id = ${bind(values, uuidOrNull(f.vzg_line_id))}::uuid`);
+  if (f.on_call_number_id)
+    conditions.push(`on_call_number_id = ${bind(values, uuidOrNull(f.on_call_number_id))}::uuid`);
+  if (f.created_by) conditions.push(`created_by = ${bind(values, uuidOrNull(f.created_by))}::uuid`);
+  if (f.monteur_id) conditions.push(`monteur_ids @> array[${bind(values, uuidOrNull(f.monteur_id))}]::uuid[]`);
+  if (f.images === "with") conditions.push("image_count > 0");
+  else if (f.images === "without") conditions.push("image_count = 0");
+  // AP13: „hat offene Aufgabe" wird serverseitig auf der View gefiltert.
+  if (f.hasOpenTask) conditions.push("has_open_task = true");
+  if (f.date_from) conditions.push(`created_date_local >= ${bind(values, f.date_from)}::date`);
+  if (f.date_to) conditions.push(`created_date_local <= ${bind(values, f.date_to)}::date`);
+  const term = (f.q ?? "").trim();
+  if (term) {
+    // escapeLike maskiert mit Backslash. `escape E'\\'` benennt genau dieses
+    // Zeichen und ist von standard_conforming_strings unabhängig.
+    const pattern = `%${escapeLike(term.toLowerCase())}%`;
+    conditions.push(`search_text like ${bind(values, pattern)} escape E'\\\\'`);
+  }
+
+  const where = conditions.length > 0 ? `where ${conditions.join(" and ")}` : "";
+  // Stand der Werteliste VOR limit/offset. Die Zaehlabfrage unten benutzt genau
+  // diese Werte und damit dieselben Platzhalternummern wie `where`; limit und
+  // offset werden erst danach gebunden und gehoeren nicht in die Zaehlung.
+  const filterValues = values.slice();
+  const limitPlaceholder = bind(values, limit);
+  const offsetPlaceholder = bind(values, offset);
+
+  const result = await client.query<IncidentListPageRow>(
+    `select to_json(r) as list_row, (count(*) over ())::int as total_count
+       from (select ${LIST_SELECT} from public.incident_list_view ${where}) r
+      order by ${orderBy(sort)}
+      limit ${limitPlaceholder} offset ${offsetPlaceholder}`,
+    values,
+  );
+  const rows = result.rows.map((row) => row.list_row);
+
+  // `count(*) over ()` allein genuegt nicht: die Gesamtzahl ist eine SPALTE der
+  // Ergebniszeilen. Liegt der OFFSET hinter der Treffermenge, kommt keine Zeile
+  // zurueck und damit auch keine Gesamtzahl - `total` fiele auf 0. Die
+  // Seitennormalisierung in listIncidentsPaged() waere dann genau dann
+  // wirkungslos, wenn sie gebraucht wird (z. B. /vorgaenge?page=99). Nur in
+  // diesem Randfall wird nachgezaehlt; der Normalfall bleibt bei EINER
+  // Anweisung. Die Zaehlung laeuft auf demselben client und damit in derselben
+  // Transaktion wie die Seitenabfrage, sieht also denselben Datenstand.
+  if (rows.length === 0 && offset > 0) {
+    const totalResult = await client.query<{ total_count: number }>(
+      `select count(*)::int as total_count from public.incident_list_view ${where}`,
+      filterValues,
+    );
+    return { rows, total: totalResult.rows[0]?.total_count ?? 0 };
+  }
+
+  return { rows, total: result.rows[0]?.total_count ?? 0 };
 }
 
 export async function listIncidentsPaged(query: IncidentListQuery): Promise<IncidentListResult> {
-  const supabase = await createClient();
   const pageSize = (INCIDENT_PAGE_SIZES as readonly number[]).includes(query.pageSize) ? query.pageSize : 50;
   let page = Math.max(1, Math.trunc(query.page) || 1);
 
-  let from = (page - 1) * pageSize;
-  let res = await fetchList(supabase, query.filters, query.sort, from, from + pageSize - 1);
-  let total = res.count ?? 0;
+  const session = await getSessionProfile();
+  if (!session) return { rows: [], total: 0, page, pageSize };
 
-  // Ungültige Seite auf gültigen Bereich normalisieren.
-  const lastPage = Math.max(1, Math.ceil(total / pageSize));
-  if (total > 0 && page > lastPage) {
-    page = lastPage;
-    from = (page - 1) * pageSize;
-    res = await fetchList(supabase, query.filters, query.sort, from, from + pageSize - 1);
-    total = res.count ?? total;
-  }
+  return withUserTransaction(session.userId, async (client) => {
+    let from = (page - 1) * pageSize;
+    let res = await fetchList(client, query.filters, query.sort, from, pageSize);
+    let total = res.total;
 
-  return { rows: (res.data ?? []) as unknown as IncidentListRow[], total, page, pageSize };
+    // Ungültige Seite auf gültigen Bereich normalisieren.
+    const lastPage = Math.max(1, Math.ceil(total / pageSize));
+    if (total > 0 && page > lastPage) {
+      page = lastPage;
+      from = (page - 1) * pageSize;
+      res = await fetchList(client, query.filters, query.sort, from, pageSize);
+      total = res.total;
+    }
+
+    return { rows: res.rows, total, page, pageSize };
+  });
 }
 
 export async function listIncidentsForExport(
   query: IncidentListQuery,
 ): Promise<{ rows: IncidentListRow[]; total: number; capped: boolean }> {
-  const supabase = await createClient();
-  const res = await fetchList(supabase, query.filters, query.sort, 0, INCIDENT_EXPORT_CAP - 1);
-  const total = res.count ?? 0;
-  return { rows: (res.data ?? []) as unknown as IncidentListRow[], total, capped: total > INCIDENT_EXPORT_CAP };
+  const session = await getSessionProfile();
+  if (!session) return { rows: [], total: 0, capped: false };
+  return withUserTransaction(session.userId, async (client) => {
+    const res = await fetchList(client, query.filters, query.sort, 0, INCIDENT_EXPORT_CAP);
+    return { rows: res.rows, total: res.total, capped: res.total > INCIDENT_EXPORT_CAP };
+  });
+}
+
+/**
+ * Urheberfilter der Vorgangsliste.
+ *
+ * Bewusst OHNE is_active- und ohne Rollenfilter: der Filter soll auch Vorgaenge
+ * inaktiver oder nicht-monteurischer Urheber auffindbar halten. Nicht mit
+ * getMonteure() verwechseln, das `where role = 'monteur' and is_active` traegt.
+ * Die Sichtbarkeit regelt allein profiles_select
+ * (`id = app.current_user_id() or public.is_staff()`).
+ *
+ * Fehlende Sitzung ergibt wie bisher eine leere Auswahl; ein Datenbankfehler
+ * propagiert.
+ */
+async function getCreatorOptions(): Promise<IncidentFormOption[]> {
+  const session = await getSessionProfile();
+  if (!session) return [];
+  return withUserTransaction(session.userId, async (client) => {
+    const result = await client.query<CreatorOptionRow>(
+      `select id, full_name, role::text as role
+         from public.profiles
+        order by full_name asc`,
+    );
+    // Fehlt der Anzeigename, steht wie bisher die rohe Kennung im Label.
+    return result.rows.map((p) => ({ id: p.id, label: `${p.full_name ?? p.id} (${p.role})` }));
+  });
 }
 
 export async function getIncidentListFilterOptions(): Promise<IncidentListFilterOptions> {
   const [opts, monteure, creators] = await Promise.all([
     getIncidentFormOptions(),
     getMonteure(),
-    listProfileOptions(),
+    getCreatorOptions(),
   ]);
   return {
     customers: opts.customers.map((c) => ({ id: c.id, label: c.name })),
@@ -459,39 +854,59 @@ const ASSIGN_MESSAGES: Record<Exclude<AssignMonteurAp13Code, "ok">, string> = {
   invalid_monteur: "Der gewählte Monteur ist nicht aktiv oder hat nicht die Rolle Monteur.",
 };
 
+type IncidentConflictBaseRow = { updated_at: string };
+type ActiveAssignmentRow = { monteur_id: string };
+type AssignResultRow = { code: AssignMonteurAp13Code | null };
+
 export async function assignIncidentMonteur(incidentId: string, monteurId: string): Promise<FormState> {
-  const supabase = await createClient();
+  const session = await getSessionProfile();
+  // Ohne Identität sah die RLS bisher keinen Vorgang; die Meldung bleibt
+  // deshalb dieselbe wie bei einem unbekannten Vorgang.
+  if (!session || !isUuid(incidentId)) return { ok: false, error: ASSIGN_MESSAGES.not_found };
 
-  // Konfliktbasis laden (RLS greift; Monteure sehen fremde Vorgänge nicht).
-  const { data: incident } = await supabase
-    .from("incidents")
-    .select("updated_at")
-    .eq("id", incidentId)
-    .maybeSingle();
-  if (!incident) return { ok: false, error: ASSIGN_MESSAGES.not_found };
+  try {
+    // Konfliktbasis lesen, erwartete Zuweisungsmenge lesen und zuweisen laufen
+    // in EINER Transaktion; der RPC sperrt den Vorgang zusätzlich selbst.
+    const code = await withUserTransaction<AssignMonteurAp13Code>(session.userId, async (client) => {
+      // `updated_at::text` erhält die Mikrosekunden; ein als JS-Date
+      // zurückgegebener Wert würde auf Millisekunden gekürzt und die
+      // Konfliktprüfung des RPC dauerhaft scheitern lassen.
+      const incident = await client.query<IncidentConflictBaseRow>(
+        `select i.updated_at::text as updated_at
+           from public.incidents i
+          where i.id = $1::uuid`,
+        [incidentId],
+      );
+      const base = incident.rows[0];
+      if (!base) return "not_found";
 
-  const { data: assignments } = await supabase
-    .from("incident_assignments")
-    .select("monteur_id")
-    .eq("incident_id", incidentId)
-    .eq("is_active", true);
-  const expectedMonteurIds = ((assignments ?? []) as { monteur_id: string }[])
-    .map((a) => a.monteur_id)
-    .sort();
+      const assignments = await client.query<ActiveAssignmentRow>(
+        `select a.monteur_id
+           from public.incident_assignments a
+          where a.incident_id = $1::uuid and a.is_active`,
+        [incidentId],
+      );
+      const expectedMonteurIds = assignments.rows.map((a) => a.monteur_id).sort();
 
-  const { data, error } = await supabase.rpc("assign_incident_monteur_ap13", {
-    p_incident_id: incidentId,
-    p_monteur_id: monteurId,
-    p_expected_updated_at: (incident as { updated_at: string }).updated_at,
-    p_expected_monteur_ids: expectedMonteurIds,
-  });
-  if (error) {
-    if (/row-level security|permission denied|42501|Nur Staff/i.test(error.message))
+      const assigned = await client.query<AssignResultRow>(
+        `select public.assign_incident_monteur_ap13($1::uuid, $2::uuid, $3::timestamptz, $4::uuid[]) as code`,
+        [incidentId, monteurId, base.updated_at, expectedMonteurIds],
+      );
+      return assigned.rows[0]?.code ?? "conflict";
+    });
+
+    if (code === "ok") return { ok: true, error: null };
+    return { ok: false, error: ASSIGN_MESSAGES[code] ?? "Die Zuweisung ist fehlgeschlagen." };
+  } catch (error) {
+    // Der SQLSTATE macht die Klassifizierung eindeutig: 42501 deckt sowohl die
+    // RLS-Verweigerung als auch die Staff-Prüfung des RPC ab. Die
+    // Datenbankmeldung bleibt serverseitig.
+    if (isPgError(error, PG_INSUFFICIENT_PRIVILEGE))
       return { ok: false, error: "Nur Disposition und Administration dürfen Monteure zuweisen." };
+    console.error(
+      "Monteurzuweisung fehlgeschlagen",
+      error instanceof Error ? error.message : "unbekannter Fehler",
+    );
     return { ok: false, error: "Die Zuweisung ist fehlgeschlagen. Bitte erneut versuchen." };
   }
-
-  const code = (data ?? "conflict") as AssignMonteurAp13Code;
-  if (code === "ok") return { ok: true, error: null };
-  return { ok: false, error: ASSIGN_MESSAGES[code] ?? "Die Zuweisung ist fehlgeschlagen." };
 }

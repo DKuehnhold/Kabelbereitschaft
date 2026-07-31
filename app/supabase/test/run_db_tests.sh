@@ -2,9 +2,10 @@
 # Plattformunabhaengiger Lauf der Datenbankpruefungen (AP14 / A10).
 #
 # Fuehrt zuerst die historische Kette samt AP10-AP13-Smokes aus und danach
-# den endlichen AP14/B-Plattformwechsel (0012/0013 + Smoke 19). Die
-# PowerShell-Fassung bleibt als historischer lokaler AP12/AP13-Nachweis
-# unveraendert.
+# den endlichen AP14/B-Plattformwechsel (Migrationen 0012, 0013 und 0014 sowie
+# die Smokes 19 und 20). run_ap12_local.ps1 bleibt als historischer lokaler
+# AP12/AP13-Nachweis unveraendert; run_ap14b_local.ps1 ist das Windows-
+# Gegenstueck zu dieser Datei.
 #
 # Aufruf:
 #   PGHOST=localhost PGPORT=5432 PGUSER=postgres PGPASSWORD=... ./run_db_tests.sh
@@ -48,7 +49,10 @@ FILES=(
   "${TEST_ROOT}/18_ap13_tasks.sql"
   "${MIGRATIONS}/0012_ap14b_platform_auth.sql"
   "${MIGRATIONS}/0013_ap14b_drop_supabase_compat.sql"
+  "${MIGRATIONS}/0014_ap14b_data_grants.sql"
   "${TEST_ROOT}/19_ap14b_platform.sql"
+  "${TEST_ROOT}/19a_ap14b_grant_reset.sql"
+  "${TEST_ROOT}/20_ap14b_data.sql"
 )
 
 for f in "${FILES[@]}"; do
@@ -62,6 +66,12 @@ cleanup() {
   local code=$?
   echo "Entferne temporaere Testdatenbank ${DB} ..."
   dropdb --if-exists --force "${DB}" || echo "WARNUNG: ${DB} konnte nicht entfernt werden." >&2
+  # Die ueber mktemp angelegte Sammeldatei ist eine Hilfsdatei des Laufs und
+  # bleibt nicht zurueck. ${LOG:-} wegen set -u: das trap steht bereits, bevor
+  # mktemp gelaufen ist.
+  if [[ -n "${LOG:-}" ]]; then
+    rm -f "${LOG}" || echo "WARNUNG: ${LOG} konnte nicht entfernt werden." >&2
+  fi
   exit "${code}"
 }
 

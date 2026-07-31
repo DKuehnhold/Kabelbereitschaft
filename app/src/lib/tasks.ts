@@ -1,4 +1,5 @@
-import { createClient } from "@/lib/supabase/server";
+import { getSessionProfile } from "@/lib/auth";
+import { isUuid, withUserTransaction } from "@/lib/db";
 import type { UserRole } from "@/lib/roles";
 import type { TaskPriority, TaskSource, TaskStatus, TaskType } from "@/lib/status";
 
@@ -10,6 +11,18 @@ import type { TaskPriority, TaskSource, TaskStatus, TaskType } from "@/lib/statu
 //   * Monteure haben KEIN Tabellenrecht und lesen ausschließlich über die
 //     gehärtete SECURITY-DEFINER-RPC get_assigned_incident_tasks.
 // Keine Service-Role, kein zweiter Datenzugriffsweg.
+//
+// AP14/B: die Reads laufen auf PostgreSQL (ADR-011 / 2.5) über
+// withUserTransaction(); die Identität stammt ausschließlich aus der
+// serverseitig geprüften Auth.js-Sitzung. Fehlt sie, wird kein SQL
+// ausgeführt – das Ergebnis ist dasselbe wie bisher (ohne Identität liefert
+// weder die RLS noch die RPC eine Zeile), der Abbruch erfolgt aber schon vor
+// dem Verbindungsaufbau.
+//
+// Die Zeilen werden wie bei den Vorgangs-Reads als JSON projiziert
+// (`to_json`): der Treiber liefert `timestamptz` sonst als JS-Date, was den
+// unten deklarierten Sichtmodellen (ISO-8601-Text) widerspräche. Die
+// JSON-Serialisierung von PostgreSQL erzeugt genau die bisherigen Werte.
 //
 // Wertebereiche und deutsche Bezeichnungen liegen in @/lib/status (rein,
 // damit Client-Komponenten sie ohne Serverimport nutzen können) und werden
@@ -95,24 +108,62 @@ const TASK_SELECT =
   "assignee_profile_id, assignee_team_id, assignee_role, acknowledged_at, acknowledged_by, " +
   "created_at, created_by, updated_at, updated_by";
 
+// Nur feste Bausteine werden zusammengesetzt: TASK_SELECT ist eine
+// Modulkonstante, es gelangt kein Eingabewert in den SQL-Text.
+const LIST_INCIDENT_TASKS_SQL = `
+  select to_json(r) as task
+  from (
+    select ${TASK_SELECT}
+    from public.incident_tasks
+    where incident_id = $1::uuid and status <> 'void'
+  ) r
+  order by r.created_at asc`;
+
+// Die RPC sortiert selbst nach created_at; die Projektion darf diese Ordnung
+// nicht überlagern, weil created_at bewusst nicht zurückgegeben wird.
+const LIST_ASSIGNED_INCIDENT_TASKS_SQL = `
+  select to_json(t) as task
+  from public.get_assigned_incident_tasks($1::uuid) t`;
+
+type IncidentTaskResult = { task: IncidentTask };
+type AssignedIncidentTaskResult = { task: AssignedIncidentTask };
+
 // Staff-Sicht: alle nicht entfallenen Aufgaben eines Vorgangs.
 export async function listIncidentTasks(incidentId: string): Promise<IncidentTask[]> {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("incident_tasks")
-    .select(TASK_SELECT)
-    .eq("incident_id", incidentId)
-    .neq("status", "void")
-    .order("created_at", { ascending: true });
-  return (data ?? []) as unknown as IncidentTask[];
+  const session = await getSessionProfile();
+  // Fail-closed und wie bisher ohne Ausnahme: eine fehlende Sitzung oder eine
+  // unbrauchbare Kennung ergibt eine leere Liste.
+  if (!session || !isUuid(incidentId)) return [];
+  return withUserTransaction(session.userId, async (client) => {
+    const result = await client.query<IncidentTaskResult>(LIST_INCIDENT_TASKS_SQL, [incidentId]);
+    return result.rows.map((row) => row.task);
+  });
 }
 
 // Monteur-Sicht: offene Aufgaben eines zugewiesenen Vorgangs.
 // Die RPC wirft bei fehlender Zuweisung einen Fehler – daraus wird eine
 // leere Liste, damit die Detailseite nicht bricht.
 export async function listAssignedIncidentTasks(incidentId: string): Promise<AssignedIncidentTask[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase.rpc("get_assigned_incident_tasks", { p_incident_id: incidentId });
-  if (error) return [];
-  return (data ?? []) as unknown as AssignedIncidentTask[];
+  const session = await getSessionProfile();
+  if (!session || !isUuid(incidentId)) return [];
+  try {
+    // Abgefangen wird UM den Wrapper herum: withUserTransaction setzt die
+    // Transaktion bei einer Ausnahme zurück und wirft sie weiter. Ein catch
+    // innerhalb des Rückrufs würde die Transaktion stattdessen bestätigen.
+    return await withUserTransaction(session.userId, async (client) => {
+      const result = await client.query<AssignedIncidentTaskResult>(
+        LIST_ASSIGNED_INCIDENT_TASKS_SQL,
+        [incidentId],
+      );
+      return result.rows.map((row) => row.task);
+    });
+  } catch (error) {
+    // Erwartbar bei fehlender Zuweisung (42501). Die Datenbankmeldung bleibt
+    // serverseitig; nach außen bleibt es wie bisher eine leere Liste.
+    console.error(
+      "Aufgaben des zugewiesenen Vorgangs nicht lesbar",
+      error instanceof Error ? error.message : "unbekannter Fehler",
+    );
+    return [];
+  }
 }

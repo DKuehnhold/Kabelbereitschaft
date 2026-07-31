@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { isUuid, withUserTransaction, type DatabaseClient } from "@/lib/db";
 import { getSessionProfile } from "@/lib/auth";
 import {
   INCIDENT_STATUS,
@@ -14,7 +14,18 @@ import {
 import { PRIORITIES, type Priority } from "@/lib/priority";
 import { assignIncidentMonteur } from "@/lib/incidents";
 import type { FormState } from "@/lib/incidents";
-import type { Incident } from "@/lib/database.types";
+
+// AP14/B: Schreibaktionen der Vorgänge auf PostgreSQL (ADR-011 / 2.5).
+//
+// Jede Aktion läuft über withUserTransaction() mit der Identität aus der
+// serverseitig geprüften Auth.js-Sitzung. Mehrschrittige Aktionen
+// (Referenzprüfung + RPC) laufen in EINER Transaktion. `redirect()` wirft
+// intern eine Kontrollausnahme und liegt deshalb ausdrücklich AUSSERHALB der
+// Transaktion – innerhalb würde der Wrapper sie als Fehler behandeln und ein
+// rollback auslösen.
+//
+// Eine Datenbankmeldung wird ausschließlich serverseitig zur Klassifizierung
+// ausgewertet (mapDbError) und gelangt nie in ein Aktionsergebnis.
 
 function str(fd: FormData, key: string): string {
   return String(fd.get(key) ?? "").trim();
@@ -37,6 +48,14 @@ function revalidateAll(id?: string) {
   if (id) revalidatePath(`/vorgaenge/${id}`);
 }
 
+/** Serverseitige Protokollierung ohne Weitergabe der Datenbankmeldung. */
+function logActionFailure(action: string, error: unknown): void {
+  console.error(
+    `${action} fehlgeschlagen`,
+    error instanceof Error ? error.message : "unbekannter Fehler",
+  );
+}
+
 // ---------- AP10-Helfer: serverseitige Referenzprüfung + Fehlerabbildung ----------
 type RefInput = {
   customer_id: string;
@@ -46,25 +65,59 @@ type RefInput = {
   on_call_number_id: string | null;
 };
 
+type ActiveFlagRow = { is_active: boolean };
+type VzgRefRow = { is_active: boolean; construction_stage_id: string };
+type CableTypeRefRow = { id: string; is_active: boolean };
+
+/**
+ * Referenzprüfung der Stammdaten (ADR-011, Regel 10: im Modul selbst, auf
+ * PostgreSQL, ohne zweiten Zugriffsweg).
+ *
+ * Läuft im Client der aufrufenden Transaktion. Eine unbrauchbare Kennung wird
+ * als NULL gebunden; die Abfrage liefert dann keine Zeile und die Prüfung
+ * ergibt wie bisher „nicht gefunden".
+ */
 async function validateRefs(
-  supabase: Awaited<ReturnType<typeof createClient>>,
+  client: DatabaseClient,
   r: RefInput,
   requireActive: boolean,
 ): Promise<string | null> {
-  const [cust, stage, vzg, cables, oncall] = await Promise.all([
-    supabase.from("customers").select("id, is_active").eq("id", r.customer_id).maybeSingle(),
-    supabase.from("construction_stages").select("id, is_active").eq("id", r.construction_stage_id).maybeSingle(),
-    supabase.from("vzg_lines").select("id, is_active, construction_stage_id").eq("id", r.vzg_line_id).maybeSingle(),
-    supabase.from("cable_types").select("id, is_active").in("id", r.cable_type_ids),
-    r.on_call_number_id
-      ? supabase.from("on_call_numbers").select("id, is_active").eq("id", r.on_call_number_id).maybeSingle()
-      : Promise.resolve({ data: null }),
-  ]);
-  const c = cust.data as { is_active: boolean } | null;
-  const s = stage.data as { is_active: boolean } | null;
-  const v = vzg.data as { is_active: boolean; construction_stage_id: string } | null;
-  const cableRows = (cables.data ?? []) as { id: string; is_active: boolean }[];
-  const o = (oncall as { data: { is_active: boolean } | null }).data;
+  const customerId = isUuid(r.customer_id) ? r.customer_id : null;
+  const stageId = isUuid(r.construction_stage_id) ? r.construction_stage_id : null;
+  const vzgLineId = isUuid(r.vzg_line_id) ? r.vzg_line_id : null;
+  const onCallId = isUuid(r.on_call_number_id) ? r.on_call_number_id : null;
+  // Nicht kanonische Kennungen können keine Kabelart treffen; der Vergleich mit
+  // der ursprünglichen Menge unten ergibt dann „nicht gefunden".
+  const cableTypeIds = r.cable_type_ids.filter(isUuid);
+
+  const cust = await client.query<ActiveFlagRow>(
+    `select is_active from public.customers where id = $1::uuid`,
+    [customerId],
+  );
+  const stage = await client.query<ActiveFlagRow>(
+    `select is_active from public.construction_stages where id = $1::uuid`,
+    [stageId],
+  );
+  const vzg = await client.query<VzgRefRow>(
+    `select is_active, construction_stage_id from public.vzg_lines where id = $1::uuid`,
+    [vzgLineId],
+  );
+  const cables = await client.query<CableTypeRefRow>(
+    `select id, is_active from public.cable_types where id = any($1::uuid[])`,
+    [cableTypeIds],
+  );
+  const oncall = r.on_call_number_id
+    ? await client.query<ActiveFlagRow>(
+        `select is_active from public.on_call_numbers where id = $1::uuid`,
+        [onCallId],
+      )
+    : null;
+
+  const c = cust.rows[0] ?? null;
+  const s = stage.rows[0] ?? null;
+  const v = vzg.rows[0] ?? null;
+  const cableRows = cables.rows;
+  const o = oncall?.rows[0] ?? null;
 
   if (!c) return "Kunde nicht gefunden.";
   if (requireActive && !c.is_active) return "Der gewählte Kunde ist inaktiv.";
@@ -140,6 +193,25 @@ function parseCablePositions(fd: FormData): CablePositionInput[] | null {
   }
 }
 
+/**
+ * Kabelpositionen als jsonb-Text für p_cable_positions.
+ *
+ * Die Neuanlage übergibt ausschließlich die vier fachlichen Felder; die
+ * Bearbeitung führt zusätzlich die bestehende Positions-Kennung, weil
+ * update_incident_ap12() daran Bestand von Neuanlage unterscheidet.
+ */
+function cablePositionsJson(rows: CablePositionInput[], keepId: boolean): string {
+  return JSON.stringify(
+    rows.map((p) => ({
+      ...(keepId && p.id ? { id: p.id } : {}),
+      cable_type_id: p.cable_type_id,
+      quantity_value: p.quantity_value,
+      quantity_unit: p.quantity_unit,
+      condition_code: p.condition_code,
+    })),
+  );
+}
+
 function validatePositionValues(rows: CablePositionInput[], isCreate: boolean): string | null {
   for (const row of rows) {
     const complete = row.quantity_value !== null && row.quantity_unit !== null && row.condition_code !== null;
@@ -165,6 +237,10 @@ function missingRequired(f: ReturnType<typeof readIncidentFields>): string[] {
     .map(([l]) => l);
 }
 
+/** Ergebnis einer Schreibtransaktion: Erfolg (mit Kennung) oder Fachmeldung. */
+type WriteOutcome = { id: string } | { error: string };
+type CreatedIdRow = { id: string | null };
+
 // ---------- Vorgang anlegen (Disposition/Admin) – Stammdatenbasiert ----------
 export async function createIncident(_prev: FormState, fd: FormData): Promise<FormState> {
   const session = await getSessionProfile();
@@ -181,46 +257,66 @@ export async function createIncident(_prev: FormState, fd: FormData): Promise<Fo
   if (positionError) return { ok: false, error: positionError };
   if (!PRIORITIES.includes(f.priority)) return { ok: false, error: "Ungültige Priorität." };
 
-  const supabase = await createClient();
-  const refErr = await validateRefs(
-    supabase,
-    {
-      customer_id: f.customer_id!,
-      construction_stage_id: f.construction_stage_id!,
-      vzg_line_id: f.vzg_line_id!,
-      cable_type_ids: positions!.map((p) => p.cable_type_id),
-      on_call_number_id: f.on_call_number_id,
-    },
-    true, // Neuanlage: nur aktive Stammdaten
-  );
-  if (refErr) return { ok: false, error: refErr };
+  let outcome: WriteOutcome;
+  try {
+    // Referenzprüfung und RPC in EINER Transaktion.
+    outcome = await withUserTransaction<WriteOutcome>(session.userId, async (client) => {
+      const refErr = await validateRefs(
+        client,
+        {
+          customer_id: f.customer_id!,
+          construction_stage_id: f.construction_stage_id!,
+          vzg_line_id: f.vzg_line_id!,
+          cable_type_ids: positions!.map((p) => p.cable_type_id),
+          on_call_number_id: f.on_call_number_id,
+        },
+        true, // Neuanlage: nur aktive Stammdaten
+      );
+      if (refErr) return { error: refErr };
 
-  const { data, error } = await supabase.rpc("create_incident_ap12", {
-    p_customer_id: f.customer_id!,
-    p_construction_stage_id: f.construction_stage_id!,
-    p_vzg_line_id: f.vzg_line_id!,
-    p_on_call_number_id: f.on_call_number_id,
-    p_priority: f.priority,
-    p_description: f.description!,
-    p_operating_point: strOrNull(fd, "operating_point"),
-    p_track: strOrNull(fd, "track"),
-    p_direction: strOrNull(fd, "direction"),
-    p_object_type: strOrNull(fd, "object_type"),
-    p_object_designation: strOrNull(fd, "object_designation"),
-    p_location_description: strOrNull(fd, "location_description"),
-    p_external_reference: strOrNull(fd, "external_reference"),
-    p_km_from: num(fd, "km_from"),
-    p_km_to: num(fd, "km_to"),
-    p_caller_name: strOrNull(fd, "caller_name"),
-    p_caller_contact: strOrNull(fd, "caller_contact"),
-    p_internal_note: strOrNull(fd, "internal_note"),
-    p_contact_id: f.contact_id,
-    p_contact_phone_number_id: f.contact_phone_number_id,
-    p_cable_positions: positions!,
-  });
-  if (error || !data) return { ok: false, error: mapDbError(error?.message) };
+      const created = await client.query<CreatedIdRow>(
+        `select public.create_incident_ap12(
+                  $1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::public.incident_priority,
+                  $6, $7, $8, $9, $10, $11, $12, $13,
+                  $14::numeric, $15::numeric, $16, $17, $18,
+                  $19::uuid, $20::uuid, $21::jsonb
+                ) as id`,
+        [
+          f.customer_id!,
+          f.construction_stage_id!,
+          f.vzg_line_id!,
+          f.on_call_number_id,
+          f.priority,
+          f.description!,
+          strOrNull(fd, "operating_point"),
+          strOrNull(fd, "track"),
+          strOrNull(fd, "direction"),
+          strOrNull(fd, "object_type"),
+          strOrNull(fd, "object_designation"),
+          strOrNull(fd, "location_description"),
+          strOrNull(fd, "external_reference"),
+          num(fd, "km_from"),
+          num(fd, "km_to"),
+          strOrNull(fd, "caller_name"),
+          strOrNull(fd, "caller_contact"),
+          strOrNull(fd, "internal_note"),
+          f.contact_id,
+          f.contact_phone_number_id,
+          cablePositionsJson(positions!, false),
+        ],
+      );
+      const id = created.rows[0]?.id ?? null;
+      if (!id) return { error: mapDbError() };
+      return { id };
+    });
+  } catch (error) {
+    return { ok: false, error: mapDbError(error instanceof Error ? error.message : undefined) };
+  }
+  if ("error" in outcome) return { ok: false, error: outcome.error };
+
   revalidateAll();
-  redirect(`/vorgaenge/${data}`);
+  // Außerhalb der Transaktion: redirect() wirft eine Kontrollausnahme.
+  redirect(`/vorgaenge/${outcome.id}`);
 }
 
 // ---------- Vorgang bearbeiten (Disposition/Admin) – Stammdatenbasiert ----------
@@ -242,48 +338,65 @@ export async function updateIncident(_prev: FormState, fd: FormData): Promise<Fo
   if (positionError) return { ok: false, error: positionError };
   if (!PRIORITIES.includes(f.priority)) return { ok: false, error: "Ungültige Priorität." };
 
-  const supabase = await createClient();
-  // Bearbeitung: bereits gespeicherte, ggf. inaktive Referenzen zulassen (Bestand),
-  // aber Existenz und VzG-Zugehörigkeit zum Bauabschnitt weiterhin prüfen.
-  const refErr = await validateRefs(
-    supabase,
-    {
-      customer_id: f.customer_id!,
-      construction_stage_id: f.construction_stage_id!,
-      vzg_line_id: f.vzg_line_id!,
-      cable_type_ids: positions!.map((p) => p.cable_type_id),
-      on_call_number_id: f.on_call_number_id,
-    },
-    false,
-  );
-  if (refErr) return { ok: false, error: refErr };
+  let outcome: WriteOutcome;
+  try {
+    outcome = await withUserTransaction<WriteOutcome>(session.userId, async (client) => {
+      // Bearbeitung: bereits gespeicherte, ggf. inaktive Referenzen zulassen (Bestand),
+      // aber Existenz und VzG-Zugehörigkeit zum Bauabschnitt weiterhin prüfen.
+      const refErr = await validateRefs(
+        client,
+        {
+          customer_id: f.customer_id!,
+          construction_stage_id: f.construction_stage_id!,
+          vzg_line_id: f.vzg_line_id!,
+          cable_type_ids: positions!.map((p) => p.cable_type_id),
+          on_call_number_id: f.on_call_number_id,
+        },
+        false,
+      );
+      if (refErr) return { error: refErr };
 
-  const { error } = await supabase.rpc("update_incident_ap12", {
-    p_id: id,
-    p_customer_id: f.customer_id!,
-    p_construction_stage_id: f.construction_stage_id!,
-    p_vzg_line_id: f.vzg_line_id!,
-    p_on_call_number_id: f.on_call_number_id,
-    p_priority: f.priority,
-    p_description: f.description!,
-    p_operating_point: strOrNull(fd, "operating_point"),
-    p_track: strOrNull(fd, "track"),
-    p_direction: strOrNull(fd, "direction"),
-    p_object_type: strOrNull(fd, "object_type"),
-    p_object_designation: strOrNull(fd, "object_designation"),
-    p_location_description: strOrNull(fd, "location_description"),
-    p_external_reference: strOrNull(fd, "external_reference"),
-    p_km_from: num(fd, "km_from"),
-    p_km_to: num(fd, "km_to"),
-    p_caller_name: strOrNull(fd, "caller_name"),
-    p_caller_contact: strOrNull(fd, "caller_contact"),
-    p_internal_note: strOrNull(fd, "internal_note"),
-    p_contact_id: f.contact_id,
-    p_contact_phone_number_id: f.contact_phone_number_id,
-    p_cable_positions: positions!,
-  });
-  if (error) return { ok: false, error: mapDbError(error.message) };
+      await client.query(
+        `select public.update_incident_ap12(
+                  $1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::uuid,
+                  $6::public.incident_priority, $7, $8, $9, $10, $11, $12, $13, $14,
+                  $15::numeric, $16::numeric, $17, $18, $19,
+                  $20::uuid, $21::uuid, $22::jsonb
+                )`,
+        [
+          id,
+          f.customer_id!,
+          f.construction_stage_id!,
+          f.vzg_line_id!,
+          f.on_call_number_id,
+          f.priority,
+          f.description!,
+          strOrNull(fd, "operating_point"),
+          strOrNull(fd, "track"),
+          strOrNull(fd, "direction"),
+          strOrNull(fd, "object_type"),
+          strOrNull(fd, "object_designation"),
+          strOrNull(fd, "location_description"),
+          strOrNull(fd, "external_reference"),
+          num(fd, "km_from"),
+          num(fd, "km_to"),
+          strOrNull(fd, "caller_name"),
+          strOrNull(fd, "caller_contact"),
+          strOrNull(fd, "internal_note"),
+          f.contact_id,
+          f.contact_phone_number_id,
+          cablePositionsJson(positions!, true),
+        ],
+      );
+      return { id };
+    });
+  } catch (error) {
+    return { ok: false, error: mapDbError(error instanceof Error ? error.message : undefined) };
+  }
+  if ("error" in outcome) return { ok: false, error: outcome.error };
+
   revalidateAll(id);
+  // Außerhalb der Transaktion: redirect() wirft eine Kontrollausnahme.
   redirect(`/vorgaenge/${id}`);
 }
 
@@ -298,16 +411,36 @@ export async function changeStatus(fd: FormData): Promise<void> {
   const isStaff = session.role === "admin" || session.role === "disponent";
   if (!isStaff && !MONTEUR_STATUS.includes(status)) return; // DB-Trigger sichert zusätzlich ab
 
-  const patch: Partial<Incident> = { status };
+  // Feste Spalten-Allow-List: nur die hier im Quelltext stehenden Spaltennamen
+  // gelangen in die SET-Liste, alle Werte ausschließlich als Parameter.
+  const values: unknown[] = [status];
+  const setClauses = ["status = $1::public.incident_status"];
   if (isStaff && (status === "abgeschlossen" || status === "durch_disposition_geprueft")) {
-    patch.closed_at = new Date().toISOString();
-    patch.closed_by = session.userId;
+    values.push(new Date().toISOString());
+    setClauses.push(`closed_at = $${values.length}::timestamptz`);
+    values.push(session.userId);
+    setClauses.push(`closed_by = $${values.length}::uuid`);
     const note = strOrNull(fd, "closing_note");
-    if (note) patch.closing_note = note;
+    if (note) {
+      values.push(note);
+      setClauses.push(`closing_note = $${values.length}`);
+    }
   }
+  values.push(id);
+  const idPlaceholder = `$${values.length}`;
 
-  const supabase = await createClient();
-  await supabase.from("incidents").update(patch).eq("id", id);
+  try {
+    await withUserTransaction(session.userId, (client) =>
+      client.query(
+        `update public.incidents set ${setClauses.join(", ")} where id = ${idPlaceholder}::uuid`,
+        values,
+      ),
+    );
+  } catch (error) {
+    // Wie bisher bleibt ein Fehlschlag nach außen unsichtbar; die
+    // Datenbankmeldung bleibt serverseitig.
+    logActionFailure("Statuswechsel", error);
+  }
   revalidateAll(id);
 }
 
@@ -318,8 +451,18 @@ export async function updateCondition(fd: FormData): Promise<void> {
   const id = str(fd, "id");
   const rating = str(fd, "condition_rating") as ConditionRating;
   if (!id || !CONDITION_RATING.includes(rating)) return;
-  const supabase = await createClient();
-  await supabase.from("incidents").update({ condition_rating: rating }).eq("id", id);
+  try {
+    await withUserTransaction(session.userId, (client) =>
+      client.query(
+        `update public.incidents
+            set condition_rating = $1::public.condition_rating
+          where id = $2::uuid`,
+        [rating, id],
+      ),
+    );
+  } catch (error) {
+    logActionFailure("Zustandsbewertung", error);
+  }
   revalidateAll(id);
 }
 
@@ -349,11 +492,18 @@ export async function deactivateAssignment(fd: FormData): Promise<void> {
   const assignment_id = str(fd, "assignment_id");
   const id = str(fd, "id");
   if (!assignment_id) return;
-  const supabase = await createClient();
-  await supabase
-    .from("incident_assignments")
-    .update({ is_active: false, unassigned_at: new Date().toISOString() })
-    .eq("id", assignment_id);
+  try {
+    await withUserTransaction(session.userId, (client) =>
+      client.query(
+        `update public.incident_assignments
+            set is_active = false, unassigned_at = $1::timestamptz
+          where id = $2::uuid`,
+        [new Date().toISOString(), assignment_id],
+      ),
+    );
+  } catch (error) {
+    logActionFailure("Beenden der Zuweisung", error);
+  }
   revalidateAll(id);
 }
 
@@ -364,9 +514,16 @@ export async function addNote(fd: FormData): Promise<void> {
   const id = str(fd, "id");
   const body = str(fd, "body");
   if (!id || !body) return;
-  const supabase = await createClient();
-  await supabase
-    .from("incident_notes")
-    .insert({ incident_id: id, body, note_type: strOrNull(fd, "note_type") ?? "allgemein" });
+  try {
+    await withUserTransaction(session.userId, (client) =>
+      client.query(
+        `insert into public.incident_notes (incident_id, body, note_type)
+         values ($1::uuid, $2, $3)`,
+        [id, body, strOrNull(fd, "note_type") ?? "allgemein"],
+      ),
+    );
+  } catch (error) {
+    logActionFailure("Notiz speichern", error);
+  }
   revalidateAll(id);
 }

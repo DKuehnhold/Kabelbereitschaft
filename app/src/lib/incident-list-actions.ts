@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { withUserTransaction } from "@/lib/db";
 import { getSessionProfile } from "@/lib/auth";
 import { listIncidentsForExport } from "@/lib/incidents";
 import {
@@ -72,6 +72,11 @@ export async function exportIncidentList(
 // AP13: Massenaktionen über die Bulk-RPCs (SECURITY INVOKER, ein äußerer
 // Aufruf mit abgefangener Subtransaktion je Eintrag). Guards, Audit und
 // Statuschronik greifen unverändert über die bestehenden Trigger.
+//
+// AP14/B: Aufruf über withUserTransaction() mit der Identität aus der
+// serverseitig geprüften Sitzung. Die Datenbankmeldung wird ausschließlich
+// serverseitig zur Klassifizierung ausgewertet (mapBulkError) und gelangt nie
+// in ein Aktionsergebnis.
 // =====================================================================
 function mapBulkError(message?: string): string {
   if (!message) return "Die Massenaktion ist fehlgeschlagen.";
@@ -123,14 +128,25 @@ export async function bulkUpdateIncidentStatus(
     expected_updated_at: i.expected_updated_at,
   }));
 
-  const supabase = await createClient();
-  const { data, error } = await supabase.rpc("bulk_update_incident_status_ap13", {
-    p_items: payload,
-    p_new_status: newStatus,
-  });
-  if (error) return { ok: 0, failed: [], error: mapBulkError(error.message) };
+  let rows: IncidentBulkActionResult[];
+  try {
+    rows = await withUserTransaction(session.userId, async (client) => {
+      const res = await client.query<IncidentBulkActionResult>(
+        `select incident_id, ok, code
+           from public.bulk_update_incident_status_ap13($1::jsonb, $2::public.incident_status)`,
+        [JSON.stringify(payload), newStatus],
+      );
+      return res.rows;
+    });
+  } catch (error) {
+    return {
+      ok: 0,
+      failed: [],
+      error: mapBulkError(error instanceof Error ? error.message : undefined),
+    };
+  }
 
-  const result = summarize((data ?? []) as IncidentBulkActionResult[]);
+  const result = summarize(rows);
   if (result.ok > 0) revalidateLists();
   return result;
 }
@@ -154,14 +170,25 @@ export async function bulkAssignIncidentMonteur(
     expected_monteur_ids: (i.expected_monteur_ids ?? []).slice().sort(),
   }));
 
-  const supabase = await createClient();
-  const { data, error } = await supabase.rpc("bulk_assign_incident_monteur_ap13", {
-    p_items: payload,
-    p_monteur_id: monteurId,
-  });
-  if (error) return { ok: 0, failed: [], error: mapBulkError(error.message) };
+  let rows: IncidentBulkActionResult[];
+  try {
+    rows = await withUserTransaction(session.userId, async (client) => {
+      const res = await client.query<IncidentBulkActionResult>(
+        `select incident_id, ok, code
+           from public.bulk_assign_incident_monteur_ap13($1::jsonb, $2::uuid)`,
+        [JSON.stringify(payload), monteurId],
+      );
+      return res.rows;
+    });
+  } catch (error) {
+    return {
+      ok: 0,
+      failed: [],
+      error: mapBulkError(error instanceof Error ? error.message : undefined),
+    };
+  }
 
-  const result = summarize((data ?? []) as IncidentBulkActionResult[]);
+  const result = summarize(rows);
   if (result.ok > 0) revalidateLists();
   return result;
 }
