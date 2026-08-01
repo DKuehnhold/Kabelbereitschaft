@@ -8,17 +8,24 @@
 
 > **Aktueller Stand (2026-08-01).** Zielplattform bleibt ADR-011: PostgreSQL 18, Auth.js v5, MinIO
 > und Containerbetrieb hinter dem internen Reverse-Proxy; Supabase ist kein Ziel. Bestätigter
-> Repository-Stand ist `main` = `origin/main` = `79d88449f9e481b1148f902e175f46f9d07ef35d`
-> (`feat: migrate masterdata and inventory to PostgreSQL`) — ein Fast-Forward von
-> `cb8bb888280b5509ae2c273789183767e3b7b4db` mit genau einem Commit Abstand, also ohne
-> Merge-Commit und ohne Force-Push; der lokale und der remote Feature-Branch
-> `feat/ap14b-data-masterdata-inventory` stehen auf demselben Commit. Der frühere Stand
-> `22db6dad8958146be4de667a55e89ba170e73b7c` ist ein Vorfahre und damit überholt. Die Datenpfade
-> für Vorgänge, Aufgaben und Offline-Sync sowie für Stammdaten und Inventar sind auf PostgreSQL 18
-> migriert und gemergt. Die weiter unten mit „2026-07-28“ datierten AP14/B-Angaben beschreiben den
-> Stand jenes Tages, sind in diesen Merges enthalten und behalten ihre historischen Prüfnachweise
-> unverändert. Nächster nicht-visueller Arbeitsblock ist die Ablösung der verbliebenen
-> Supabase-Datenpfade in Bildern und Uploads mit dem MinIO-Bildspeicher. V1 bleibt
+> Technischer Referenzstand vor diesem Dokumentationsabschluss ist
+> `cbe17b3c1bf9118ae3b36ef85353cce46aa7d8c9`
+> (`fix(ci): verify MinIO private anonymous state`) über dem fachlichen Commit
+> `edfafb482f6d4d95e69bd99e9b28c54ef7d92a87` (`feat: migrate incident images to MinIO`);
+> Pull Request #5 ist geschlossen und gemergt. Die früheren Stände
+> `79d88449f9e481b1148f902e175f46f9d07ef35d` und `22db6dad8958146be4de667a55e89ba170e73b7c` sind
+> Vorfahren und damit überholt. Die Datenpfade für Vorgänge, Aufgaben und Offline-Sync, für
+> Stammdaten und Inventar sowie für Bilder und Uploads sind auf PostgreSQL 18 und den privaten
+> MinIO-Objektspeicher migriert und gemergt; der echte MinIO-Nachweis liegt mit dem CI-Job
+> `objectstore` vor (PR-Lauf `30691249168`, main-Lauf `30692250157`, Container-Image
+> `30692250154`, je `completed/success`). Die weiter unten mit „2026-07-28“ datierten
+> AP14/B-Angaben beschreiben den Stand jenes Tages, sind in diesen Merges enthalten und behalten
+> ihre historischen Prüfnachweise unverändert. **AP14 insgesamt bleibt offen:** echte IT-Adressen
+> und die Same-Origin-Route am internen Reverse-Proxy, produktiver Betrieb und Deployment, die
+> vollständige `@app`-/Offline-Abnahme und die CSP-Auswertung sind nicht erbracht. Nächster
+> nicht-visueller Arbeitsblock ist die administrative Benutzerverwaltung nach ADR-011 (Reset mit
+> temporärem Passwort und `must_change_password`, Deaktivierung, Rollenwechsel, jeweils mit
+> Sitzungswiderruf und Audit). V1 bleibt
 > Produktionssperre, Branding bleibt separat, GUI-/Designarbeit wartet auf Dennis.
 
 ## Repository
@@ -58,13 +65,15 @@
   gemäß ADR-011 auf PostgreSQL/RLS umgestellt und mit Commit `6b9d8dd` gemergt (siehe Abschnitt
   „AP14/B – Datenpfade"). **Stand 2026-08-01:** ebenso sind Stammdaten und Inventar umgestellt und
   mit Commit `79d8844` gemergt (siehe Abschnitt „AP14/B – Datenpfade Stammdaten und Inventar").
-  **Offen bleibt aus AP14/B nur noch die Ablösung von Bildern und Uploads** (mit dem
-  MinIO-Bildspeicher).
+  **Ebenfalls 2026-08-01:** auch Bilder und Uploads sind auf den MinIO-Objektspeicher umgestellt und
+  mit Commit `edfafb4` gemergt (siehe Abschnitt „AP14/B – Bilder und Uploads auf MinIO"); damit
+  sind die AP14/B-Datenpfade technisch abgeschlossen.
   Kein Deployment; IT-Zielparameter fehlen noch. AP14 insgesamt ist nicht abgeschlossen:
-  Browser-/Offline-Abnahme, CSP-Durchsetzung, MinIO sowie Betrieb und Deployment stehen aus.
+  echte IT-Adressen und Same-Origin-Reverse-Proxy, produktiver Betrieb und Deployment, die
+  vollständige `@app`-/Offline-Abnahme sowie die CSP-Auswertung stehen aus.
 - **AP14/B – Auth-Basis:** implementiert, lokal vollständig verifiziert und inzwischen auf `main`
   gemergt, Stand `22db6dad8958146be4de667a55e89ba170e73b7c` (2026-07-30; inzwischen Vorfahre des
-  aktuellen Stands `79d8844`). Auth.js v5 mit
+  aktuellen Stands `cbe17b3`). Auth.js v5 mit
   Credentials-Provider, Argon2id, transaktionslokaler Benutzer-ID, serverseitig
   widerrufbaren `auth_sessions`,
   kurzen verschlüsselten JWTs (nur `sub`/`sid`) und Next-16-`proxy.ts` statt der
@@ -103,11 +112,13 @@
   PostgreSQL-Cluster mit 16 erfolgreichen Prüfungen (alle 13 geschützten Seiten und alle 3
   geschützten APIs gesperrt). Temporäres Cluster, temporärer Server und Hilfsdateien wurden
   entfernt; der vorhandene Dienst blieb unangetastet.
-  **Offen (Stand 2026-08-01):** Rechtematrix der Fachtabellen für Bilder und Uploads — für
-  Vorgänge, Aufgaben und Offline-Sync ist sie mit Migration `0014_ap14b_data_grants.sql` und für
-  Stammdaten und Inventar mit `0015_ap14b_masterdata_inventory_grants.sql` geliefert;
-  MinIO-Bildspeicher; administrative Benutzerverwaltung (Reset, Deaktivierung, Rollenwechsel) als
-  eigenes Arbeitspaket.
+  **Stand 2026-08-01:** die Rechtematrix der Fachtabellen ist vollständig geliefert — für
+  Vorgänge, Aufgaben und Offline-Sync mit Migration `0014_ap14b_data_grants.sql`, für
+  Stammdaten und Inventar mit `0015_ap14b_masterdata_inventory_grants.sql` und für Bilder und
+  Uploads mit `0016_ap14b_image_grants.sql`; der MinIO-Bildspeicher ist umgesetzt und gemergt.
+  **Offen bleibt** die administrative Benutzerverwaltung nach ADR-011 (Reset mit temporärem
+  Passwort und `must_change_password`, Deaktivierung, Rollenwechsel, jeweils mit Sitzungswiderruf
+  und Audit) als eigenes Arbeitspaket.
   Einzelheiten: `PROJEKT_WISSEN.md`, Abschnitt „AP14/B — Auth-Basis".
 
 ## Git / Push (VERALTET — siehe „Aktueller Stand 2026-07-26" am Dateiende)
@@ -229,7 +240,8 @@ Details: `04-UI-UX/GUI.md`, `04-UI-UX/DESIGNSYSTEM.md`.
 - **Status: technisch abgeschlossen und gemergt.** Commit
   `6b9d8dd7b4b937b3a2cb055b509557ed17313430` (`feat: migrate incident and task data paths to
   PostgreSQL`), 18 Dateien, +4422/-583. Dieser Commit war am 2026-07-31 die Spitze von `main`;
-  aktueller Stand ist seit dem 2026-08-01 `79d8844` (folgender Abschnitt).
+  danach folgten am 2026-08-01 `79d8844` (folgender Abschnitt) und `edfafb4`/`cbe17b3` für Bilder
+  und Uploads. Aktueller Stand ist `cbe17b3`.
 - Umgestellt sind die Datenpfade für Vorgänge, Aufgaben und Offline-Sync (u. a. `incidents.ts`,
   `incident-actions.ts`, `incident-list-actions.ts`, `tasks.ts`, `task-actions.ts`,
   `db/pg-errors.ts`, `/api/sync`, `/api/incidents/[id]/meta`), Migration
@@ -257,17 +269,20 @@ Details: `04-UI-UX/GUI.md`, `04-UI-UX/DESIGNSYSTEM.md`.
 - Offen bleiben außerdem die Rechtematrix für Bilder und Uploads, der MinIO-Bildspeicher, die
   administrative Benutzerverwaltung (Reset, Deaktivierung, Rollenwechsel), AP15 und V1 als
   Produktionssperre.
+- **Nachtrag 2026-08-01:** Rechtematrix und MinIO-Bildspeicher sind mit Commit `edfafb4` geliefert
+  und gemergt; siehe Abschnitt „AP14/B – Bilder und Uploads auf MinIO (2026-08-01)".
 - Einzelheiten: `PROJEKT_WISSEN.md` (Abschnitt „AP14/B — Datenpfade Vorgänge, Aufgaben,
   Offline-Sync") und `00-Projektsteuerung/ROADMAP_AP12_AP15_ENTWURF.md` (B.4, Version 1.17).
 
 ## AP14/B – Datenpfade Stammdaten und Inventar (2026-08-01)
 
-- **Status: technisch abgeschlossen und gemergt.** `main` = `origin/main` =
+- **Status: technisch abgeschlossen und gemergt.** Commit
   `79d88449f9e481b1148f902e175f46f9d07ef35d` (`feat: migrate masterdata and inventory to
   PostgreSQL`), 14 Dateien, +6021/-478; Fast-Forward von
   `cb8bb888280b5509ae2c273789183767e3b7b4db` mit genau einem Commit Abstand, ohne Merge-Commit und
-  ohne Force-Push. Der lokale und der remote Feature-Branch
-  `feat/ap14b-data-masterdata-inventory` stehen auf demselben Commit.
+  ohne Force-Push. Zum damaligen Zeitpunkt standen `main`, `origin/main` sowie der lokale und der
+  remote Feature-Branch `feat/ap14b-data-masterdata-inventory` auf demselben Commit; `main` steht
+  inzwischen auf `cbe17b3`.
 - Umgestellt sind `lib/masterdata.ts`, `masterdata-actions.ts`, `inventory.ts` und
   `inventory-actions.ts` — in allen vier Dateien null Supabase-Importe und null
   `supabase.`-Zugriffe. Neu sind Migration `0015_ap14b_masterdata_inventory_grants.sql`, der Smoke
@@ -319,5 +334,41 @@ Details: `04-UI-UX/GUI.md`, `04-UI-UX/DESIGNSYSTEM.md`.
   Betrieb/Deployment); **RC1 ist nicht abgeschlossen**, es gibt **kein** Tag, **kein** Release und
   keine V1-Freigabe. Branding bleibt separat auf `feat/ap8.1-branding` (`04253a2`, ungemergt),
   GUI-/Designarbeit wartet auf Dennis.
+  **Nachtrag 2026-08-01:** diese Grenze ist mit Commit `edfafb4` aufgehoben — Bilder und Uploads
+  laufen über MinIO, die Supabase-Clientdateien und beide Pakete sind entfernt, CSP/`connect-src`
+  nennen Supabase nicht mehr; siehe folgenden Abschnitt.
 - Einzelheiten: `PROJEKT_WISSEN.md` (Abschnitt „AP14/B — Datenpfade Stammdaten und Inventar") und
   `00-Projektsteuerung/ROADMAP_AP12_AP15_ENTWURF.md` (B.4, Version 1.18).
+
+## AP14/B – Bilder und Uploads auf MinIO (2026-08-01)
+
+- **Status: technisch abgeschlossen und gemergt.** Fachlicher Commit
+  `edfafb482f6d4d95e69bd99e9b28c54ef7d92a87` (`feat: migrate incident images to MinIO`),
+  CI-Korrektur `cbe17b3c1bf9118ae3b36ef85353cce46aa7d8c9`
+  (`fix(ci): verify MinIO private anonymous state`); `main` = `origin/main` = `cbe17b3`.
+  Pull Request #5 ist geschlossen und gemergt. Arbeitsbaum sauber.
+- Umgestellt sind Bilder und Uploads auf PostgreSQL 18 mit RLS und einen privaten
+  MinIO-/S3-Objektspeicher; die Supabase-Clientdateien und die Pakete `@supabase/ssr` und
+  `@supabase/supabase-js` sind entfernt, CSP/`connect-src` nennen Supabase nicht mehr. Neu sind
+  die Rechtematrix `0016_ap14b_image_grants.sql` mit spaltenbezogenem `update`, der Smoke
+  `22_ap14b_images.sql` und der CI-Job `objectstore`.
+- **Echter MinIO-Nachweis erbracht:** PR-CI-Lauf `30691249168` mit `verify`, `database`,
+  `container` und `objectstore` je `completed/success`; `objectstore` läuft gegen einen echten
+  MinIO-Container. Abschließende main-Läufe: CI `30692250157` mit allen vier Jobs
+  `completed/success` und Container-Image `30692250154` `completed/success`.
+- **Unabhängig durch Codex erhoben:** TypeScript, ESLint, 67 Einheitentests, Produktions-Build und
+  21 `@public` Browser-/a11y-Tests; PostgreSQL 18 mit den Migrationen `0001`–`0016`, 103 Smokes
+  ohne Fehler sowie die Integrationssuiten 30/30, 31/31 und 37/37; das temporäre Cluster wurde
+  vollständig entfernt.
+- **Grenze:** die Bucket- und Identitätsprovisionierung ist ein verbindlicher, dokumentierter
+  Schritt der internen IT (`deploy/README.md`); ohne sie startet die Anwendung, aber jeder Upload
+  scheitert zur Laufzeit. **AP14 insgesamt bleibt offen:** echte IT-Adressen und die
+  Same-Origin-Route am internen Reverse-Proxy, produktiver Betrieb und Deployment, die
+  vollständige `@app`-/Offline-Abnahme sowie die CSP-Auswertung sind nicht erbracht. **RC1 ist
+  nicht abgeschlossen**, es gibt **kein** Tag, **kein** Release und keine V1-Freigabe.
+- **Nächstes nicht-visuelles Paket:** administrative Benutzerverwaltung nach ADR-011 — Reset mit
+  temporärem Passwort und `must_change_password`, Deaktivierung und Rollenwechsel, jeweils mit
+  Widerruf aller Sitzungen des Kontos und Auditeintrag (ADR-011 §2.2 und §2.3). **GUI-/Designarbeit
+  wartet weiter auf Dennis.**
+- Einzelheiten: `PROJEKT_WISSEN.md` (Abschnitt „AP14/B — Bilder und Uploads auf MinIO") und
+  `00-Projektsteuerung/ROADMAP_AP12_AP15_ENTWURF.md` (B.4, Version 1.19).
