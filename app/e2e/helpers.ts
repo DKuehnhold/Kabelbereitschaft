@@ -1,11 +1,13 @@
 import { type Page, expect } from "@playwright/test";
 
-// App-Tests (mit Login/Daten) benötigen eine Test-Supabase-Instanz und Testbenutzer.
+// App-Tests (mit Login/Daten) benötigen eine Testdatenbank der internen Plattform
+// (DATABASE_URL, AUTH_SECRET – siehe src/lib/platform-config.ts) und Testbenutzer.
 // Ohne diese Umgebungsvariablen werden die @app-Tests übersprungen (nicht als bestanden gewertet).
 export const hasAppEnv = Boolean(
   process.env.E2E_ADMIN_EMAIL &&
     process.env.E2E_ADMIN_PASSWORD &&
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.DATABASE_URL &&
+    process.env.AUTH_SECRET,
 );
 
 export type TestUser = { email: string; password: string };

@@ -5,19 +5,27 @@ import type { NextConfig } from "next";
 // - Content-Security-Policy wird zunächst als Report-Only ausgeliefert, damit sie
 //   nichts unbemerkt bricht; sie ist im Browser zu verifizieren und danach auf die
 //   durchsetzende Variante (Content-Security-Policy) umzustellen. Siehe SICHERHEIT.md.
-const supabase = "https://*.supabase.co";
+//
+// Es ist bewusst KEINE zusätzliche Herkunft und keine Wildcard eingetragen, auch
+// nicht für den Objektspeicher: die signierten Bild-URLs liegen nach der
+// festgelegten Same-Origin-Proxygrenze unter demselben Origin wie die Anwendung
+// (AUTH_URL). Der interne Reverse-Proxy routet den Bucket-Pfad auf den privaten
+// MinIO-Dienst; bei Path-Style beginnt der Pfad einer signierten URL mit dem
+// Bucketnamen. Diese Grenze wird zur Laufzeit fail-closed erzwungen - der
+// Origin-Vergleich von S3_PUBLIC_BASE_URL gegen AUTH_URL steht in
+// src/lib/minio-config.ts (readMinioConfig). Damit genügt img-src 'self'.
 const cspReportOnly = [
   "default-src 'self'",
   "base-uri 'self'",
   "form-action 'self'",
   "frame-ancestors 'none'",
   "object-src 'none'",
-  `img-src 'self' data: blob: ${supabase}`,
+  "img-src 'self' data: blob:",
   "media-src 'self' blob:",
   "font-src 'self' data:",
   "style-src 'self' 'unsafe-inline'",
   "script-src 'self' 'unsafe-inline'",
-  `connect-src 'self' ${supabase} wss://*.supabase.co`,
+  "connect-src 'self'",
   "worker-src 'self'",
   "manifest-src 'self'",
 ].join("; ");

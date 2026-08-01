@@ -25,3 +25,12 @@ services:
           memory: 1g
         reservations:
           memory: 256m
+
+  minio:
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1g
+        reservations:
+          memory: 256m

@@ -5,23 +5,35 @@
 // Platzhalterwerte, keine Ausgabe von Werten.
 //
 // Es werden ausschliesslich NAMEN geprueft und protokolliert - niemals Werte.
-// Der Anon-Key ist kein Geheimnis im kryptografischen Sinn, wird aber
-// dennoch nicht ins Log geschrieben.
+// Das gilt auch fuer Angaben, die kein Geheimnis im kryptografischen Sinn sind:
+// Endpunkte, Bucketnamen und Kennungen bleiben ebenso aus dem Log.
 //
-// Stand Arbeitspaket B / Auth-Basis: Authentifizierung und Sitzungen laufen
-// gegen PostgreSQL (DATABASE_URL) mit Auth.js (AUTH_SECRET). Die noch nicht
-// migrierten Datenmodule (Vorgaenge, Material, Bilder) nutzen weiterhin
-// Supabase; deshalb sind derzeit BEIDE Gruppen Pflicht. Die Supabase-Variablen
-// entfallen mit dem Abschluss der Datenmigration (ADR-011 / 4).
-//
-// Die MinIO-Zugangsdaten sind noch nicht Pflicht: der Bildspeicher wird in
-// einem eigenen Arbeitspaket umgestellt.
+// Stand nach Abschluss der Datenmigration (ADR-011 / 4): Anwendung, Anmeldung
+// und Sitzungen laufen vollstaendig gegen PostgreSQL (DATABASE_URL) mit Auth.js
+// (AUTH_SECRET). Der Bildspeicher liegt im internen Objektspeicher (MinIO/S3);
+// dessen Pflichtnamen sind mit MINIO_REQUIRED_ENV_KEYS in
+// src/lib/minio-config.ts deckungsgleich zu halten. Supabase ist abgeloest und
+// wird von keinem Modul mehr benutzt.
 
 const REQUIRED = [
   "DATABASE_URL",
   "AUTH_SECRET",
-  "NEXT_PUBLIC_SUPABASE_URL",
-  "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+  // AUTH_URL ist im CONTAINERBETRIEB Pflicht, obwohl die Anwendung sie sonst als
+  // optional behandelt. Grund: readMinioConfig() in src/lib/minio-config.ts
+  // erzwingt die Same-Origin-Proxygrenze - S3_PUBLIC_BASE_URL muss denselben
+  // Origin haben wie AUTH_URL - aber NUR, wenn AUTH_URL gesetzt ist. Bliebe sie
+  // hier optional, entfiele diese Zusicherung im Betrieb still, und der Browser
+  // koennte Bild-URLs von einem fremden Origin erhalten. Die Pflicht gilt
+  // bewusst nur an dieser Startgrenze und nicht in MINIO_REQUIRED_ENV_KEYS:
+  // lokale Entwicklung und die synthetischen Tests laufen ohne AUTH_URL.
+  "AUTH_URL",
+  // Objektspeicher, Reihenfolge und Schreibweise wie MINIO_REQUIRED_ENV_KEYS
+  // in src/lib/minio-config.ts.
+  "S3_ENDPOINT",
+  "S3_PUBLIC_BASE_URL",
+  "S3_BUCKET",
+  "S3_ACCESS_KEY_ID",
+  "S3_SECRET_ACCESS_KEY",
 ];
 
 const OPTIONAL_WITH_DEFAULT = [
@@ -31,9 +43,21 @@ const OPTIONAL_WITH_DEFAULT = [
 ];
 
 // Variablen, die in dieser Anwendung ausdruecklich NICHT gesetzt werden
-// duerfen. Ein Service-Role-Key wird von der Webanwendung nicht verwendet
-// (ADR-011 / SICHERHEIT.md); sein Vorhandensein ist ein Konfigurationsfehler.
-const FORBIDDEN = ["SUPABASE_SERVICE_ROLE_KEY"];
+// duerfen.
+//
+// - SUPABASE_SERVICE_ROLE_KEY: ein Service-Role-Key wird von der Webanwendung
+//   nicht verwendet (ADR-011 / SICHERHEIT.md).
+// - NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY: nach der
+//   Abloesung darf keine Supabase-Laufzeitvariable mehr gesetzt sein. Eine noch
+//   vorhandene Altvariable ist ein Konfigurationsfehler und soll den Start
+//   verweigern, statt still ignoriert zu werden. Zusaetzlich sind
+//   NEXT_PUBLIC_*-Werte buildzeitgebunden: eine zur Laufzeit gesetzte
+//   Altvariable wuerde einen falschen Eindruck von Wirksamkeit erzeugen.
+const FORBIDDEN = [
+  "SUPABASE_SERVICE_ROLE_KEY",
+  "NEXT_PUBLIC_SUPABASE_URL",
+  "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+];
 
 const missing = REQUIRED.filter((name) => {
   const value = process.env[name];
@@ -59,7 +83,7 @@ if (missing.length > 0 || forbidden.length > 0) {
     lines.push("Unzulaessig gesetzte Variablen (bitte entfernen):");
     for (const name of forbidden) lines.push(`  - ${name}`);
     lines.push("");
-    lines.push("Die Webanwendung verwendet keinen Service-Role-Key.");
+    lines.push("Diese Variablen werden von der Webanwendung nicht verwendet.");
   }
   lines.push("");
   process.stderr.write(lines.join("\n") + "\n");

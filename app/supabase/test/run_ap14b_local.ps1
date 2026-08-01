@@ -170,7 +170,16 @@ $files = @(
   # public.inventory_movements und kein insert auf public.customers besitzt -
   # genau diese Rechte erteilt 0015. Liefe 0015 vorher, wuerde D18 scheitern.
   (Join-Path $migrationRoot "0015_ap14b_masterdata_inventory_grants.sql"),
-  (Join-Path $testRoot "21_ap14b_masterdata_inventory.sql")
+  (Join-Path $testRoot "21_ap14b_masterdata_inventory.sql"),
+  # 0016 und 22 stehen aus demselben Grund HINTER 20_ap14b_data.sql: dessen Fall
+  # D14 prueft ausdruecklich negativ, dass app_user kein delete auf
+  # public.sync_actions besitzt (20_ap14b_data.sql:699). 0016 erteilt dieses
+  # Recht nicht - die Negativpruefung bleibt also gueltig. Die Reihenfolge wird
+  # trotzdem eingehalten: jede Rechtematrix steht unmittelbar vor ihrem Smoke,
+  # die Kette bleibt lesbar, und ein spaeter ergaenztes Recht kann keine
+  # bestehende Negativprobe still entwerten.
+  (Join-Path $migrationRoot "0016_ap14b_image_grants.sql"),
+  (Join-Path $testRoot "22_ap14b_images.sql")
 )
 foreach ($file in $files) {
   if (-not (Test-Path -LiteralPath $file)) { throw "Testdatei fehlt: $file" }
@@ -182,8 +191,15 @@ $moduleHooks = Join-Path $appRoot "test\integration\module-hooks.mjs"
 # Hooks-Datei (siehe module-hooks-app.mjs). module-hooks.mjs bleibt unveraendert.
 $masterdataIntegrationTest = Join-Path $appRoot "test\integration\ap14b-masterdata-inventory.int.mjs"
 $moduleHooksApp = Join-Path $appRoot "test\integration\module-hooks-app.mjs"
+# Dritter Integrationslauf: der Bildpfad. Er benutzt dieselbe Hooks-Datei wie der
+# Stammdatenlauf und zusaetzlich einen synthetischen S3-kompatiblen
+# Testendpunkt (s3-test-endpoint.mjs, im Arbeitsspeicher, freier Port vom
+# Betriebssystem). Das ist AUSDRUECKLICH KEIN MinIO und kein MinIO-Nachweis.
+$imagesIntegrationTest = Join-Path $appRoot "test\integration\ap14b-images.int.mjs"
+$s3TestEndpoint = Join-Path $appRoot "test\integration\s3-test-endpoint.mjs"
 if (-not $SkipIntegrationTests) {
-  foreach ($file in @($integrationTest, $moduleHooks, $masterdataIntegrationTest, $moduleHooksApp)) {
+  foreach ($file in @($integrationTest, $moduleHooks, $masterdataIntegrationTest, $moduleHooksApp,
+      $imagesIntegrationTest, $s3TestEndpoint)) {
     if (-not (Test-Path -LiteralPath $file)) { throw "Testdatei fehlt: $file" }
   }
   if (-not (Test-Path -LiteralPath $NodeExe)) {
@@ -793,16 +809,23 @@ try {
   }
 
   Write-Host ""
-  Write-Host "--- AP14/B-Pruefungen aus 19_ap14b_platform.sql, 19a_ap14b_grant_reset.sql, 20_ap14b_data.sql und 21_ap14b_masterdata_inventory.sql ---"
+  Write-Host "--- AP14/B-Pruefungen aus 19_ap14b_platform.sql, 19a_ap14b_grant_reset.sql, 20_ap14b_data.sql, 21_ap14b_masterdata_inventory.sql und 22_ap14b_images.sql ---"
   # Die Ueberschrift nennt Smoke 21 ausdruecklich mit. Er benutzt aber eigene
   # Fallpraefixe (M fuer Stammdaten, N fuer Inventar) und wuerde vom bisherigen
   # Muster "SMOKE [PRD]\d+" nicht erfasst - der Auszug waere irrefuehrend, weil
   # er eine Datei ankuendigt, aus der keine Zeile erscheint. Deshalb die zweite
-  # Bedingung.
+  # Bedingung. Fuer Smoke 22 gilt dasselbe: er benutzt B (fachliche Faelle der
+  # Bilddokumentation) und G (Rechte- und Negativfaelle) und braucht deshalb eine
+  # eigene, dritte Bedingung.
   $allOutput |
     Where-Object {
       ($_ -match "(19_ap14b_platform|19a_ap14b_grant_reset|20_ap14b_data)" -and $_ -match "SMOKE [PRD]\d+") -or
-      ($_ -match "21_ap14b_masterdata_inventory" -and $_ -match "SMOKE [MN]\d+")
+      ($_ -match "21_ap14b_masterdata_inventory" -and $_ -match "SMOKE [MN]\d+") -or
+      # Die Abschlusszeile von Smoke 22 heisst "SMOKE BG-ENDE" und erfuellt
+      # "SMOKE [BG]\d+" nicht (auf BG folgt ein Bindestrich, keine Ziffer). Ohne
+      # die dritte Alternative liefe der Smoke sichtbar bis G5 und seine
+      # Abschlussbestaetigung fehlte im Konsolenauszug - ein stiller Nachweisverlust.
+      ($_ -match "22_ap14b_images" -and $_ -match "SMOKE (B\d+|G\d+|BG-ENDE)")
     } |
     ForEach-Object { Write-Host (($_ -split "NOTICE:\s+")[-1]) }
 
@@ -884,6 +907,35 @@ grant connect on database "$database" to "$appRole";
     if ($masterdataRun.ExitCode -ne 0) {
       throw ("Integrationstests der Stammdaten- und Inventarmodule fehlgeschlagen (Exit {0})." -f
         $masterdataRun.ExitCode)
+    }
+
+    Write-Host ""
+    Write-Host "Fuehre Integrationstests des Bildpfades aus ..."
+    # Dritter, gleichartiger Aufruf mit derselben Auswertung. Er benutzt dieselbe
+    # Hooks-Datei wie der Stammdatenlauf (module-hooks-app.mjs) und startet den
+    # synthetischen S3-kompatiblen Testendpunkt IM TESTPROZESS: er lauscht auf
+    # 127.0.0.1 und einem vom Betriebssystem zugewiesenen freien Port, haelt die
+    # Objekte ausschliesslich im Arbeitsspeicher und wird am Ende des Laufs
+    # geschlossen. Es bleibt kein Prozess, kein Port und kein Verzeichnis zurueck.
+    # DAS IST KEIN MinIO UND KEIN MinIO-NACHWEIS (Begruendung und Abgrenzung im
+    # Kopf von test/integration/s3-test-endpoint.mjs).
+    try {
+      $env:AP14B_APP_DATABASE_URL = $appUrl
+      $env:AP14B_ADMIN_DATABASE_URL = $adminUrl
+      $imagesRun = Invoke-HandleSafeProcess -FilePath $NodeExe -Label "integration_images" `
+        -TimeoutSeconds 900 -WorkingDirectory $appRoot `
+        -Arguments @("--disable-warning=MODULE_TYPELESS_PACKAGE_JSON",
+          "--import", "./test/integration/module-hooks-app.mjs",
+          "./test/integration/ap14b-images.int.mjs")
+    }
+    finally {
+      Remove-Item Env:\AP14B_APP_DATABASE_URL -ErrorAction SilentlyContinue
+      Remove-Item Env:\AP14B_ADMIN_DATABASE_URL -ErrorAction SilentlyContinue
+    }
+    $imagesRun.Output | ForEach-Object { Write-Host $_ }
+    if ($imagesRun.ExitCode -ne 0) {
+      throw ("Integrationstests des Bildpfades fehlgeschlagen (Exit {0})." -f
+        $imagesRun.ExitCode)
     }
   }
 

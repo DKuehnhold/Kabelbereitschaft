@@ -13,9 +13,11 @@
 > verifiziert. Die weiter unten mit „(2026-07-28, nicht committet)“ gekennzeichneten
 > AP14/B-Abschnitte beschreiben den Stand jenes Tages, sind in diesen Merges enthalten und behalten
 > ihre historischen Prüfnachweise unverändert. Die Datenpfade für **Stammdaten und Inventar** sind
-> ebenfalls auf PostgreSQL umgestellt und mit `79d8844` auf `main` **gemergt**. Nächster
-> nicht-visueller Arbeitsblock ist die Ablösung der verbliebenen Supabase-Datenpfade in **Bildern
-> und Uploads** mit dem MinIO-Bildspeicher. V1 bleibt
+> ebenfalls auf PostgreSQL umgestellt und mit `79d8844` auf `main` **gemergt**. **Bilder und
+> Uploads** sind auf PostgreSQL 18 und einen privaten MinIO-/S3-Objektspeicher umgestellt; dieser
+> Stand liegt als **nicht committeter** Arbeitsstand auf `feat/ap14b-images-minio` und ist lokal
+> verifiziert — ein Lauf gegen ein echtes MinIO und die Browser-Abnahme stehen aus (siehe
+> „AP14/B — Bilder und Uploads auf MinIO“). V1 bleibt
 > Produktionssperre, Branding bleibt separat, GUI-/Designarbeit wartet auf Dennis.
 
 ## Projektziel
@@ -47,7 +49,7 @@ CSV-Export, Offlinebetrieb mit Synchronisation und Konfliktbehandlung.
 - **Sicherheitsheader (AP7):** harte Header durchsetzend; CSP zunächst Report-Only.
 - **Release:** Semantic Versioning; erster RC `v1.0.0-rc.1`; **Tag/Release nur mit Nutzerfreigabe**.
 - **Migrationen:** additiv/idempotent; aktuell `0001`–`0015` (Stand 2026-08-01). Sie liegen
-  vollständig auf `main`.
+  vollständig auf `main`. `0016_ap14b_image_grants.sql` liegt als nicht committeter Arbeitsstand vor.
 - **Zielplattform (ADR-011):** keine Supabase-Cloud und kein selbst gehostetes Supabase.
   Ziel sind interne PostgreSQL-18-Dienste, Auth.js v5 mit serverseitigem Sitzungswiderruf,
   MinIO für Bildobjekte sowie Containerbetrieb hinter dem Unternehmens-Reverse-Proxy.
@@ -70,7 +72,8 @@ grün:
 **Noch offen (Präzisierung 2026-08-01):** Arbeitspaket B löst die verbleibenden
 Supabase-Abhängigkeiten schrittweise ab. Auth-Basis, Vorgänge, Aufgaben und Offline-Sync sowie
 Stammdaten und Inventar sind abgelöst und gemergt (siehe „AP14/B — Datenpfade …“). Bilder und
-Uploads laufen weiterhin über Supabase.
+Uploads sind auf dem **nicht committeten** Arbeitsstand `feat/ap14b-images-minio` ebenfalls
+abgelöst (siehe „AP14/B — Bilder und Uploads auf MinIO“).
 Serveradresse, DNS, Ressourcen, Netzwerkdetails und Betriebszugänge liefert die interne IT.
 Bis dahin kein Deployment. V1 bleibt Produktionssperre; kein produktiver Datenanfall.
 
@@ -123,7 +126,10 @@ Kein Commit, kein Push, kein Merge, kein Tag.
   der Supabase-Anmeldepfad in `login/actions.ts`, der Supabase-Abmeldepfad in
   `auth/signout/route.ts` und `supabase.auth.getUser()` in `lib/auth.ts`. Die Datenmodule
   bleiben unverändert auf Supabase (eigene Folgeaufträge); deshalb sind derzeit **beide**
-  Variablengruppen Laufzeitpflicht.
+  Variablengruppen Laufzeitpflicht. **Nachtrag 2026-08-01:** überholt — auf dem nicht committeten
+  Arbeitsstand `feat/ap14b-images-minio` verlangt die Startprüfung `DATABASE_URL`, `AUTH_SECRET`,
+  `AUTH_URL` und die fünf S3-Pflichtnamen und verweigert den Start, wenn eine der drei
+  Supabase-Variablen gesetzt ist.
 
 ### Prüfergebnisse (tatsächlich erhoben, 2026-07-28)
 
@@ -304,8 +310,12 @@ und Schaltflächen unverändert von der bestehenden Anmeldeseite.
   Datenmodule, hier ist nur das Mindestrecht auf `profiles` enthalten. **Nachtrag 2026-07-31:**
   für Vorgänge, Aufgaben und Offline-Sync mit Migration `0014_ap14b_data_grants.sql` und für
   Stammdaten und Inventar mit Migration `0015_ap14b_masterdata_inventory_grants.sql` geliefert;
-  offen bleibt sie nur noch für Bilder und Uploads.
+  offen bleibt sie nur noch für Bilder und Uploads. **Nachtrag 2026-08-01:** für Bilder und Uploads
+  mit der nicht committeten Migration `0016_ap14b_image_grants.sql` geliefert.
 - CSP und `connect-src` nennen weiterhin Supabase, weil Bilder und Uploads noch dorthin sprechen.
+  **Nachtrag 2026-08-01:** auf dem nicht committeten Arbeitsstand `feat/ap14b-images-minio` findet
+  die Supabase-Restsuche keine produktive Nennung mehr; die CSP bleibt bei `img-src 'self'` ohne
+  Wildcard und ohne fremde Herkunft und wird weiterhin nur als Report-Only ausgeliefert.
 - `@app`-E2E weiterhin offen: sie brauchen den vollständigen Stack einschließlich MinIO.
 
 ## AP14/B — Datenpfade Vorgänge, Aufgaben, Offline-Sync (2026-07-31, gemergt)
@@ -348,7 +358,8 @@ PostgreSQL`), 18 Dateien, +4422/-583. **Kein Tag, kein Release, keine V1-Freigab
   `lib/supabase/server.ts`, `lib/supabase/client.ts`, `database.types.ts`); Stammdaten und
   Inventar sind Gegenstand des folgenden, inzwischen gemergten Abschnitts. AP14 insgesamt ist
   **nicht** abgeschlossen: Browser-/Offline-Abnahme, CSP-Durchsetzung, MinIO sowie Betrieb und
-  Deployment bleiben offen.
+  Deployment bleiben offen. **Nachtrag 2026-08-01:** diese Grenze ist mit dem nicht committeten
+  Arbeitsstand `feat/ap14b-images-minio` aufgehoben (siehe „AP14/B — Bilder und Uploads auf MinIO“).
 
 ## AP14/B — Datenpfade Stammdaten und Inventar (2026-08-01, gemergt)
 
@@ -549,7 +560,125 @@ Feature-Branch `feat/ap14b-data-masterdata-inventory` stehen auf demselben Commi
   diesem Paket **nicht** ausgeführt: der Diff berührt keine Route und keine Laufzeitabhängigkeit der
   `@public`-Tests. AP14 insgesamt bleibt offen (Browser-/Offline-Abnahme, CSP-Durchsetzung, MinIO,
   Betrieb und Deployment), V1 bleibt Produktionssperre, Branding bleibt separat, GUI-/Designarbeit
-  wartet auf Dennis.
+  wartet auf Dennis. **Nachtrag 2026-08-01:** diese Grenze ist mit dem nicht committeten
+  Arbeitsstand `feat/ap14b-images-minio` aufgehoben — Clientdateien und Pakete sind dort entfernt,
+  `lib/database.types.ts` bleibt (siehe folgender Abschnitt).
+
+## AP14/B — Bilder und Uploads auf MinIO (2026-08-01, nicht committet)
+
+**Status:** implementiert und lokal verifiziert auf `feat/ap14b-images-minio`; als Arbeitspaket
+bleibt **AP14/B Bilder und MinIO offen**, bis ein Lauf gegen ein echtes MinIO grün belegt ist.
+**Kein Commit, kein Push, kein Merge, kein Tag, keine Freigabe.** Die unten genannten Ergebnisse hat
+Claude am jetzigen Endstand selbst erhoben.
+
+- **Umfang:** Bilder und Uploads laufen auf PostgreSQL 18 mit RLS und einem privaten
+  MinIO-/S3-Objektspeicher über AWS SDK v3 mit Path-Style. Damit ist Supabase auch im letzten
+  Datenpfad abgelöst. Neu sind die server-only Module `app/src/lib/minio-config.ts` und
+  `app/src/lib/minio-storage.ts`; der Objektspeicherzugriff gibt weder Client noch Konfiguration,
+  Bucket oder Endpunkt heraus.
+- **Konfigurationsprüfung:** `S3_PUBLIC_BASE_URL` ist eine eigene Pflichtvariable **ohne** Rückfall
+  auf `S3_ENDPOINT`. Endpunkt und öffentliche Signierbasis werden als absolute http(s)-URL ohne
+  Benutzerinfo, Query und Fragment geprüft; außerhalb von Loopback dürfen sie nicht denselben
+  Origin haben; ist `AUTH_URL` gesetzt, muss die Signierbasis denselben Origin haben wie sie. Jede
+  Ablehnung nennt ausschließlich Variablennamen, nie Werte.
+- **Same-Origin-Proxygrenze:** die signierten Bild-URLs liegen unter dem Origin der Anwendung, der
+  interne Reverse-Proxy routet den Bucket-Pfad auf den privaten MinIO-Dienst. Deshalb bleibt die
+  CSP bei `img-src 'self'` und enthält **keine** Wildcard und keine fremde Herkunft. Die Route
+  selbst ist eine noch **offene Anforderung an die interne IT**; es gibt keine echte Adresse.
+- **Idempotenz fail-closed:** eine nicht kanonische, nicht leere `client_action_id` wird abgewiesen,
+  **bevor** ein Objekt geschrieben oder die Datenbank berührt wird. Eine fehlende oder leere Kennung
+  bleibt zulässig und läuft ohne Deduplizierung.
+- **Rechtematrix (`0016_ap14b_image_grants.sql`):** genau drei Rechteanweisungen —
+  `revoke update on public.incident_images from app_user;`,
+  `grant insert on public.incident_images to app_user;` und
+  `grant update (category, description, deleted_at, deleted_by) on public.incident_images to app_user;`.
+  `update` ist damit spaltengenau auf die vier vom Produkt benötigten Spalten begrenzt; das
+  vorangestellte `revoke` nimmt ausschließlich das Tabellenrecht zurück, das frühere Fassungen
+  **dieser** Datei selbst erteilt hatten — kein Recht aus `0001`–`0015` wird angetastet. Weiterhin
+  kein Recht an `public`, `anon` oder `authenticated`. **Warum spaltengenau:** die Policy `images_update` begrenzt keine Spalte;
+  tabellenweites `update` hätte es einer berechtigten Identität erlaubt, `storage_path` einer
+  Bildzeile auf den Objektschlüssel eines fremden Bildes zu setzen, und die Galerie signiert diesen
+  Wert unverändert. Die Spaltenbegrenzung schließt diesen UPDATE-Weg; Smoke 22 belegt das mit
+  echten, abgewiesenen UPDATE-Versuchen (Fälle G6 bis G12). **Offen bleibt der INSERT-Weg:**
+  `insert` gilt weiterhin tabellenweit und damit auch auf `storage_path`. Per Rechtevergabe lässt
+  sich dieser Weg nicht schließen, weil der Uploadpfad die Spalte schreiben muss; die Schranke dort
+  ist eine **Anwendungsschranke** — die Anwendung berechnet den Objektschlüssel selbst und übernimmt
+  ihn nie aus Eingabedaten — und damit schwächer als ein Datenbankrecht.
+- **Objektlebenszyklus:** Soft-Delete entfernt kein Objekt. Presigned GET ist kurzlebig; einen
+  presigned PUT im Browser gibt es nicht.
+- **Supabase-Restbestand entfernt:** die drei Clientdateien unter `app/src/lib/supabase/` sind
+  gelöscht, die Pakete `@supabase/ssr` und `@supabase/supabase-js` sind aus `package.json` und der
+  Lockdatei entfernt. `app/src/lib/database.types.ts` **bleibt**: sie hat weiterhin drei echte
+  Konsumenten für Hilfstypen.
+- **Startprüfung des Containers:** verlangt jetzt `DATABASE_URL`, `AUTH_SECRET`, `AUTH_URL` und die
+  fünf S3-Pflichtnamen und verweigert den Start, wenn `SUPABASE_SERVICE_ROLE_KEY`,
+  `NEXT_PUBLIC_SUPABASE_URL` oder `NEXT_PUBLIC_SUPABASE_ANON_KEY` gesetzt sind.
+- **`deploy/compose.yml`:** ein privater `minio`-Dienst ohne Host-Port mit eigenem Volume,
+  Healthcheck und interner Netzgrenze; die Webanwendung erhält **keine** MinIO-Root-Zugangsdaten.
+  Einen Bootstrap-Dienst `minio-init` gibt es **nicht mehr** — er ist aus allen drei Compose-Dateien
+  entfernt, weil `mc alias set` und `mc admin user add` Zugangsdaten als Prozessargumente übergaben
+  und eine geheimnisfreie Variante in diesem Vault nicht nachweisbar war (keine Containerlaufzeit,
+  kein `mc`, kein WSL — jeweils mit Exit-Code belegt). Bucket, Policy und Anwendungsidentität sind
+  stattdessen ein verbindlicher, dokumentierter IT-Provisionierungsschritt vor dem ersten Start
+  (`deploy/README.md`) mit ausdrücklicher Verifikationspflicht; die Least-Privilege-Policy bleibt
+  als versionierte Datei `deploy/minio/incident-images-app.policy.json` prüfbar — genau
+  `s3:GetObject`, `s3:PutObject` und `s3:DeleteObject` auf genau `arn:aws:s3:::incident-images/*`.
+  **Das ist ein Rückschritt:** ohne die IT-Provisionierung startet die Anwendung gesund und jeder
+  Bildupload scheitert erst zur Laufzeit — die Anwendung legt selbst keinen Bucket an und prüft
+  seine Existenz beim Start nicht. Früher fiel das beim Start auf.
+
+### Prüfergebnisse (von Claude selbst erhoben, 2026-08-01)
+
+- TypeScript `tsc --noEmit`: Exit 0. ESLint: Exit 0, **154** Dateien geprüft, 0 Fehler, 0 Warnungen;
+  die neue Datei `app/test/integration/ap14b-minio-live.int.mjs` ist von ESLint erfasst.
+- Einheitentests: Exit 0, **67 Tests**, 67 bestanden, 0 fehlgeschlagen.
+- Next.js-Produktions-Build: Exit 0, 33 Routen. `npm audit --omit=dev --audit-level=high`: Exit 0,
+  `found 0 vulnerabilities`. `git diff --check`: Exit 0.
+- Vollständiger lokaler PostgreSQL-18-Lauf gegen ein temporäres Cluster, Prozess-Exitcode 0:
+  Bootstrap 01–03, Migrationen `0001`–`0016` und Smokes 15–22; **103** `SMOKE … OK`, **0** `FAIL`,
+  0 Zeilen mit `ERROR`/`FATAL`/`PANIC`/`WARNING`; Abschlusszeile
+  `ERGEBNIS: AP10/AP11/AP12/AP13/AP14B DATENBANKTESTS ERFOLGREICH.` Dieser Lauf wurde nach der
+  letzten Änderung wiederholt und war deckungsgleich.
+- Drei Integrationssuiten in demselben Lauf: 30/30, 31/31 und **37/37** für den Bildpfad,
+  je 0 Fehlschläge. Die Bildsuite deckt unter anderem ab: Kompensation nach Datenbankfehler,
+  verwaistes Objekt bei fehlgeschlagener Kompensation, zwei gleichzeitige Uploads mit derselben
+  Kennung ergeben genau eine Zeile, Retry nach Komplettfehlschlag, Teilerfolg ohne Duplikat,
+  fail-closed bei nicht kanonischer Kennung sowie unsignierte, falsch signierte und mit fremdem
+  Zugriffsschlüssel ausgeführte PUT- und DELETE-Zugriffe mit je 403 und unverändertem
+  Objektbestand.
+- Supabase-Restsuche: null produktive Abhängigkeiten, null produktive Laufzeitvariablen, null
+  `supabase.`-Zugriffe. Verbliebene Nennungen sind ausschließlich ausdrückliche Verbotsprüfungen
+  und historische Texte bzw. der Verzeichnisname `app/supabase/`.
+- Aufräumen nachgeprüft: kein Lauscher auf Port 55432, kein `kb_ap14b_*`-Verzeichnis im
+  Temp-Bereich, der vorhandene Dienst `postgresql-x64-18` blieb unverändert `Running`.
+- Strukturprüfung ersatzweise mit einem YAML-Parser, weil `docker compose config` mangels
+  Containerlaufzeit nicht möglich ist: die drei Compose-Dateien und `.github/workflows/ci.yml`
+  parsen; die Compose-Dienste sind genau `app`, `postgres`, `minio`; `.github/workflows/ci.yml` hat
+  die Jobs `verify`, `database`, `container`, `objectstore`; die Policy-Datei ist gültiges JSON.
+
+### Ausdrücklich offene Nachweise
+
+- **Ein Lauf gegen ein echtes MinIO steht aus.** Der bisherige Bildpfad-Nachweis benutzt einen
+  synthetischen S3-kompatiblen Testendpunkt im Arbeitsspeicher
+  (`app/test/integration/s3-test-endpoint.mjs`). Dieser rechnet die SigV4-Signaturen von presigned
+  GET sowie von PUT und DELETE kryptografisch nach, ist aber **kein MinIO** und darf **nicht** als
+  MinIO-Nachweis gelten.
+- **CI-Job `objectstore`: Status vorbereitet, nicht bestanden.** `.github/workflows/ci.yml` enthält
+  jetzt den Job `objectstore`. Er startet einen echten MinIO-Container, versionsfest mit Tag **und**
+  Digest referenziert, provisioniert ihn fail-closed und prüft über den Produktivcode
+  `app/src/lib/minio-storage.ts` autorisiertes PUT, signiertes GET mit byteweisem Vergleich, DELETE
+  sowie abgewiesene ungültige Signaturen; dazu die Rechtebegrenzung der Anwendungsidentität. Der Job
+  ist in diesem Vault **nie gelaufen** — es gibt hier keine Containerlaufzeit.
+- **AP14/B Bilder und MinIO bleibt offen**, bis der echte MinIO-CI-Lauf grün belegt ist.
+- Auf dem Entwicklungsrechner ist weder `docker` noch `podman` vorhanden. Der Containerbetrieb und
+  `docker compose config` für den erweiterten Stack konnten deshalb **nicht** ausgeführt werden; das
+  Compose-Modell ist nur als YAML maschinell geparst und strukturell geprüft.
+- Browser-/E2E-Abnahme steht aus.
+- Die Same-Origin-Route beim internen Reverse-Proxy ist eine offene IT-Anforderung; echte
+  Endpunkte, Zugangsdaten, DNS- und Proxydaten liegen weiterhin nicht vor.
+- Die CSP wird weiterhin nur als `Content-Security-Policy-Report-Only` ausgeliefert; die Umstellung
+  auf die durchsetzende Variante ist eine eigene, im Browser zu verifizierende Entscheidung.
+- V1 bleibt Produktionssperre; die Aufbewahrungsentscheidung ist offen.
 
 ## Definitionen und Begriffe
 - **AP1–AP7:** Arbeitspakete (Grundgerüst → Vorgänge → Material → Bilder → Offline/PWA → E2E/Härtung → Release Readiness).
@@ -824,6 +953,6 @@ Abschnitt.** Details in Roadmap B.3 (Version 1.14).
 **V1** bleibt Produktionssperre (Stage und Test nur mit synthetischen Daten), Branding bleibt
 separat auf `feat/ap8.1-branding` (`04253a2`, nicht gemergt), **kein RC1-Tag**. AP14B
 `data-incidents-tasks-sync` ist seit dem 2026-07-31 gemergt (Commit `6b9d8dd`); Stammdaten und
-Inventar sind seit dem 2026-08-01 gemergt (Commit `79d8844`). Nächster nicht-visueller
-Arbeitsblock ist die Ablösung der verbliebenen Supabase-Datenpfade in **Bildern und Uploads** mit
-dem MinIO-Bildspeicher. Die Browser-E2E der Massenaktionen bleibt diesen Ablösungen nachgeordnet.
+Inventar sind seit dem 2026-08-01 gemergt (Commit `79d8844`). **Bilder und Uploads** sind auf dem
+nicht committeten Arbeitsstand `feat/ap14b-images-minio` abgelöst (siehe „AP14/B — Bilder und
+Uploads auf MinIO“). Die Browser-E2E der Massenaktionen bleibt diesen Ablösungen nachgeordnet.

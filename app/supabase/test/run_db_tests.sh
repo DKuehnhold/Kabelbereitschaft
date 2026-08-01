@@ -60,6 +60,15 @@ FILES=(
   "${TEST_ROOT}/20_ap14b_data.sql"
   "${MIGRATIONS}/0015_ap14b_masterdata_inventory_grants.sql"
   "${TEST_ROOT}/21_ap14b_masterdata_inventory.sql"
+  # 0016 und 22 stehen aus demselben Grund HINTER 20_ap14b_data.sql: dessen Fall
+  # D14 prueft ausdruecklich negativ, dass app_user kein delete auf
+  # public.sync_actions besitzt (20_ap14b_data.sql:699). 0016 erteilt dieses
+  # Recht nicht - die Negativpruefung bleibt also gueltig. Die Reihenfolge wird
+  # trotzdem eingehalten: jede Rechtematrix steht unmittelbar vor ihrem Smoke,
+  # die Kette bleibt lesbar, und ein spaeter ergaenztes Recht kann keine
+  # bestehende Negativprobe still entwerten.
+  "${MIGRATIONS}/0016_ap14b_image_grants.sql"
+  "${TEST_ROOT}/22_ap14b_images.sql"
 )
 
 for f in "${FILES[@]}"; do

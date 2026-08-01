@@ -2,11 +2,17 @@
 #
 # ------------------------------------------------------------------------------
 # NICHT PRODUKTIONSFAEHIG.
-# Die Anwendung nutzt in diesem Stand weiterhin Supabase (Auth, Datenzugriff,
-# Bildspeicher). Der postgres-Dienst ist vorbereitet, wird von der Anwendung
-# aber noch NICHT verwendet. Der Stack ist erst nach Abschluss von
-# Arbeitspaket B (Supabase-Abloesung, siehe 00-Projektsteuerung/
-# ADR-011-postgres-eigenplattform.md) betriebsfaehig.
+# Anwendung, Anmeldung und Bildspeicher laufen inzwischen gegen die interne
+# Plattform (PostgreSQL, Auth.js, MinIO, siehe 00-Projektsteuerung/
+# ADR-011-postgres-eigenplattform.md). Supabase ist abgeloest.
+# Die Produktionssperre bleibt davon UNBERUEHRT:
+#   - V1 (Aufbewahrungsfristen fuer Personen-, EXIF-/GPS- und Auditdaten) ist
+#     offen und sperrt produktiven Datenanfall.
+#   - Echte Endpunkte, Zugangsdaten, DNS-Angaben und die Freigabe der
+#     Proxy-Route auf den Bucket-Pfad liegen von der internen IT NICHT vor.
+#   - Dieser Stack wurde nie gestartet. Es gibt keinen Betriebsnachweis; auch
+#     "docker compose config" konnte im Vault nicht ausgefuehrt werden, weil
+#     dort keine Containerlaufzeit vorhanden ist (deploy/README.md, 0 und 12).
 # ------------------------------------------------------------------------------
 #
 # Grundsaetze:
@@ -14,6 +20,10 @@
 #     (Unternehmens-Gateway). Der App-Port ist ausschliesslich intern "expose".
 #   - Kein veroeffentlichter Datenbankport. postgres ist nur im internen Netz
 #     erreichbar.
+#   - Kein veroeffentlichter Objektspeicherport. minio ist nur im internen Netz
+#     erreichbar; der Bucket ist privat, es gibt keine anonyme Freigabe. Der
+#     Browser erreicht Bilder ausschliesslich ueber kurzlebige signierte URLs,
+#     die der interne Reverse-Proxy auf den privaten Dienst routet.
 #   - Keine Secrets in dieser Datei. Werte kommen aus deploy/env/*.env,
 #     die nicht versioniert werden.
 #   - Feste, kontrollierte Image-Referenz. Kein unkontrolliertes "latest".
@@ -51,6 +61,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      # Der Objektspeicher muss bereit sein, bevor die Anwendung Bilder
+      # schreibt oder signiert. Dass der Bucket und die Anwendungsidentitaet
+      # darin auch EXISTIEREN, prueft dieser Stack ausdruecklich NICHT mehr -
+      # siehe den Hinweisblock unterhalb des Dienstes "minio".
+      minio:
+        condition: service_healthy
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -73,8 +89,9 @@ services:
         max-file: "5"
 
   postgres:
-    # Vorbereitet fuer Arbeitspaket B. Die Anwendung verbindet sich in
-    # Arbeitspaket A noch nicht mit diesem Dienst.
+    # Datenhaltung der Anwendung (ADR-011). Die Anwendung verbindet sich mit
+    # der eingeschraenkten Rolle aus DATABASE_URL, nicht mit dem hier
+    # angelegten Eigentuemerkonto.
     image: postgres:18-bookworm
     restart: unless-stopped
     env_file:
@@ -98,6 +115,105 @@ services:
         max-size: "10m"
         max-file: "5"
 
+  minio:
+    # Interner Objektspeicher fuer die Vorgangsbilder (ADR-011).
+    #
+    # Image-Referenz bewusst als PFLICHTVARIABLE OHNE Standardwert - dasselbe
+    # Muster wie APP_IMAGE_REF oben. Hier steht absichtlich weder ein fester
+    # Tag noch "latest": eine Referenz, die in diesem Vault niemand pruefen
+    # konnte, waere eine erfundene Infrastrukturangabe. Die interne IT setzt
+    # eine gepruefte, unveraenderliche Referenz - vorzugsweise mit Digest.
+    image: ${MINIO_IMAGE_REF:?MINIO_IMAGE_REF muss die vollstaendige, von der internen IT gepruefte Image-Referenz des MinIO-Servers enthalten - Tag oder Digest, kein bewegliches latest}
+    restart: unless-stopped
+    env_file:
+      # Enthaelt ausschliesslich die Root-Zugangsdaten des Objektspeichers. Die
+      # Webanwendung bekommt diese Datei NICHT.
+      - ./env/minio.env
+    # Bewusst KEIN "ports:" - der Objektspeicher ist nicht von aussen
+    # erreichbar. Der Browser laedt Bilder ueber kurzlebige signierte URLs, die
+    # der interne Reverse-Proxy auf diesen Dienst routet.
+    #
+    # Bewusst KEINE Konsole: "server /data" startet nur die S3-API auf dem
+    # internen Port 9000. Eine zusaetzlich lauschende Konsole waere eine
+    # weitere Angriffsflaeche ohne Betriebsnutzen in diesem Stack.
+    command: ["server", "/data"]
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      # Dokumentierter Liveness-Endpunkt des MinIO-Servers auf dem internen
+      # Port 9000.
+      #
+      # UNGEPRUEFT: dieses Kommando konnte im Vault NICHT ausgefuehrt werden -
+      # es gibt dort keine Containerlaufzeit. Zwei Annahmen sind beim ersten
+      # echten Lauf zu bestaetigen:
+      #   1. Die von der IT gewaehlte Image-Variante enthaelt "curl". Trifft das
+      #      nicht zu, ist auf das ebenfalls dokumentierte "mc ready local"
+      #      umzustellen.
+      #   2. Der Endpunkt antwortet unter dem hier gesetzten Port.
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9000/minio/health/live >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - internal
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  # ============================================================================
+  # KEINE AUTOMATISCHE PROVISIONIERUNG DES OBJEKTSPEICHERS - BEWUSSTE ENTSCHEIDUNG
+  # ============================================================================
+  #
+  # An dieser Stelle stand ein einmaliger Bootstrap-Dienst, der Bucket, Policy
+  # und Anwendungsidentitaet mit dem MinIO-Clientwerkzeug angelegt hat. Er ist
+  # ENTFERNT. Bucket, Policy und Anwendungsidentitaet werden von diesem Stack
+  # ausdruecklich NICHT mehr automatisch angelegt.
+  #
+  # BEGRUENDUNG:
+  # Die benutzten Kommandos ("mc alias set", "mc admin user add") nehmen ihre
+  # Zugangsdaten als PROZESSARGUMENTE entgegen. Fuer die Dauer dieser Kommandos
+  # stehen die Root-Zugangsdaten des Objektspeichers und die Zugangsdaten der
+  # Anwendungsidentitaet in der Prozessliste (/proc/<pid>/cmdline) und sind fuer
+  # andere Prozesse im selben PID-Namensraum lesbar. Eine geheimnisfreie
+  # Variante (Alias ueber MC_HOST_<alias>, Identitaet ueber stdin) konnte in
+  # diesem Vault NICHT nachgewiesen werden: hier gibt es weder eine
+  # Containerlaufzeit noch das Clientwerkzeug selbst. Eine unbewiesene
+  # Absicherung wird nicht behauptet, also entfaellt der Automatismus, statt ihn
+  # als vermeintlich gehaertet stehenzulassen.
+  #
+  # WAS STATTDESSEN GILT:
+  # Die Provisionierung ist ein VERBINDLICHER, dokumentierter Schritt der
+  # internen IT VOR dem ersten Start. Ablauf, Verifikationspflicht und die
+  # Anforderung an das eingesetzte Werkzeug stehen in deploy/README.md,
+  # Abschnitt "MinIO-Provisionierung durch die interne IT". Der Berechtigungstext
+  # ist versioniert unter deploy/minio/incident-images-app.policy.json; der dort
+  # eingetragene Bucketname muss mit S3_BUCKET in deploy/env/app.env
+  # uebereinstimmen.
+  #
+  # VERSCHLECHTERUNG, DIE DAMIT BEWUSST IN KAUF GENOMMEN WIRD - ohne Beschoenigung:
+  # Die Anwendung legt selbst KEINEN Bucket an und prueft beim Start auch NICHT,
+  # ob er existiert. Belegbar an app/src/lib/minio-storage.ts (dort gibt es nur
+  # Put, Get/Signieren und Delete - kein CreateBucket, kein HeadBucket) und an
+  # app/src/lib/minio-config.ts (prueft ausschliesslich, ob Variablennamen
+  # gesetzt und formal gueltig sind, nicht den Zustand des Objektspeichers).
+  # Fehlt die IT-Provisionierung, startet der Container GESUND und JEDER
+  # Bildupload scheitert erst zur Laufzeit. Frueher fiel ein solcher Fehler beim
+  # Start auf, weil die Anwendung auf den erfolgreichen Bootstrap wartete. Dieser
+  # Rueckschritt ist bekannt und ausschliesslich durch den IT-Schritt und die
+  # Inbetriebnahme-Checkliste zu kompensieren.
+  #
+  # ENTFALLEN: die Variable MINIO_CLIENT_IMAGE_REF (Image des Clientwerkzeugs)
+  # wird von dieser Datei nicht mehr gebraucht. MINIO_IMAGE_REF fuer den Server
+  # bleibt Pflicht.
+  #
+  # Bitte hier KEINE auskommentierte Bootstrap-Variante hinterlegen: sie waere
+  # eine Einladung, den beschriebenen Mangel unbesehen wieder einzuschalten.
+
 networks:
   internal:
     driver: bridge
@@ -105,3 +221,7 @@ networks:
 
 volumes:
   postgres-data:
+  # Objektdaten des Bildspeichers. Wird von "docker compose down" NICHT
+  # entfernt. Datenbank und Objektspeicher werden getrennt gesichert; die
+  # zeitliche Konsistenzgrenze ist in deploy/README.md, Abschnitt 10 benannt.
+  minio-data:

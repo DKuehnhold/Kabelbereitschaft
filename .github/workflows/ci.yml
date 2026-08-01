@@ -72,17 +72,19 @@ jobs:
       - name: Install Playwright (Chromium)
         run: npx playwright install --with-deps chromium
 
-      # @public-E2E (ohne Supabase) inkl. Accessibility (axe). Vollständige @app-E2E benötigen
-      # Test-Supabase-Secrets (siehe E2E_TESTS.md); ohne diese werden @app-Tests übersprungen.
+      # @public-E2E (ohne Anmeldung und ohne Datenbank) inkl. Accessibility (axe).
+      # Vollständige @app-E2E benötigen eine Testdatenbank der internen Plattform und
+      # Testbenutzer (siehe E2E_TESTS.md); ohne diese werden @app-Tests übersprungen.
       - name: E2E + a11y (öffentliche Tests)
         run: npx playwright test --grep @public
         env:
           NEXT_TELEMETRY_DISABLED: "1"
-          # Für vollständige App-E2E in CI zusätzlich als GitHub Secrets bereitstellen:
-          #   NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY,
+          # Für vollständige App-E2E in CI wären zusätzlich bereitzustellen:
+          #   DATABASE_URL, AUTH_SECRET (Pflichtnamen aus app/src/lib/platform-config.ts),
           #   E2E_ADMIN_EMAIL/PASSWORD, E2E_DISPO_*, E2E_MONTEUR_*, E2E_MONTEUR2_*, E2E_INCIDENT_ID
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          # Bewusst noch KEINE secrets.*-Referenz: es ist nicht belegt, dass diese Secrets im
+          # Repository existieren. Ein Verweis auf ein fehlendes Secret ergibt eine leere
+          # Zeichenkette und damit einen stillen Fehlzustand statt eines sichtbaren Skips.
 
       - name: Upload Playwright-Report (bei Fehler)
         if: failure()
@@ -117,7 +119,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y postgresql-client
 
-      - name: Datenbankpruefungen (Migrationen 0001-0011 + Smokes AP10-AP13)
+      - name: Datenbankpruefungen (Migrationen 0001-0016 + Smokes AP10-AP14B)
         run: |
           chmod +x supabase/test/run_db_tests.sh
           supabase/test/run_db_tests.sh
@@ -166,15 +168,26 @@ jobs:
             echo "Erwartet war Exit-Code 78 (fehlende Konfiguration), erhalten: ${code}" >&2
             exit 1
           fi
-          echo "${output}" | grep -q "NEXT_PUBLIC_SUPABASE_URL" || {
-            echo "Meldung nennt die fehlende Variable nicht." >&2
+          # DATABASE_URL fehlt ohne Konfiguration zwingend und steht dauerhaft in
+          # REQUIRED (app/docker/verify-runtime-config.mjs).
+          echo "${output}" | grep -q "DATABASE_URL" || {
+            echo "Meldung nennt die fehlende Plattformvariable nicht." >&2
+            exit 1
+          }
+          # Zweite Zusicherung: auch der Objektspeicher ist Pflicht. Faellt die
+          # MinIO-Pflicht kuenftig weg, schlaegt diese Zeile auf und der Wegfall
+          # bleibt nicht unbemerkt.
+          echo "${output}" | grep -q "S3_SECRET_ACCESS_KEY" || {
+            echo "Meldung nennt die fehlende Objektspeichervariable nicht." >&2
             exit 1
           }
 
+      # Die Altmuster bleiben bewusst stehen: eine Supabase-Variable in einem Layer
+      # ist auch nach der Abloesung ein Fund.
       - name: Keine Secrets in den Image-Layern
         run: |
           if docker history --no-trunc --format '{{.CreatedBy}}' kabelbereitschaft:ci \
-              | grep -Ei 'SUPABASE_SERVICE_ROLE_KEY|ANON_KEY=|AUTH_SECRET|PASSWORD='; then
+              | grep -Ei 'SUPABASE_SERVICE_ROLE_KEY|ANON_KEY=|AUTH_SECRET|PASSWORD=|S3_SECRET_ACCESS_KEY|S3_ACCESS_KEY_ID'; then
             echo "Verdaechtiger Wert in einem Image-Layer gefunden." >&2
             exit 1
           fi
@@ -185,10 +198,20 @@ jobs:
         run: |
           cp deploy/env/app.env.example deploy/env/app.env
           cp deploy/env/postgres.env.example deploy/env/postgres.env
+          cp deploy/env/minio.env.example deploy/env/minio.env
           export APP_IMAGE_REF=kabelbereitschaft:ci
+          # Pflichtvariable des Objektspeicherdienstes. Erkennbarer
+          # CI-Platzhalter, wie bei APP_IMAGE_REF - es wird nichts gezogen und
+          # nichts gestartet, "config" prueft nur das Modell.
+          #
+          # MINIO_CLIENT_IMAGE_REF steht hier bewusst NICHT mehr: seit dem
+          # Wegfall des automatischen Bootstraps referenziert deploy/compose.yml
+          # diese Variable nicht mehr (siehe den Hinweisblock am Ende der Datei),
+          # ein Export waere wirkungslos.
+          export MINIO_IMAGE_REF=minio-server:ci
           docker compose -f deploy/compose.yml -f deploy/compose.stage.yml config >/dev/null
           docker compose -f deploy/compose.yml -f deploy/compose.production.yml config >/dev/null
-          rm -f deploy/env/app.env deploy/env/postgres.env
+          rm -f deploy/env/app.env deploy/env/postgres.env deploy/env/minio.env
           echo "Compose-Konfiguration gueltig (stage und production)."
 
       # Informativ, nicht blockierend: die Basiszeile an Basisimage-CVEs ist
@@ -203,3 +226,215 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: "0"
+
+  # AP14/B: ECHTER MinIO-NACHWEIS.
+  #
+  # Abgrenzung, die dieser Job aufloest: app/test/integration/s3-test-endpoint.mjs
+  # ist ein SYNTHETISCHER, im Arbeitsspeicher gehaltener S3-Endpunkt und
+  # ausdruecklich KEIN MinIO-Nachweis (die Abgrenzung steht dort im Kopf der
+  # Datei). Hier laeuft derselbe Produktivcode (app/src/lib/minio-storage.ts ueber
+  # das echte AWS SDK v3) gegen einen WIRKLICHEN MinIO-Container mit echter
+  # Bucket-Policy, echter Benutzerverwaltung und echten S3-Fehlercodes.
+  #
+  # Der Server laeuft bewusst NICHT als "services:"-Eintrag: ein Service-Container
+  # kann sein Kommando nicht ueberschreiben, MinIO braucht aber "server /data".
+  # Er wird deshalb in einem normalen Schritt per "docker run" gestartet; Docker
+  # ist auf ubuntu-latest vorhanden.
+  #
+  # Beide Images sind digest-fest referenziert (Tag NUR zur Lesbarkeit, der
+  # Digest entscheidet). Kein "latest", kein beweglicher Tag.
+  objectstore:
+    runs-on: ubuntu-latest
+    env:
+      # Digest-feste Image-Referenzen. Bei einer Aktualisierung muss der Digest
+      # erneut bei der Registry abgefragt und hier mitgezogen werden.
+      MINIO_SERVER_IMAGE: minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+      MINIO_CLIENT_IMAGE: minio/mc:RELEASE.2025-08-13T08-35-41Z@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
+      MINIO_NETWORK: kb-objectstore-ci
+      MINIO_CONTAINER: kb-objectstore-ci-server
+      # Der Bucketname ist NICHT frei waehlbar: er steht so in der versionierten
+      # Policy deploy/minio/incident-images-app.policy.json
+      # (arn:aws:s3:::incident-images/*). Genau diese Datei wird unten geladen.
+      S3_BUCKET: incident-images
+      # Zweiter Bucket ausschliesslich als GEGENPROBE der Rechtebegrenzung. Ohne
+      # ihn waere eine Abweisung ausserhalb des einen Buckets nicht von einem
+      # "Bucket existiert nicht" zu unterscheiden.
+      AP14B_MINIO_FOREIGN_BUCKET: ci-gegenprobe-fremder-bucket
+      # SYNTHETISCHE CI-Zugangsdaten im Klartext, im selben Stil wie
+      # POSTGRES_PASSWORD: ci_only_not_a_secret im Job "database". Bewusst KEINE
+      # secrets.*-Referenz: es ist nicht belegt, dass solche Secrets im Repository
+      # existieren, und ein Verweis auf ein fehlendes Secret ergibt eine leere
+      # Zeichenkette und damit einen stillen Fehlzustand.
+      #
+      # Root- und Anwendungsidentitaet sind ABSICHTLICH verschieden. Waeren sie
+      # gleich, liefe der Test mit Administratorrechten und wuerde die
+      # Rechtebegrenzung der Policy gar nicht messen.
+      MINIO_ROOT_USER: ciminiorootnotasecret
+      MINIO_ROOT_PASSWORD: ciminiorootpassnotasecret
+      S3_ACCESS_KEY_ID: ciappidentitynotasecret
+      S3_SECRET_ACCESS_KEY: ciappsecretnotasecret
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: MinIO starten (echter Container, digest-fest)
+        run: |
+          docker network create "${MINIO_NETWORK}"
+          # DURCHREICHFORM "--env NAME" OHNE "=wert": Docker uebernimmt den Wert
+          # aus der Umgebung dieses Schrittes. Damit steht in der Kommandozeile
+          # und in der Prozessliste ausschliesslich der NAME der Variablen,
+          # niemals ihr Wert. Diese Form ist zugleich der Nachweis, dass eine
+          # argumentfreie Uebergabe von Zugangsdaten an den MinIO-Container
+          # funktioniert - Voraussetzung fuer jede spaetere, geheimnisfreie
+          # Wiedereinfuehrung einer automatischen Provisionierung.
+          docker run --detach \
+            --name "${MINIO_CONTAINER}" \
+            --network "${MINIO_NETWORK}" \
+            --publish 127.0.0.1:9000:9000 \
+            --env MINIO_ROOT_USER \
+            --env MINIO_ROOT_PASSWORD \
+            "${MINIO_SERVER_IMAGE}" \
+            server /data
+
+      # Fail-closed: kommt der Server nicht hoch, schlaegt der Job fehl. Kein
+      # Ueberspringen, kein "|| true", kein continue-on-error.
+      - name: Auf MinIO warten
+        run: |
+          for attempt in $(seq 1 30); do
+            if curl --silent --fail --max-time 5 \
+                http://127.0.0.1:9000/minio/health/live >/dev/null; then
+              echo "MinIO ist bereit (Versuch ${attempt})."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "MinIO wurde binnen 60 Sekunden nicht bereit." >&2
+          # Bewusst KEIN "docker logs": das Startbanner von MinIO kann die
+          # Root-Zugangsdaten enthalten. Ausgegeben wird nur der Containerstatus.
+          docker inspect --format '{{.State.Status}} {{.State.ExitCode}}' \
+            "${MINIO_CONTAINER}" >&2
+          exit 1
+
+      # =====================================================================
+      # DIES IST DER CI-NACHWEIS UND AUSDRUECKLICH NICHT DER PRODUKTIVE
+      # BOOTSTRAP.
+      #
+      # Der produktive Stack provisioniert bewusst NICHT mehr automatisch; die
+      # Provisionierung ist ein dokumentierter Schritt der internen IT (siehe
+      # deploy/README.md, Abschnitt "MinIO-Provisionierung durch die interne IT",
+      # und den Hinweisblock am Ende von deploy/compose.yml). Hier wird
+      # ausschliesslich der Zustand hergestellt, gegen den der Nachweis laeuft.
+      #
+      # Laeuft dieser Job gruen, ist genau das der Beleg, der eine spaetere,
+      # geheimnisfreie Wiedereinfuehrung einer automatischen Provisionierung
+      # ueberhaupt erst begruendbar macht: er zeigt, dass Bucket, Policy und
+      # Anwendungsidentitaet ohne einen einzigen Zugangsdatenwert auf einer
+      # Kommandozeile eingerichtet werden koennen.
+      # =====================================================================
+      - name: MinIO provisionieren (nur fuer diesen Nachweis)
+        run: |
+          # MC_HOST_<alias> traegt die Root-Zugangsdaten. Es ist eine
+          # Umgebungsvariable dieses Schrittes und wird - wie oben - ueber die
+          # Durchreichform "--env MC_HOST_ci" ohne "=wert" an den Client
+          # gereicht. "export" ist ein Shell-Builtin und erzeugt keinen Prozess;
+          # der Wert steht damit in keiner Kommandozeile.
+          export MC_HOST_ci="http://${MINIO_ROOT_USER}:${MINIO_ROOT_PASSWORD}@${MINIO_CONTAINER}:9000"
+
+          # Einmalcontainer im selben Docker-Netz wie der Server. Die
+          # versionierte Policy wird NUR GEMOUNTET und nicht neu geschrieben -
+          # geprueft wird damit genau die Datei aus dem Repository.
+          run_mc() {
+            docker run --rm --interactive \
+              --network "${MINIO_NETWORK}" \
+              --env MC_HOST_ci \
+              --volume "${GITHUB_WORKSPACE}/deploy/minio:/policy:ro" \
+              "${MINIO_CLIENT_IMAGE}" "$@"
+          }
+
+          run_mc mb "ci/${S3_BUCKET}"
+          run_mc mb "ci/${AP14B_MINIO_FOREIGN_BUCKET}"
+
+          # Anonyme Freigabe ausdruecklich auf "none". Ein frischer Bucket hat
+          # zwar keine, der Zustand wird aber gesetzt und danach abgefragt.
+          run_mc anonymous set none "ci/${S3_BUCKET}"
+          run_mc anonymous set none "ci/${AP14B_MINIO_FOREIGN_BUCKET}"
+          anonymous_state="$(run_mc anonymous get "ci/${S3_BUCKET}")"
+          case "${anonymous_state}" in
+            *none*) echo "Anonyme Freigabe des Buckets steht auf none." ;;
+            *)
+              echo "Anonyme Freigabe des Buckets steht NICHT auf none." >&2
+              exit 1
+              ;;
+          esac
+
+          run_mc admin policy create ci incident-images-app \
+            /policy/incident-images-app.policy.json
+
+          # Anwendungsidentitaet anlegen. "mc admin user add" nimmt Zugangsdaten
+          # auch als Argumente - genau das ist hier verboten. Ohne Argumente
+          # liest mc auf einem nicht-interaktiven stdin zwei Zeilen:
+          # Zugriffsschluessel, dann Geheimnis. "printf" ist ein Shell-Builtin,
+          # es entsteht also kein Prozess, dessen Argumentliste das Geheimnis
+          # enthielte.
+          printf '%s\n%s\n' "${S3_ACCESS_KEY_ID}" "${S3_SECRET_ACCESS_KEY}" \
+            | run_mc admin user add ci
+
+          # Der Zugriffsschluessel ist KEIN Geheimnis: er steht in jeder
+          # signierten URL im Klartext (X-Amz-Credential). Das Geheimnis
+          # erscheint an keiner Stelle als Argument.
+          run_mc admin policy attach ci incident-images-app \
+            --user "${S3_ACCESS_KEY_ID}"
+
+          # Fail-closed: der Zielzustand wird ausdruecklich abgefragt. Kein
+          # "|| true". Der Vergleich laeuft ueber "case" (Shell-Builtin), damit
+          # der Zugriffsschluessel nicht als Argument an ein Suchwerkzeug geht.
+          policy_entities="$(run_mc admin policy entities ci \
+            --policy incident-images-app --json)"
+          case "${policy_entities}" in
+            *"${S3_ACCESS_KEY_ID}"*)
+              echo "Policy incident-images-app ist der Anwendungsidentitaet zugeordnet."
+              ;;
+            *)
+              echo "Policy incident-images-app ist NICHT zugeordnet." >&2
+              exit 1
+              ;;
+          esac
+
+      # Der eigentliche Nachweis. Node fuehrt die TypeScript-Module des
+      # Produktivcodes mit Typentfernung aus; die Aufloesung von "server-only"
+      # und "@/..." leistet test/integration/module-hooks.mjs.
+      - name: MinIO-Live-Nachweis (Produktivcode gegen echtes MinIO)
+        run: |
+          node --import ./test/integration/module-hooks.mjs \
+            test/integration/ap14b-minio-live.int.mjs
+        env:
+          # Loopback: minio-config.ts laesst denselben Origin fuer Endpunkt und
+          # Signierbasis ausschliesslich dann zu, wenn BEIDE Hostnamen Loopback
+          # sind. 127.0.0.1 erfuellt das, und nur so ist die signierte URL vom
+          # Runner aus auch tatsaechlich abrufbar.
+          S3_ENDPOINT: http://127.0.0.1:9000
+          S3_PUBLIC_BASE_URL: http://127.0.0.1:9000
+          S3_REGION: us-east-1
+          S3_FORCE_PATH_STYLE: "true"
+          # AUTH_URL wird bewusst NICHT gesetzt: waere sie gesetzt, verlangte
+          # readMinioConfig() denselben Origin wie die Signierbasis.
+
+      - name: MinIO entfernen
+        if: always()
+        run: |
+          # Kein "|| true": es wird ausdruecklich geprueft, ob es ueberhaupt
+          # etwas zu entfernen gibt.
+          if [ -n "$(docker ps --all --quiet --filter "name=^${MINIO_CONTAINER}$")" ]; then
+            docker rm --force "${MINIO_CONTAINER}"
+          fi
+          if [ -n "$(docker network ls --quiet --filter "name=^${MINIO_NETWORK}$")" ]; then
+            docker network rm "${MINIO_NETWORK}"
+          fi
