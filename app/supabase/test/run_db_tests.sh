@@ -3,8 +3,13 @@
 #
 # Fuehrt zuerst die historische Kette samt AP10-AP13-Smokes aus und danach
 # den endlichen AP14/B-Plattformwechsel (Migrationen 0012, 0013 und 0014 sowie
-# die Smokes 19 und 20). run_ap12_local.ps1 bleibt als historischer lokaler
-# AP12/AP13-Nachweis unveraendert; run_ap14b_local.ps1 ist das Windows-
+# die Smokes 19 und 20). Zusaetzlich laufen anschliessend die Rechtematrix der
+# Stammdaten und des Inventars (Migration 0015) und ihr Smoke 21. Beide stehen
+# bewusst HINTER 20_ap14b_data.sql: dessen Fall D18 prueft ausdruecklich
+# negativ, dass app_user kein select auf public.inventory_movements und kein
+# insert auf public.customers besitzt - genau diese Rechte erteilt 0015. Liefe
+# 0015 vorher, wuerde D18 scheitern. run_ap12_local.ps1 bleibt als historischer
+# lokaler AP12/AP13-Nachweis unveraendert; run_ap14b_local.ps1 ist das Windows-
 # Gegenstueck zu dieser Datei.
 #
 # Aufruf:
@@ -53,6 +58,8 @@ FILES=(
   "${TEST_ROOT}/19_ap14b_platform.sql"
   "${TEST_ROOT}/19a_ap14b_grant_reset.sql"
   "${TEST_ROOT}/20_ap14b_data.sql"
+  "${MIGRATIONS}/0015_ap14b_masterdata_inventory_grants.sql"
+  "${TEST_ROOT}/21_ap14b_masterdata_inventory.sql"
 )
 
 for f in "${FILES[@]}"; do

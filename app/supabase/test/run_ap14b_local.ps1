@@ -164,7 +164,13 @@ $files = @(
   (Join-Path $migrationRoot "0014_ap14b_data_grants.sql"),
   (Join-Path $testRoot "19_ap14b_platform.sql"),
   (Join-Path $testRoot "19a_ap14b_grant_reset.sql"),
-  (Join-Path $testRoot "20_ap14b_data.sql")
+  (Join-Path $testRoot "20_ap14b_data.sql"),
+  # 0015 und 21 stehen bewusst HINTER 20_ap14b_data.sql: dessen Fall D18 prueft
+  # ausdruecklich negativ, dass app_user kein select auf
+  # public.inventory_movements und kein insert auf public.customers besitzt -
+  # genau diese Rechte erteilt 0015. Liefe 0015 vorher, wuerde D18 scheitern.
+  (Join-Path $migrationRoot "0015_ap14b_masterdata_inventory_grants.sql"),
+  (Join-Path $testRoot "21_ap14b_masterdata_inventory.sql")
 )
 foreach ($file in $files) {
   if (-not (Test-Path -LiteralPath $file)) { throw "Testdatei fehlt: $file" }
@@ -172,8 +178,12 @@ foreach ($file in $files) {
 
 $integrationTest = Join-Path $appRoot "test\integration\ap14b-platform.int.mjs"
 $moduleHooks = Join-Path $appRoot "test\integration\module-hooks.mjs"
+# Zweiter Integrationslauf: die Stammdaten- und Inventarmodule mit einer eigenen
+# Hooks-Datei (siehe module-hooks-app.mjs). module-hooks.mjs bleibt unveraendert.
+$masterdataIntegrationTest = Join-Path $appRoot "test\integration\ap14b-masterdata-inventory.int.mjs"
+$moduleHooksApp = Join-Path $appRoot "test\integration\module-hooks-app.mjs"
 if (-not $SkipIntegrationTests) {
-  foreach ($file in @($integrationTest, $moduleHooks)) {
+  foreach ($file in @($integrationTest, $moduleHooks, $masterdataIntegrationTest, $moduleHooksApp)) {
     if (-not (Test-Path -LiteralPath $file)) { throw "Testdatei fehlt: $file" }
   }
   if (-not (Test-Path -LiteralPath $NodeExe)) {
@@ -783,10 +793,16 @@ try {
   }
 
   Write-Host ""
-  Write-Host "--- AP14/B-Pruefungen aus 19_ap14b_platform.sql, 19a_ap14b_grant_reset.sql und 20_ap14b_data.sql ---"
+  Write-Host "--- AP14/B-Pruefungen aus 19_ap14b_platform.sql, 19a_ap14b_grant_reset.sql, 20_ap14b_data.sql und 21_ap14b_masterdata_inventory.sql ---"
+  # Die Ueberschrift nennt Smoke 21 ausdruecklich mit. Er benutzt aber eigene
+  # Fallpraefixe (M fuer Stammdaten, N fuer Inventar) und wuerde vom bisherigen
+  # Muster "SMOKE [PRD]\d+" nicht erfasst - der Auszug waere irrefuehrend, weil
+  # er eine Datei ankuendigt, aus der keine Zeile erscheint. Deshalb die zweite
+  # Bedingung.
   $allOutput |
     Where-Object {
-      $_ -match "(19_ap14b_platform|19a_ap14b_grant_reset|20_ap14b_data)" -and $_ -match "SMOKE [PRD]\d+"
+      ($_ -match "(19_ap14b_platform|19a_ap14b_grant_reset|20_ap14b_data)" -and $_ -match "SMOKE [PRD]\d+") -or
+      ($_ -match "21_ap14b_masterdata_inventory" -and $_ -match "SMOKE [MN]\d+")
     } |
     ForEach-Object { Write-Host (($_ -split "NOTICE:\s+")[-1]) }
 
@@ -843,6 +859,31 @@ grant connect on database "$database" to "$appRole";
     $nodeRun.Output | ForEach-Object { Write-Host $_ }
     if ($nodeRun.ExitCode -ne 0) {
       throw ("Integrationstests fehlgeschlagen (Exit {0})." -f $nodeRun.ExitCode)
+    }
+
+    Write-Host ""
+    Write-Host "Fuehre Integrationstests der Stammdaten- und Inventarmodule aus ..."
+    # Zweiter, gleichartiger Aufruf mit derselben Auswertung. Er braucht eine
+    # EIGENE Hooks-Datei: die Fachmodule verlangen ausserhalb von Next
+    # zusaetzlich Ersatz fuer `next/cache` und `@/lib/auth`. Der Aufruf oben
+    # bleibt dadurch unveraendert.
+    try {
+      $env:AP14B_APP_DATABASE_URL = $appUrl
+      $env:AP14B_ADMIN_DATABASE_URL = $adminUrl
+      $masterdataRun = Invoke-HandleSafeProcess -FilePath $NodeExe -Label "integration_masterdata" `
+        -TimeoutSeconds 900 -WorkingDirectory $appRoot `
+        -Arguments @("--disable-warning=MODULE_TYPELESS_PACKAGE_JSON",
+          "--import", "./test/integration/module-hooks-app.mjs",
+          "./test/integration/ap14b-masterdata-inventory.int.mjs")
+    }
+    finally {
+      Remove-Item Env:\AP14B_APP_DATABASE_URL -ErrorAction SilentlyContinue
+      Remove-Item Env:\AP14B_ADMIN_DATABASE_URL -ErrorAction SilentlyContinue
+    }
+    $masterdataRun.Output | ForEach-Object { Write-Host $_ }
+    if ($masterdataRun.ExitCode -ne 0) {
+      throw ("Integrationstests der Stammdaten- und Inventarmodule fehlgeschlagen (Exit {0})." -f
+        $masterdataRun.ExitCode)
     }
   }
 
