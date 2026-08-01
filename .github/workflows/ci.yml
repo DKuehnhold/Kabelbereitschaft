@@ -362,15 +362,23 @@ jobs:
           run_mc mb "ci/${S3_BUCKET}"
           run_mc mb "ci/${AP14B_MINIO_FOREIGN_BUCKET}"
 
-          # Anonyme Freigabe ausdruecklich auf "none". Ein frischer Bucket hat
+          # Anonyme Freigabe fail-closed abschalten. Ein frischer Bucket hat
           # zwar keine, der Zustand wird aber gesetzt und danach abgefragt.
+          # WICHTIG - Setzverb und gemeldeter Zustand sind NICHT dieselbe
+          # Zeichenfolge: das mc-Setzverb heisst "none", die oben digest-fest
+          # gepinnte mc-Version (Zeile 252, RELEASE.2025-08-13T08-35-41Z)
+          # meldet denselben Zustand bei "anonymous get" jedoch als "private".
+          # So belegt im CI-Lauf 30689463269, in dem "set none" erfolgreich war
+          # und allein die Zustandspruefung fehlschlug. Geprueft wird deshalb
+          # genau dieser Begriff. Wird der Digest gewechselt, ist die
+          # Schreibweise des gemeldeten Zustands erneut zu pruefen.
           run_mc anonymous set none "ci/${S3_BUCKET}"
           run_mc anonymous set none "ci/${AP14B_MINIO_FOREIGN_BUCKET}"
           anonymous_state="$(run_mc anonymous get "ci/${S3_BUCKET}")"
           case "${anonymous_state}" in
-            *none*) echo "Anonyme Freigabe des Buckets steht auf none." ;;
+            *private*) echo "Anonyme Freigabe des Buckets steht auf private." ;;
             *)
-              echo "Anonyme Freigabe des Buckets steht NICHT auf none." >&2
+              echo "Anonyme Freigabe des Buckets steht NICHT auf private." >&2
               exit 1
               ;;
           esac
