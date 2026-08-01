@@ -1,17 +1,21 @@
 # Projektwissen – Kabelbereitschaft
-> Stand: 2026-07-31 · Nur bestätigte Ergebnisse. Nicht ausgeführte Prüfungen sind als offen markiert.
+> Stand: 2026-08-01 · Nur bestätigte Ergebnisse. Nicht ausgeführte Prüfungen sind als offen markiert.
 
-> **Aktueller Stand (2026-07-31).** Zielplattform bleibt ADR-011: PostgreSQL 18, Auth.js v5, MinIO
+> **Aktueller Stand (2026-08-01).** Zielplattform bleibt ADR-011: PostgreSQL 18, Auth.js v5, MinIO
 > und Containerbetrieb hinter dem internen Reverse-Proxy; Supabase ist kein Ziel. Bestätigter
-> Repository-Stand ist `main` = `origin/main` = `6b9d8dd7b4b937b3a2cb055b509557ed17313430`
-> (`feat: migrate incident and task data paths to PostgreSQL`); der frühere Stand
+> Repository-Stand ist `main` = `origin/main` = `79d88449f9e481b1148f902e175f46f9d07ef35d`
+> (`feat: migrate masterdata and inventory to PostgreSQL`) — selbst ein **fachlicher** Commit,
+> als Fast-Forward von `cb8bb888280b5509ae2c273789183767e3b7b4db` mit genau einem Commit Abstand
+> und damit **ohne Merge-Commit und ohne Force-Push**; der lokale und der remote Feature-Branch
+> `feat/ap14b-data-masterdata-inventory` stehen auf demselben Commit. Der frühere Stand
 > `22db6dad8958146be4de667a55e89ba170e73b7c` ist ein Vorfahre und damit überholt. Die Datenpfade
 > für **Vorgänge, Aufgaben und Offline-Sync** sind auf PostgreSQL 18 migriert, lokal und in der CI
 > verifiziert. Die weiter unten mit „(2026-07-28, nicht committet)“ gekennzeichneten
 > AP14/B-Abschnitte beschreiben den Stand jenes Tages, sind in diesen Merges enthalten und behalten
-> ihre historischen Prüfnachweise unverändert. Nächster nicht-visueller Arbeitsblock ist die
-> Ablösung der verbliebenen Supabase-Datenpfade in **Stammdaten und Inventar** nach
-> PostgreSQL/RLS; Bilder und Uploads folgen mit dem MinIO-Bildspeicher. V1 bleibt
+> ihre historischen Prüfnachweise unverändert. Die Datenpfade für **Stammdaten und Inventar** sind
+> ebenfalls auf PostgreSQL umgestellt und mit `79d8844` auf `main` **gemergt**. Nächster
+> nicht-visueller Arbeitsblock ist die Ablösung der verbliebenen Supabase-Datenpfade in **Bildern
+> und Uploads** mit dem MinIO-Bildspeicher. V1 bleibt
 > Produktionssperre, Branding bleibt separat, GUI-/Designarbeit wartet auf Dennis.
 
 ## Projektziel
@@ -42,7 +46,8 @@ CSV-Export, Offlinebetrieb mit Synchronisation und Konfliktbehandlung.
 - **HEIC:** nicht akzeptiert (keine zuverlässige Browser-Vorschau/Verarbeitung).
 - **Sicherheitsheader (AP7):** harte Header durchsetzend; CSP zunächst Report-Only.
 - **Release:** Semantic Versioning; erster RC `v1.0.0-rc.1`; **Tag/Release nur mit Nutzerfreigabe**.
-- **Migrationen:** additiv/idempotent; aktuell `0001`–`0014` (Stand 2026-07-31).
+- **Migrationen:** additiv/idempotent; aktuell `0001`–`0015` (Stand 2026-08-01). Sie liegen
+  vollständig auf `main`.
 - **Zielplattform (ADR-011):** keine Supabase-Cloud und kein selbst gehostetes Supabase.
   Ziel sind interne PostgreSQL-18-Dienste, Auth.js v5 mit serverseitigem Sitzungswiderruf,
   MinIO für Bildobjekte sowie Containerbetrieb hinter dem Unternehmens-Reverse-Proxy.
@@ -62,10 +67,10 @@ grün:
 - Lokal zusätzlich normaler und Standalone-Build sowie Startvalidierung 78/0/78
   nachgewiesen.
 
-**Noch offen (Präzisierung 2026-07-31):** Arbeitspaket B löst die verbleibenden
-Supabase-Abhängigkeiten schrittweise ab. Auth-Basis sowie Vorgänge, Aufgaben und Offline-Sync sind
-abgelöst (siehe „AP14/B — Datenpfade …“); Stammdaten, Inventar sowie Bilder und Uploads laufen
-weiterhin über Supabase.
+**Noch offen (Präzisierung 2026-08-01):** Arbeitspaket B löst die verbleibenden
+Supabase-Abhängigkeiten schrittweise ab. Auth-Basis, Vorgänge, Aufgaben und Offline-Sync sowie
+Stammdaten und Inventar sind abgelöst und gemergt (siehe „AP14/B — Datenpfade …“). Bilder und
+Uploads laufen weiterhin über Supabase.
 Serveradresse, DNS, Ressourcen, Netzwerkdetails und Betriebszugänge liefert die interne IT.
 Bis dahin kein Deployment. V1 bleibt Produktionssperre; kein produktiver Datenanfall.
 
@@ -297,9 +302,10 @@ und Schaltflächen unverändert von der bestehenden Anmeldeseite.
 
 - Vollständige Rechtematrix für `app_user` auf den Fachtabellen: gehört zur Migration der
   Datenmodule, hier ist nur das Mindestrecht auf `profiles` enthalten. **Nachtrag 2026-07-31:**
-  für Vorgänge, Aufgaben und Offline-Sync mit Migration `0014_ap14b_data_grants.sql` geliefert;
-  offen bleibt sie für Stammdaten, Inventar sowie Bilder und Uploads.
-- CSP und `connect-src` nennen weiterhin Supabase, weil die Datenmodule noch dorthin sprechen.
+  für Vorgänge, Aufgaben und Offline-Sync mit Migration `0014_ap14b_data_grants.sql` und für
+  Stammdaten und Inventar mit Migration `0015_ap14b_masterdata_inventory_grants.sql` geliefert;
+  offen bleibt sie nur noch für Bilder und Uploads.
+- CSP und `connect-src` nennen weiterhin Supabase, weil Bilder und Uploads noch dorthin sprechen.
 - `@app`-E2E weiterhin offen: sie brauchen den vollständigen Stack einschließlich MinIO.
 
 ## AP14/B — Datenpfade Vorgänge, Aufgaben, Offline-Sync (2026-07-31, gemergt)
@@ -337,11 +343,213 @@ PostgreSQL`), 18 Dateien, +4422/-583. **Kein Tag, kein Release, keine V1-Freigab
   Produktions-Build 0, `git diff --check` 0.
 - **Nachweis CI:** die beiden **durch Codex bestätigten** Push-Läufe zu `6b9d8dd` — CI-Lauf
   `30635566629` completed/success und Container-Image-Lauf `30635566645` completed/success.
-- **Grenze:** Stammdaten, Inventar sowie Bilder und Uploads laufen unverändert über Supabase
-  (u. a. `masterdata.ts`, `masterdata-actions.ts`, `inventory.ts`, `inventory-actions.ts`,
-  `image-actions.ts`, `image-upload-core.ts`, `images-server.ts`, `lib/supabase/server.ts`,
-  `lib/supabase/client.ts`, `database.types.ts`). AP14 insgesamt ist **nicht** abgeschlossen:
-  Browser-/Offline-Abnahme, CSP-Durchsetzung, MinIO sowie Betrieb und Deployment bleiben offen.
+- **Grenze:** Bilder und Uploads laufen unverändert über Supabase
+  (u. a. `image-actions.ts`, `image-upload-core.ts`, `images-server.ts`,
+  `lib/supabase/server.ts`, `lib/supabase/client.ts`, `database.types.ts`); Stammdaten und
+  Inventar sind Gegenstand des folgenden, inzwischen gemergten Abschnitts. AP14 insgesamt ist
+  **nicht** abgeschlossen: Browser-/Offline-Abnahme, CSP-Durchsetzung, MinIO sowie Betrieb und
+  Deployment bleiben offen.
+
+## AP14/B — Datenpfade Stammdaten und Inventar (2026-08-01, gemergt)
+
+**Status:** technisch abgeschlossen und auf `main` gemergt, Commit
+`79d88449f9e481b1148f902e175f46f9d07ef35d` (`feat: migrate masterdata and inventory to
+PostgreSQL`), 14 Dateien, +6021/-478. Der Commit ist ein Fast-Forward von
+`cb8bb888280b5509ae2c273789183767e3b7b4db` mit genau einem Commit Abstand, also **ohne
+Merge-Commit und ohne Force-Push**; `main`, `origin/main` sowie der lokale und der remote
+Feature-Branch `feat/ap14b-data-masterdata-inventory` stehen auf demselben Commit.
+**Kein Tag, kein Release, keine V1-Freigabe.**
+
+- **Umfang:** auf PostgreSQL umgestellt sind `app/src/lib/masterdata.ts`, `masterdata-actions.ts`,
+  `inventory.ts` und `inventory-actions.ts`; in allen vier Dateien gibt es null Supabase-Importe und
+  null `supabase.`-Zugriffe (per Suche belegt). Neu sind die Migration
+  `0015_ap14b_masterdata_inventory_grants.sql`, der Smoke `21_ap14b_masterdata_inventory.sql` und der
+  Node-Integrationstest `app/test/integration/ap14b-masterdata-inventory.int.mjs` mit der
+  Auflösungsdatei `module-hooks-app.mjs` und zwei Teststubs; die beiden Startskripte
+  `run_ap14b_local.ps1` und `run_db_tests.sh` wurden um Migration 0015 und Smoke 21 erweitert.
+- **Rechtematrix (`0015`):** die Migration ändert ausschließlich Rechte — keine Tabelle, Spalte,
+  Policy, View, Funktion oder Trigger. Alle 16 `grant`-Anweisungen gehen ausschließlich an
+  `app_user`; es gibt keinen Grant an `public`, `anon` oder `authenticated`, kein Recht auf
+  `audit_events` und **kein** `revoke`. Erteilt werden objektgenau: nur `insert`/`update` auf den
+  **sieben** Stammdatentabellen `on_call_numbers`, `customers`, `construction_stages`, `vzg_lines`,
+  `contacts`, `cable_types` und `app_settings`, deren Leserecht bereits aus `0014` stammt (bei
+  `app_settings` dient das Schreibrecht nicht einer `is_active`-Deaktivierung, sondern dem
+  Singleton-Upsert); `select`/`insert`/`update` auf `technicians` und `teams`, wo das Leserecht
+  **neu** ist, weil `0014` diesen beiden Tabellen gar kein Recht erteilt und `listTechnicians()`,
+  `listTeams()` sowie der Namensabgleich des Monteurimports es voraussetzen; `insert`/`delete` auf
+  `contact_phone_numbers`, dessen `select` bereits aus `0014` besteht, sowie
+  `select`/`insert`/`delete` auf `construction_stage_contacts` und `team_members`, deren Leserecht
+  hier erstmals erteilt wird, weil `listContacts()` die Bauabschnittszuordnung und `listTeams()` die
+  Mitgliedschaft mitliest — auf allen drei vollständig ersetzten Zuordnungstabellen bewusst kein
+  `update`; im Inventar `select`/`insert`/`update` auf `materials` und `storage_locations` (bewusst
+  kein `delete`, Deaktivierung über `is_active`), `select` auf der Bestands-View `material_stock` und
+  `select`/`insert` auf `inventory_movements` — für die Chronik ausdrücklich **kein** `update` und
+  **kein** `delete`. Vier fail-closed `do`-Blöcke am Migrationsende: **ein** Positivblock über 40
+  Objekt/Recht-Paare, davon drei nur als Wächter über Rechte, die schon aus `0012`/`0014` stammen
+  (`profiles select` aus `0012`, `incidents select` und `incidents update` aus
+  `0014_ap14b_data_grants.sql:55` für die `for update`-Serialisierung der Buchungswege; beides
+  direkte Vergaben an `app_user`, keine Rollenvererbung), sowie **drei** Negativblöcke: 19
+  verweigerte Tabellenrechte, die sieben klassischen Tabellenprivilegien auf `audit_events`
+  (`select`, `insert`, `update`, `delete`, `truncate`, `references`, `trigger`; das seit
+  PostgreSQL 17 zusätzliche `MAINTAIN` prüft der Block nicht, es erlaubt keinen Datenzugriff) und
+  die Gegenprobe, dass `app_user` weder `SUPERUSER` noch `BYPASSRLS` hat.
+- **Transaktionsabsicherung:** jeder Lese- und Schreibpfad läuft über
+  `withUserTransaction(session.userId, …)`; die Identität stammt ausschließlich aus
+  `getSessionProfile()`, das bei fehlender Sitzung und bei `must_change_password` NULL liefert —
+  eine fehlende Sitzung führt in den Lesewegen zum leeren Ergebnis wie bisher und in den
+  Schreibwegen zur Abweisung, in beiden Fällen ohne ausgeführtes SQL.
+  Mehrschrittige Operationen liegen in genau **einer** Transaktion: `saveContact` (Kontakt,
+  Telefonnummern, Bauabschnittszuordnung), `saveTeam` (Team und Mitgliedschaft) und die vier
+  Buchungswege einschließlich Einheitsabfrage und, bei der Rückgabe, der Prüfung der rückgabefähigen
+  Menge. SQL ist durchgängig parametrisiert, `order by` steht ausschließlich als festes Literal.
+  Fehler werden allein über den SQLSTATE eingeordnet; eine Datenbankmeldung gelangt nicht in das
+  Ergebnis einer Server Action, sondern ausschließlich ins Serverprotokoll. `created_by` und
+  `created_at` einer Bewegung bleiben Spaltendefault und werden nie aus einer Eingabe gesetzt.
+- **Reihenfolge in der Prüfkette:** Migration `0015` und Smoke `21` laufen in beiden Startskripten
+  **hinter** `20_ap14b_data.sql`. Grund: dessen Fall D18 prüft ausdrücklich negativ, dass `app_user`
+  kein `select` auf `inventory_movements` und kein `insert` auf `customers` besitzt, und belegt damit
+  den `0014`-Stand. Diese bestehende Negativprobe bleibt unverändert gültig; eine Anwendung von
+  `0015` davor würde sie scheitern lassen.
+- **Codex-Review und Korrekturlauf (2026-08-01):** das Codex-Review hat drei blockierende Befunde
+  festgestellt (F1 Rollenprüfung als Verbotsliste, F2 Rückfall auf `Stk` bei unbekanntem Material,
+  F3 parallele Rückgaben über die Restmenge hinaus). Die drei folgenden Punkte beschreiben deren
+  Behebung; sie stammen aus dem Korrekturlauf vom 2026-08-01 und nicht aus dem Vorlauf vom
+  2026-07-31.
+- **Reviewkorrektur Rollenprüfung (F1):** `createMovement()` entscheidet jetzt über eine
+  ausdrückliche Allowlist (`admin`, `disponent`) statt über die frühere Verbotsliste
+  `role === "monteur"`. Eine künftig ergänzte Rolle ist damit nicht länger durch Schweigen
+  buchungsberechtigt. Die zugelassene Menge deckt sich mit `public.is_staff()` und mit der Policy
+  `movements_insert`; der sichtbare Meldungstext ist unverändert.
+- **Reviewkorrektur fehlendes Material (F2):** der Rückfall auf die Einheit `Stk` bei fehlender
+  Materialzeile ist entfallen. `materialUnit()` liefert jetzt `null`, und alle vier Buchungswege
+  brechen fachlich vor dem Insert ab, statt sich auf den Fremdschlüssel zu verlassen. Fehlendes
+  Material („Verweis auf Material, Lager oder Vorgang ist ungültig.") und inaktives Material
+  („Material ist inaktiv.") liefern unterscheidbare Meldungen. Der Aktivstatus wird in Entnahme,
+  Rückgabe und Verbrauch ausdrücklich **nicht** geprüft: eine bereits entnommene Menge muss
+  rückgabefähig bleiben, auch wenn das Material inzwischen deaktiviert wurde.
+- **Reviewkorrektur Serialisierung (F3):** Entnahme, Rückgabe und Verbrauch sperren als **erste**
+  Anweisung ihrer bestehenden Transaktion die Vorgangszeile mit
+  `select id from public.incidents where id = $1::uuid for update`; zwei gleichzeitige Rückgaben
+  **desselben Vorgangs** können damit nicht mehr beide dieselbe Restmenge sehen. Die Sperre liegt
+  zwingend **vor** der Prüfung der rückgabefähigen Menge. `public.incidents` ist gewählt, weil alle drei Wege diese
+  Zeile zwingend berühren und sie für `admin`, `disponent` und den zugewiesenen Monteur sowohl
+  sichtbar (`incidents_select`) als auch sperrbar (`incidents_update`) ist — beide Policies tragen
+  dieselbe Bedingung (`0001_init.sql:540-546`); das nötige `update`-Recht der Anwendungsrolle stammt
+  aus `0014_ap14b_data_grants.sql:55`, Vorbild für die Sperre ist
+  `0010_ap12_incident_details.sql:255-259`. Kein globaler Lock, kein Superuser, kein
+  SECURITY-DEFINER-Umweg, keine geänderte Isolationsstufe. Ein fehlender oder nicht sichtbarer
+  Vorgang bricht fail-closed ab; „nicht vorhanden" und „nicht sichtbar" sind absichtlich nicht
+  unterscheidbar. **Ausdrücklich offen geblieben, vollständig nach dem Quelltextvermerk:** die
+  Vorgangssperre wirkt ausschließlich zwischen Buchungen **desselben** Vorgangs. Sie schützt den
+  Bestandswächter `check_inventory_nonnegative()` — einen `BEFORE`-Trigger ohne eigene Sperre, der
+  auf einem Anweisungssnapshot rechnet — **nicht** gegen gleichzeitige Abgänge desselben Materials
+  aus demselben Lager, wenn diese verschiedene Zeilen sperren oder gar keine: zwei Entnahmen oder
+  Verbräuche auf **verschiedenen** Vorgängen sperren verschiedene Vorgangszeilen, und die
+  lagerbezogenen Abgänge aus `createMovement()` (`verlust`, `beschaedigung`, `umbuchung`,
+  `korrektur`-Abgang) sperren **überhaupt nichts**, weil sie keine Vorgangszeile berühren. Diese
+  Lücke zu schließen wäre eine andere Sperrgranularität (Material/Lager) und damit eine fachliche
+  Entscheidung. **Voraussetzung der Zusage** ist die PostgreSQL-Vorgabestufe `READ COMMITTED`:
+  `withUserTransaction()` setzt keine Isolationsstufe, die Anweisungssperre verbietet `set`, und
+  keine Migration, kein Startskript und keine Umgebungsvorlage setzt
+  `default_transaction_isolation`. Unter `REPEATABLE READ` behielte die zweite Transaktion nach der
+  Sperrwartezeit ihren alten Snapshot — die gesperrte Zeile wird nur gesperrt, nicht geändert, es
+  gäbe also keinen Serialisierungsfehler — und die Korrektur würde still unwirksam.
+- **Geänderte Dateien der Korrektur:** ausschließlich `app/src/lib/inventory-actions.ts` und
+  `app/test/integration/ap14b-masterdata-inventory.int.mjs`. Migration `0015` und Smoke `21` blieben
+  unverändert — die Korrekturen brauchten keine Datenbankänderung. Der Fall `II9` erwartet für den
+  fremden Monteur jetzt den neutralen Verweistext, weil die Abweisung nicht mehr erst an der
+  Insert-Policy (`42501`), sondern schon an der Vorgangssperre erfolgt. Neu sind die Fälle
+  `II15`–`II19`.
+- **Nachweise des Vorlaufs vor dem Codex-Review (von Claude selbst erhoben):** TypeScript
+  `tsc --noEmit` Exit 0; ESLint Exit 0; Einheitentests 41/41 Exit 0; Next.js-Produktions-Build
+  Exit 0; `git diff --check` Exit 0.
+  Vollständiger lokaler PostgreSQL-18-Lauf über `run_ap14b_local.ps1 -TemporaryCluster` mit
+  Prozess-Exitcode 0: Bootstrap, Migrationen `0001`–`0015`, Smokes 15–20 einschließlich 19a und der
+  neue Smoke 21 mit 28 Erfolgsmeldungen und keiner FAIL-Meldung, Abschlusszeile
+  `ERGEBNIS: AP10/AP11/AP12/AP13/AP14B DATENBANKTESTS ERFOLGREICH.`; Node-Integrationstests 30/30
+  (Plattform) und 26/26 (Stammdaten und Inventar, damaliger Umfang vor den Reviewkorrekturen; der
+  gültige Wert steht im folgenden Punkt), je 0 Fehlschläge. Der neue Smoke prüft unter
+  `set role app_user` mit aktiver RLS und transaktionsgebundener Identität für Admin, Disposition,
+  zugewiesenen und fremden Monteur: CRUD und Aktivierung für Bereitschaftsnummern, Kunden,
+  Bauabschnitte, VzG-Strecken, Kontakte mit Telefonnummern und Zuordnung, Techniker, Teams mit
+  Mitgliedschaft, Kabelarten und Anwendungseinstellungen; im Inventar Material, Lagerort,
+  Bestandsliste, Bewegungsverlauf und alle Bewegungsarten einschließlich Negativmenge, Einheit aus
+  dem Material, unzureichendem Bestand, unzulässiger Rolle, unveränderbarer Chronik, unverändertem
+  Audit und Rollback nach einem Fehler im zweiten Teilschritt. Temporäres Cluster, temporäre
+  Datenbank und Rolle wurden entfernt, der Port lauscht nicht mehr, und der vorhandene Dienst
+  `postgresql-x64-18` blieb unverändert.
+- **Nachweise des Korrekturlaufs (von Claude selbst erhoben):** TypeScript `tsc --noEmit` Exit 0;
+  ESLint Exit 0; Einheitentests 41/41 Exit 0; `git diff --check` Exit 0;
+  Next.js-Produktions-Build Exit 0. Vollständiger lokaler PostgreSQL-18-Lauf über
+  `run_ap14b_local.ps1 -TemporaryCluster` mit Prozess-Exitcode 0: Migrationen `0001`–`0015`,
+  Smokes 15–21 einschließlich 19a und 20, keine einzige `FAIL`-Meldung, Abschlusszeile
+  `ERGEBNIS: AP10/AP11/AP12/AP13/AP14B DATENBANKTESTS ERFOLGREICH.`; Node-Integrationstests 30/30
+  (Plattform) und 31/31 (Stammdaten und Inventar), je 0 Fehlschläge. Der Nebenläufigkeitsfall `II18`
+  startet zwei Rückgaben über je die volle Restmenge gemeinsam über `Promise.all`: genau eine
+  besteht, die zweite wird mit der unveränderten Restmengenmeldung und Restmenge 0 abgewiesen, und
+  die Summe der Rückgaben überschreitet die entnommene Menge nicht. Temporäres Cluster, temporäre
+  Datenbank und Rolle wurden entfernt, Port 55432 lauscht nicht mehr, der Dienst
+  `postgresql-x64-18` blieb unverändert `Running`. In allen vier Zieldateien gibt es weiterhin null
+  Supabase-Importe und null `supabase.`-Zugriffe; der frühere Worttreffer im Kommentar von
+  `inventory-actions.ts` ist mit dem ersetzten Kommentar entfallen.
+- **Unabhängige Verifikation und CI (2026-08-01, durch Codex erhoben — nicht von Claude selbst):**
+  TypeScript Exit 0, ESLint Exit 0, 41/41 Einheitentests, Next.js-Produktions-Build Exit 0 und
+  `git diff --check` Exit 0. Dazu ein vollständiger unabhängiger lokaler PostgreSQL-18-Lauf mit
+  Exit 0: Migrationen `0001`–`0015`, Smokes 15–21 einschließlich 19a, 30/30
+  Plattform-Integrationstests und 31/31 Stammdaten-/Inventar-Integrationstests einschließlich
+  Rollen-Allowlist, fehlendem Material, fremdem Vorgang und echter Parallelrückgabe, mit
+  vorhandener Abschlusszeile; temporäres Cluster, Datenbank, Rolle, Port und Arbeitsverzeichnis
+  wurden nachweislich entfernt, der vorhandene PostgreSQL-Dienst blieb unverändert. **Die beiden
+  durch Codex bestätigten Push-Läufe zu `79d8844`:** CI-Lauf `30677465341` completed/success und
+  Container-Image-Lauf `30677465340` completed/success — `gh` ist auf diesem Rechner nicht
+  installiert, Claude konnte die beiden Läufe nicht selbst abrufen.
+- **Bewusst unverändert (keine RLS-Änderung):** keine Policy, View, Funktion und kein Trigger wurde
+  angefasst; die Zeilensichtbarkeit bleibt Sache der bestehenden Policies. Zwei vorbestehende
+  Eigenschaften bleiben damit ausdrücklich bestehen und sind **kein** Ergebnis dieser Umstellung:
+  die AP9-Lesepolicy von `technicians`, `teams` und `team_members` lautet weiterhin „jede angemeldete
+  Identität" — kein Anwendungspfad führt einen Monteur dorthin, weil die Stammdatenseiten
+  staff-gesperrt sind; und `material_stock` bleibt eine Aggregat-View ohne `security_invoker`, sodass
+  die Bestandsübersicht `/bestand` allen Rollen den Gesamtbestand zeigt (so in `0001_init.sql` unter
+  der View-Definition begründet).
+- **Ausdrücklich benannte Folge der neuen Leserechte:** die AP9-Lesepolicy selbst bleibt
+  unverändert, ihre **Erreichbarkeit** für die Anwendungsrolle entsteht auf `technicians` und
+  `teams` jedoch erst mit `0015`. Vorher besaß `app_user` auf diesen beiden Tabellen kein
+  Tabellenrecht — geprüft gegen alle Migrationen `0001`–`0014` —, ein Lesezugriff scheiterte also
+  schon in der Datenbank mit `42501`. Seit `0015` ist die einzige verbleibende Schranke gegen einen
+  Monteur-Lesezugriff die Anwendungsschicht, nämlich die staff-gesperrten Stammdatenseiten. Das ist
+  eine bewusste Folge der Umstellung und keine Policy-Änderung; ob diese Schranke ausreichen soll,
+  ist eine fachliche Entscheidung und wird hier nicht getroffen.
+- **Sichtbare Auswirkung:** keine GUI-, Layout-, Navigations- oder Interaktionsänderung. Einzige
+  unvermeidbare Textfolge: wo eine Fehlermeldung bisher die rohe Datenbankmeldung interpolierte,
+  steht jetzt ein neutraler Text hinter dem unveränderten Präfix.
+- **Sichtbare Auswirkung der Reviewkorrekturen:** die Korrekturen führen **kein** neues
+  Meldungsvokabular ein — beide Texte, die die neuen Vorprüfungen liefern („Verweis auf Material,
+  Lager oder Vorgang ist ungültig." und „Material ist inaktiv."), bestanden bereits wörtlich und
+  existieren als Konstante nur einmal. Geändert hat sich genau **ein** Fehlerpfad: buchte eine
+  Identität auf einen Vorgang, der für sie nicht sichtbar ist (fremder Monteur), meldete die
+  Anwendung bisher „keine Berechtigung." aus dem `SQLSTATE 42501` der Insert-Policy; jetzt greift
+  vorher die Vorgangssperre und es erscheint derselbe neutrale Verweistext wie für einen nicht
+  vorhandenen Vorgang. Das ist beabsichtigt: die Meldung soll keine Existenzaussage über fremde
+  Vorgänge treffen. Keine GUI-Entscheidung erforderlich, weil kein sichtbarer Text neu gestaltet
+  wurde.
+- **Restpunkte, ausdrücklich nicht behoben (nicht blockierend, gehören in die Übergabe an Codex):**
+  die nicht atomare Dublettenprüfung des Monteurimports — Abgleich und Insert liegen in zwei
+  Transaktionen, die Eindeutigkeit greift nur auf `profile_id` — und die fehlende Ausführung der
+  beiden Node-Integrationssuiten im Linux-CI-Skript `run_db_tests.sh`: dort läuft ausschließlich die
+  SQL-Kette, was gleichermaßen für den bestehenden Plattformtest gilt und damit keine Regression ist.
+- **Grenze:** Supabase bleibt ausschließlich für **Bilder und Uploads** sowie die dafür noch
+  benötigten Clientdateien und Pakete in Betrieb. Der funktionale Restbestand unter `app/src` sind
+  genau sieben Dateien — `lib/images-server.ts`, `lib/image-upload-core.ts`, `lib/image-actions.ts`,
+  `app/api/images/upload/route.ts`, `lib/supabase/client.ts`, `lib/supabase/server.ts` und
+  `lib/supabase/config.ts` — dazu `lib/database.types.ts` mit dem `Database`-Typ, den nur
+  `client.ts` und `server.ts` importieren; weitere Nennungen in `app/src` sind reine Kommentar- oder
+  Anzeigetexte und **kein** funktionaler Restbestand. Die Pakete `@supabase/ssr` und
+  `@supabase/supabase-js` sind bewusst noch nicht entfernt, und CSP/`connect-src` nennen weiterhin
+  Supabase. Browser-E2E wurden in
+  diesem Paket **nicht** ausgeführt: der Diff berührt keine Route und keine Laufzeitabhängigkeit der
+  `@public`-Tests. AP14 insgesamt bleibt offen (Browser-/Offline-Abnahme, CSP-Durchsetzung, MinIO,
+  Betrieb und Deployment), V1 bleibt Produktionssperre, Branding bleibt separat, GUI-/Designarbeit
+  wartet auf Dennis.
 
 ## Definitionen und Begriffe
 - **AP1–AP7:** Arbeitspakete (Grundgerüst → Vorgänge → Material → Bilder → Offline/PWA → E2E/Härtung → Release Readiness).
@@ -615,7 +823,7 @@ Abschnitt.** Details in Roadmap B.3 (Version 1.14).
 
 **V1** bleibt Produktionssperre (Stage und Test nur mit synthetischen Daten), Branding bleibt
 separat auf `feat/ap8.1-branding` (`04253a2`, nicht gemergt), **kein RC1-Tag**. AP14B
-`data-incidents-tasks-sync` ist seit dem 2026-07-31 gemergt (Commit `6b9d8dd`). Nächster
-nicht-visueller Arbeitsblock ist die Ablösung der verbliebenen Supabase-Datenpfade in
-**Stammdaten und Inventar** nach PostgreSQL/RLS; Bilder und Uploads folgen mit dem
-MinIO-Bildspeicher. Die Browser-E2E der Massenaktionen bleibt diesen Ablösungen nachgeordnet.
+`data-incidents-tasks-sync` ist seit dem 2026-07-31 gemergt (Commit `6b9d8dd`); Stammdaten und
+Inventar sind seit dem 2026-08-01 gemergt (Commit `79d8844`). Nächster nicht-visueller
+Arbeitsblock ist die Ablösung der verbliebenen Supabase-Datenpfade in **Bildern und Uploads** mit
+dem MinIO-Bildspeicher. Die Browser-E2E der Massenaktionen bleibt diesen Ablösungen nachgeordnet.
