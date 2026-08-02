@@ -4,15 +4,16 @@
 > (`00-Projektsteuerung/ROADMAP_AP12_AP15_ENTWURF.md`, B.1/B.8). Abgelöste Dublette:
 > `00-Projektsteuerung/PROJEKTSTATUS.md` (als historisch markiert, nicht gelöscht).
 > Endgültige Konsolidierung und Archivierung erfolgen in AP15.
-> Stand: 2026-08-01
+> Stand: 2026-08-02
 
-> **Aktueller Stand (2026-08-01).** Zielplattform bleibt ADR-011: PostgreSQL 18, Auth.js v5, MinIO
+> **Aktueller Stand (2026-08-02).** Zielplattform bleibt ADR-011: PostgreSQL 18, Auth.js v5, MinIO
 > und Containerbetrieb hinter dem internen Reverse-Proxy; Supabase ist kein Ziel. Bestätigter
-> Technischer Referenzstand vor diesem Dokumentationsabschluss ist
-> `cbe17b3c1bf9118ae3b36ef85353cce46aa7d8c9`
-> (`fix(ci): verify MinIO private anonymous state`) über dem fachlichen Commit
-> `edfafb482f6d4d95e69bd99e9b28c54ef7d92a87` (`feat: migrate incident images to MinIO`);
-> Pull Request #5 ist geschlossen und gemergt. Die früheren Stände
+> Technischer Referenzstand ist `62ab167dafd344c754eb00e19fe1c69e92950a2e` auf `main`;
+> Pull Request #6 ist geschlossen und gemergt. Die administrative Benutzerverwaltung nach ADR-011
+> ist serverseitig umgesetzt (temporärer Passwort-Reset, Deaktivierung/Reaktivierung,
+> Rollenwechsel, Sitzungswiderruf und Audit). Der abschließende PR-CI-Lauf `30734789895`, der
+> main-CI-Lauf `30735713849` mit allen vier Jobs und der Container-Image-Lauf `30735713852` sind
+> jeweils `completed/success`. Die früheren Stände
 > `79d88449f9e481b1148f902e175f46f9d07ef35d` und `22db6dad8958146be4de667a55e89ba170e73b7c` sind
 > Vorfahren und damit überholt. Die Datenpfade für Vorgänge, Aufgaben und Offline-Sync, für
 > Stammdaten und Inventar sowie für Bilder und Uploads sind auf PostgreSQL 18 und den privaten
@@ -23,9 +24,8 @@
 > ihre historischen Prüfnachweise unverändert. **AP14 insgesamt bleibt offen:** echte IT-Adressen
 > und die Same-Origin-Route am internen Reverse-Proxy, produktiver Betrieb und Deployment, die
 > vollständige `@app`-/Offline-Abnahme und die CSP-Auswertung sind nicht erbracht. Nächster
-> nicht-visueller Arbeitsblock ist die administrative Benutzerverwaltung nach ADR-011 (Reset mit
-> temporärem Passwort und `must_change_password`, Deaktivierung, Rollenwechsel, jeweils mit
-> Sitzungswiderruf und Audit). V1 bleibt
+> nicht-visueller Arbeitsblock ist AP15 Konsolidierung und Archivierung. Die sichtbare GUI der
+> Benutzerverwaltung wartet auf Dennis. V1 bleibt
 > Produktionssperre, Branding bleibt separat, GUI-/Designarbeit wartet auf Dennis.
 
 ## Repository
@@ -116,9 +116,10 @@
   Vorgänge, Aufgaben und Offline-Sync mit Migration `0014_ap14b_data_grants.sql`, für
   Stammdaten und Inventar mit `0015_ap14b_masterdata_inventory_grants.sql` und für Bilder und
   Uploads mit `0016_ap14b_image_grants.sql`; der MinIO-Bildspeicher ist umgesetzt und gemergt.
-  **Offen bleibt** die administrative Benutzerverwaltung nach ADR-011 (Reset mit temporärem
-  Passwort und `must_change_password`, Deaktivierung, Rollenwechsel, jeweils mit Sitzungswiderruf
-  und Audit) als eigenes Arbeitspaket.
+  **Stand 2026-08-02:** die administrative Benutzerverwaltung nach ADR-011 ist serverseitig mit
+  Migration `0017`, Sitzungswiderruf, Audit und fail-closed Schutz des letzten aktiven
+  Administrators umgesetzt und auf `main` gemergt. Die sichtbare GUI bleibt bis zur gemeinsamen
+  Designentscheidung mit Dennis offen.
   Einzelheiten: `PROJEKT_WISSEN.md`, Abschnitt „AP14/B — Auth-Basis".
 
 ## Git / Push (VERALTET — siehe „Aktueller Stand 2026-07-26" am Dateiende)
@@ -366,9 +367,7 @@ Details: `04-UI-UX/GUI.md`, `04-UI-UX/DESIGNSYSTEM.md`.
   Same-Origin-Route am internen Reverse-Proxy, produktiver Betrieb und Deployment, die
   vollständige `@app`-/Offline-Abnahme sowie die CSP-Auswertung sind nicht erbracht. **RC1 ist
   nicht abgeschlossen**, es gibt **kein** Tag, **kein** Release und keine V1-Freigabe.
-- **Nächstes nicht-visuelles Paket:** administrative Benutzerverwaltung nach ADR-011 — Reset mit
-  temporärem Passwort und `must_change_password`, Deaktivierung und Rollenwechsel, jeweils mit
-  Widerruf aller Sitzungen des Kontos und Auditeintrag (ADR-011 §2.2 und §2.3). **GUI-/Designarbeit
-  wartet weiter auf Dennis.**
+- **Nächstes nicht-visuelles Paket:** AP15 Konsolidierung und Archivierung. **GUI-/Designarbeit
+  der Benutzerverwaltung wartet weiter auf Dennis.**
 - Einzelheiten: `PROJEKT_WISSEN.md` (Abschnitt „AP14/B — Bilder und Uploads auf MinIO") und
   `00-Projektsteuerung/ROADMAP_AP12_AP15_ENTWURF.md` (B.4, Version 1.19).

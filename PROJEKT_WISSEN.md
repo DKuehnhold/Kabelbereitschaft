@@ -1,13 +1,17 @@
 # Projektwissen – Kabelbereitschaft
-> Stand: 2026-08-01 · Nur bestätigte Ergebnisse. Nicht ausgeführte Prüfungen sind als offen markiert.
+> Stand: 2026-08-02 · Nur bestätigte Ergebnisse. Nicht ausgeführte Prüfungen sind als offen markiert.
 
-> **Aktueller Stand (2026-08-01).** Zielplattform bleibt ADR-011: PostgreSQL 18, Auth.js v5, MinIO
+> **Aktueller Stand (2026-08-02).** Zielplattform bleibt ADR-011: PostgreSQL 18, Auth.js v5, MinIO
 > und Containerbetrieb hinter dem internen Reverse-Proxy; Supabase ist kein Ziel. Bestätigter
-> Technischer Referenzstand vor diesem Dokumentationsabschluss ist
-> `cbe17b3c1bf9118ae3b36ef85353cce46aa7d8c9`
-> (`fix(ci): verify MinIO private anonymous state`) über dem fachlichen Commit
-> `edfafb482f6d4d95e69bd99e9b28c54ef7d92a87` (`feat: migrate incident images to MinIO`);
-> Pull Request #5 ist geschlossen und gemergt. Die früheren Stände
+> Technischer Referenzstand ist `62ab167dafd344c754eb00e19fe1c69e92950a2e`
+> (`test: cover final fail-closed admin race`) auf `main`; Pull Request #6 ist geschlossen und
+> gemergt. Die administrative Benutzerverwaltung nach ADR-011 ist serverseitig umgesetzt:
+> Passwort-Reset mit temporärem Passwort und `must_change_password`, Deaktivierung/Reaktivierung
+> und Rollenwechsel widerrufen die Zielsitzungen transaktional und erzeugen Auditereignisse.
+> Migration `0017` schützt insbesondere den letzten aktiven Administrator und die aktive
+> Administrator-Identität fail-closed. Der abschließende PR-CI-Lauf `30734789895` sowie die
+> main-Läufe CI `30735713849` (Jobs `verify`, `database`, `container`, `objectstore`) und
+> Container-Image `30735713852` sind jeweils `completed/success`. Die früheren Stände
 > `79d88449f9e481b1148f902e175f46f9d07ef35d` und `22db6dad8958146be4de667a55e89ba170e73b7c`
 > sind Vorfahren und damit überholt. Die Datenpfade
 > für **Vorgänge, Aufgaben und Offline-Sync** sind auf PostgreSQL 18 migriert, lokal und in der CI
@@ -23,9 +27,8 @@
 > abgeschlossen**. **AP14 insgesamt bleibt offen:** echte IT-Adressen und die Same-Origin-Route am
 > internen Reverse-Proxy, produktiver Betrieb und Deployment, die vollständige `@app`-/Offline-
 > Abnahme sowie die CSP-Auswertung sind **nicht** erbracht. Nächster nicht-visueller Arbeitsblock
-> ist die **administrative Benutzerverwaltung nach ADR-011** (Reset mit temporärem Passwort und
-> `must_change_password`, Deaktivierung, Rollenwechsel, jeweils mit Sitzungswiderruf und Audit);
-> sie ist bislang **nur benannt und nicht umgesetzt**.
+> ist **AP15 Konsolidierung und Archivierung**. Die sichtbare GUI der Benutzerverwaltung wartet
+> weiterhin auf die gemeinsame Designentscheidung mit Dennis.
 > V1 bleibt Produktionssperre, Branding bleibt separat, GUI-/Designarbeit wartet auf Dennis.
 
 ## Projektziel
