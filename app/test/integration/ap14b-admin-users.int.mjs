@@ -917,7 +917,7 @@ test("V24 letzter Administrator: zwei gleichzeitige Herabstufungen", options, as
   // Beide Aufrufe handeln unter DERSELBEN Identitaet (ADMIN_A) und stufen je
   // einen ANDEREN der beiden verbliebenen Administratoren herab. Welcher der
   // beiden zuerst festschreibt, entscheidet die Datenbank - der Fall laesst
-  // deshalb DREI legitime Ausgaenge fuer den jeweils unterlegenen Aufruf zu:
+  // deshalb VIER legitime Ausgaenge fuer den jeweils unterlegenen Aufruf zu:
   //
   //   1. Die Herabstufung von ADMIN_B gewinnt. Der Aufruf auf ADMIN_A selbst
   //      trifft danach den letzten Administrator und endet mit `last_admin`.
@@ -927,9 +927,22 @@ test("V24 letzter Administrator: zwei gleichzeitige Herabstufungen", options, as
   //      festgeschrieben, BEVOR der andere Aufruf `assertActiveAdmin`
   //      durchlaeuft. Der Handelnde ist dann selbst kein aktiver Administrator
   //      mehr und wird fail-closed mit AdminActionDeniedError abgewiesen.
+  //   4. Die Selbstherabstufung von ADMIN_A gewinnt, schreibt aber erst fest,
+  //      NACHDEM der andere Aufruf `assertActiveAdmin` schon bestanden hat.
+  //      Unter READ COMMITTED bekommt jede Anweisung einen eigenen
+  //      Schnappschuss: das anschliessende Lesen des ZIELPROFILS faellt unter
+  //      die Policy `profiles_select` aus Migration `0001` (dort
+  //      `id = auth.uid() or public.is_staff()`, von `0012` auf
+  //      `app.current_user_id()` umgeschrieben), und `public.is_staff()`
+  //      umfasst nur `admin` und `disponent`. Der inzwischen zum Monteur
+  //      herabgestufte Handelnde sieht die Zeile von ADMIN_B damit nicht mehr,
+  //      und `adminSetRole` endet fail-closed mit `not_found`. Genau dieser
+  //      Ausgang trat im Linux-CI-Lauf `30733048345` auf
+  //      (`erfuellt:not_found | erfuellt:changed`).
   //
-  // Ausgang 3 ist gewolltes Verhalten und keine Abschwaechung: er verweigert
-  // frueher als der Schutztrigger, nicht spaeter. Die EIGENTLICHE Zusicherung
+  // Die Ausgaenge 3 und 4 sind gewolltes Verhalten und keine Abschwaechung: sie
+  // verweigern frueher als der Schutztrigger, nicht spaeter, und schreiben
+  // nichts - `not_found` faellt vor dem `update`. Die EIGENTLICHE Zusicherung
   // dieses Falls ist deshalb nicht ein bestimmtes Ergebnispaar, sondern die
   // Invariante danach: es bleibt GENAU EIN aktiver Administrator uebrig -
   // niemals null. Genau diese Invariante wuerde ohne den Advisory-Lock brechen.
@@ -970,12 +983,13 @@ test("V24 letzter Administrator: zwei gleichzeitige Herabstufungen", options, as
 
       const other = settled.find((outcome) => outcome !== changed[0]);
       const otherAccepted =
-        (other.status === "fulfilled" && other.value.kind === "last_admin") ||
+        (other.status === "fulfilled" &&
+          (other.value.kind === "last_admin" || other.value.kind === "not_found")) ||
         (other.status === "rejected" && other.reason instanceof AdminActionDeniedError);
       assert.equal(
         otherAccepted,
         true,
-        `Der zweite Aufruf muss mit last_admin oder AdminActionDeniedError enden, erhalten: ${seen}`,
+        `Der zweite Aufruf muss mit last_admin, not_found oder AdminActionDeniedError enden, erhalten: ${seen}`,
       );
 
       // Die eigentliche Sicherheitsaussage - gemessen ueber den Admin-Client mit
