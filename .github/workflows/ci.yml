@@ -97,6 +97,20 @@ jobs:
   # AP14/A10: die SQL-Smokes liefen bisher ausschliesslich lokal ueber
   # run_ap12_local.ps1 (PowerShell/Windows). Hier laufen dieselben Dateien in
   # derselben Reihenfolge gegen einen PostgreSQL-18-Service.
+  #
+  # AP14/B: nach der SQL-Kette laeuft zusaetzlich der Integrationstest der
+  # administrativen Benutzerverwaltung (echter Anwendungscode aus
+  # app/src/lib/admin-users.ts gegen dieselbe temporaere Datenbank). Er laeuft
+  # FAIL-CLOSED und doppelt gesichert:
+  #   1. AP14B_INTEGRATION: require - run_db_tests.sh bricht mit einem Exitcode
+  #      ungleich 0 ab, sobald eine Voraussetzung fehlt (node, node_modules/pg,
+  #      Testdateien, Zufallsquelle, Rollenanlage).
+  #   2. Das Skript setzt fuer den Node-Lauf zusaetzlich
+  #      AP14B_REQUIRE_INTEGRATION=1; ein leerer oder falscher Verbindungswert
+  #      fuehrt dort zum Abbruch beim Laden des Moduls statt zu einem Skip.
+  # Ein fehlender Verbindungswert kann damit keinen gruenen Lauf ohne Nachweis
+  # erzeugen. Deshalb sind hier auch setup-node und "npm ci" noetig: ohne
+  # app/node_modules faende das Skript kein pg und wuerde abbrechen.
   database:
     runs-on: ubuntu-latest
     services:
@@ -114,12 +128,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
       - name: PostgreSQL-Client installieren
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y postgresql-client
 
-      - name: Datenbankpruefungen (Migrationen 0001-0016 + Smokes AP10-AP14B)
+      - name: Datenbankpruefungen (Migrationen 0001-0017 + Smokes AP10-AP14B + Admin-Integrationstest)
         run: |
           chmod +x supabase/test/run_db_tests.sh
           supabase/test/run_db_tests.sh
@@ -128,6 +151,8 @@ jobs:
           PGPORT: "5432"
           PGUSER: postgres
           PGPASSWORD: ci_only_not_a_secret
+          # Pflichtmodus: der Integrationstest MUSS laufen und MUSS gelingen.
+          AP14B_INTEGRATION: require
 
   # AP14/A8: Containerbau und Stack-Validierung. Kein Push, kein Deployment.
   container:

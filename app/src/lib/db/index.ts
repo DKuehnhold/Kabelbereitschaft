@@ -13,9 +13,22 @@ import { assertAllowedStatement } from "./statement-guard";
 // AP14/B: kontrollierter Datenbankzugriff gemaess ADR-011 / 2.5.
 //
 // Verbindliche Eigenschaften dieses Moduls:
-//   - Der Pool ist modulprivat. Es gibt keinen Export, der eine rohe Verbindung
-//     herausgibt; damit ist "kein Datenbankzugriff ausserhalb des Wrappers"
-//     strukturell erzwungen und nicht nur eine Konvention.
+//   - Die FASSADE ist strukturell erzwungen: es gibt keinen Export, der eine
+//     rohe Verbindung herausgibt, und unter app/src importiert ausschliesslich
+//     diese Datei `pg` (die Werkzeuge unter app/scripts sind kein Anwendungscode
+//     und laufen ohnehin im Eigentuemerkontext).
+//     BEKANNTE GRENZE - ausdruecklich benannt, damit aus dieser Zusage niemand
+//     mehr liest, als sie traegt: der Anker `globalThis.__kabelbereitschaftPool`
+//     (unten) ist von jedem Servermodul desselben Prozesses OHNE Import
+//     erreichbar. Dass niemand ihn benutzt, ist eine Konvention und keine
+//     strukturelle Sperre. Der Anker ist noetig, weil Next.js Servermodule im
+//     Entwicklungsbetrieb mehrfach laedt; die Testsuiten beenden den Pool
+//     ueber ihn. Eine Umstellung auf ein nicht erratbares Symbol oder eine
+//     Lint-Regel waere eine eigene Entscheidung und ist hier NICHT getroffen.
+//   - Vor der ersten fachlichen Transaktion prueft ein einmaliges Startgate die
+//     Laufzeitrolle (kein Superuser, kein BYPASSRLS, keine Mitgliedschaft in
+//     der Eigentuemerrolle). Es gibt dafuer keine Umgehungsvariable: schlaegt
+//     das Gate fehl, laeuft KEINE Transaktion dieses Prozesses.
 //   - Jede fachliche Operation laeuft in einer expliziten Transaktion. Die
 //     Identitaet wird darin mit SET LOCAL gesetzt (via set_config(..., true))
 //     und endet mit der Transaktion. Sie kann deshalb nicht ueber eine
@@ -200,10 +213,191 @@ async function applyTransactionSettings(
   );
 }
 
+/**
+ * Ergebnis der Rollenpruefung - acht Zusagen, jede einzeln beurteilbar.
+ *
+ * Bewusst acht getrennte Spalten statt eines vorberechneten "ist in Ordnung":
+ * die Meldung soll die VERLETZTE Zusage nennen und nicht nur, dass etwas
+ * verletzt ist.
+ */
+type RuntimeRoleRow = {
+  session_superuser: boolean;
+  session_bypassrls: boolean;
+  session_owns_auth_accounts: boolean;
+  session_owns_profiles: boolean;
+  current_superuser: boolean;
+  current_bypassrls: boolean;
+  current_owns_auth_accounts: boolean;
+  current_owns_profiles: boolean;
+};
+
+/**
+ * Die drei Zusagen ueber die Laufzeitrolle, gelesen aus dem Systemkatalog.
+ *
+ * WARUM `session_user` UND ZUSAETZLICH `current_user`:
+ *   Massgeblich ist `session_user` - das ist die ANMELDEROLLE, und nur sie
+ *   beschreibt, womit der Prozess an der Datenbank haengt. `set role` setzt
+ *   ausschliesslich `current_user`; wer nur `current_user` prueft, misst
+ *   deshalb einen Zustand, der sich jederzeit wieder aendern laesst. Umgekehrt
+ *   waere `session_user` allein zu wenig: liefe die Verbindung zum
+ *   Pruefzeitpunkt bereits unter einer angenommenen Rolle, wuerde die Pruefung
+ *   an ihr vorbeisehen. Deshalb werden BEIDE Rollen gegen dieselben drei
+ *   Zusagen gemessen. Weichen sie voneinander ab, ist das fuer sich genommen
+ *   KEIN Abweisungsgrund - die abweichende Rolle muss die Zusagen aber
+ *   ebenfalls erfuellen.
+ *
+ * WARUM 'MEMBER' UND NICHT 'USAGE':
+ *   'USAGE' beantwortet, ob die Rolle die Rechte der Eigentuemerrolle
+ *   AUTOMATISCH erbt. Eine mit `noinherit` angelegte Anmelderolle liefert dort
+ *   `false`, kann aber jederzeit `set role <eigentuemer>` ausfuehren und danach
+ *   alles tun, was der Eigentuemer darf. Ab PostgreSQL 16 steuert zudem jedes
+ *   `grant ... with inherit/set` getrennt, ob Vererbung und/oder Rollenwechsel
+ *   gilt - 'USAGE' und 'MEMBER' fallen dort regelmaessig auseinander. Fuer die
+ *   BETRIEBSVORAUSSETZUNG "Anmelderolle getrennt von der Eigentuemerrolle" ist
+ *   'MEMBER' der richtige, strengere Modus.
+ *   ASYMMETRIE ZU MIGRATION 0017, ABSICHTLICH: die Waechter dort benutzen in
+ *   ihrer Eigentuemerausnahme `pg_has_role(current_user, <owner>, 'USAGE')` -
+ *   dort geht es um die Frage, ob der gerade Schreibende die Rechte des
+ *   Eigentuemers TATSAECHLICH hat, und ein Freibrief soll so eng wie moeglich
+ *   sein. Hier geht es um das Gegenteil: eine Betriebsvoraussetzung soll so
+ *   frueh wie moeglich anschlagen. Beide Modi sind an ihrer Stelle richtig.
+ *
+ * WARUM BEIDE EIGENTUEMER:
+ *   Die beiden Waechter in 0017 lesen getrennt den Eigentuemer von
+ *   public.auth_accounts bzw. public.profiles. Diese beiden koennen
+ *   auseinanderfallen; jede Mitgliedschaft in einem der beiden hebelt einen der
+ *   Waechter aus.
+ */
+const RUNTIME_ROLE_QUERY = `select
+     r.rolsuper     as session_superuser,
+     r.rolbypassrls as session_bypassrls,
+     pg_catalog.pg_has_role(session_user, o.auth_owner, 'MEMBER')
+       as session_owns_auth_accounts,
+     pg_catalog.pg_has_role(session_user, o.profile_owner, 'MEMBER')
+       as session_owns_profiles,
+     c.rolsuper     as current_superuser,
+     c.rolbypassrls as current_bypassrls,
+     pg_catalog.pg_has_role(current_user, o.auth_owner, 'MEMBER')
+       as current_owns_auth_accounts,
+     pg_catalog.pg_has_role(current_user, o.profile_owner, 'MEMBER')
+       as current_owns_profiles
+   from pg_catalog.pg_roles r
+   join pg_catalog.pg_roles c on c.rolname = current_user
+   cross join (
+     select
+       (select k.relowner from pg_catalog.pg_class k
+         where k.oid = 'public.auth_accounts'::regclass) as auth_owner,
+       (select k.relowner from pg_catalog.pg_class k
+         where k.oid = 'public.profiles'::regclass)      as profile_owner
+   ) o
+   where r.rolname = session_user`;
+
+/**
+ * Fehler des Startgates - Klartext der verletzten Zusage, sonst nichts.
+ *
+ * Dieselbe Zurueckhaltung wie in `databaseUrl()`, das bewusst nur den
+ * Variablennamen nennt: die Meldung enthaelt NIEMALS die
+ * Verbindungszeichenfolge, NIEMALS ein Kennwort und NIEMALS einen Rollennamen.
+ * Sie landet im Serverprotokoll und moeglicherweise in einer Fehlerseite.
+ */
+function runtimeRoleError(violation: string): Error {
+  return new Error(
+    `Laufzeitrolle der Datenbankverbindung nicht zulaessig: ${violation}. ` +
+      "Die Anwendung muss mit einer eigenen, nicht privilegierten Anmelderolle " +
+      "laufen, die von der Migrations-/Eigentuemerrolle getrennt ist.",
+  );
+}
+
+/**
+ * Einmalige, fail-closed Pruefung der Laufzeitrolle.
+ *
+ * Holt sich eine EIGENE Verbindung und gibt sie im `finally` zurueck. Sie
+ * laeuft nicht ueber die Fassade, sondern am rohen Client - wie `begin` und
+ * `applyTransactionSettings` auch: die Fassade ist fuer fachliche Abfragen da.
+ */
+async function checkRuntimeRole(): Promise<void> {
+  const client = await getPool().connect();
+  try {
+    const result = await client.query<RuntimeRoleRow>(RUNTIME_ROLE_QUERY);
+
+    // Fail-closed im Vollsinn: keine Zeile, mehr als eine Zeile oder ein Wert,
+    // der kein Wahrheitswert ist, sind eine Verweigerung - kein Vorgabewert,
+    // keine Warnung. Ein Fehler der Abfrage selbst schlaegt ohnehin durch.
+    if (result.rows.length !== 1) {
+      throw runtimeRoleError(
+        "die Laufzeitrolle ist im Systemkatalog nicht eindeutig bestimmbar",
+      );
+    }
+    const row = result.rows[0];
+    for (const value of Object.values(row)) {
+      if (typeof value !== "boolean") {
+        throw runtimeRoleError(
+          "die Zusagen ueber die Laufzeitrolle sind nicht auswertbar",
+        );
+      }
+    }
+
+    if (row.session_superuser) {
+      throw runtimeRoleError("die Anmelderolle ist Superuser");
+    }
+    if (row.session_bypassrls) {
+      throw runtimeRoleError("die Anmelderolle umgeht RLS (BYPASSRLS)");
+    }
+    if (row.session_owns_auth_accounts || row.session_owns_profiles) {
+      throw runtimeRoleError(
+        "die Anmelderolle ist Mitglied der Eigentuemerrolle der Auth- bzw. Profiltabelle",
+      );
+    }
+    if (row.current_superuser) {
+      throw runtimeRoleError("die aktuell wirksame Rolle ist Superuser");
+    }
+    if (row.current_bypassrls) {
+      throw runtimeRoleError("die aktuell wirksame Rolle umgeht RLS (BYPASSRLS)");
+    }
+    if (row.current_owns_auth_accounts || row.current_owns_profiles) {
+      throw runtimeRoleError(
+        "die aktuell wirksame Rolle ist Mitglied der Eigentuemerrolle der Auth- bzw. Profiltabelle",
+      );
+    }
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Zwischengespeichertes Ergebnis des Startgates - genau EIN Lauf je Prozess.
+ *
+ * Ein einmal ABGELEHNTES Promise bleibt abgelehnt: jede weitere Transaktion
+ * scheitert mit derselben Meldung. Das ist ausdruecklich gewollt. Eine
+ * Wiederholung wuerde bedeuten, dass eine Betriebsvoraussetzung sich zur
+ * Laufzeit "einrenken" kann - und genau das darf sie nicht. Der Preis ist
+ * benannt: faellt das Gate wegen eines Verbindungsfehlers aus, hilft nur ein
+ * Neustart des Prozesses.
+ */
+let runtimeRoleGate: Promise<void> | undefined;
+
+/**
+ * Startgate vor der ersten fachlichen Transaktion.
+ *
+ * Bewusst hier und NICHT im `connect`-Ereignis des Pools - derselbe Grund wie
+ * bei `applyTransactionSettings`: dessen Rueckruf laeuft nebenlaeufig zur
+ * ersten Abfrage. Ein dort geworfener Fehler wuerde die erste Transaktion also
+ * nicht zuverlaessig aufhalten, sondern bestenfalls als Poolfehler erscheinen -
+ * und damit waere aus der Sperre eine Warnung geworden.
+ */
+function assertRuntimeRole(): Promise<void> {
+  runtimeRoleGate ??= checkRuntimeRole();
+  return runtimeRoleGate;
+}
+
 async function inTransaction<T>(
   userId: string | null,
   work: (client: DatabaseClient) => Promise<T>,
 ): Promise<T> {
+  // VOR dem Verbindungsaufbau der eigentlichen Transaktion: eine unzulaessige
+  // Laufzeitrolle darf nicht einmal ein `begin` absetzen.
+  await assertRuntimeRole();
+
   const client = await getPool().connect();
   let destroyed = false;
   try {

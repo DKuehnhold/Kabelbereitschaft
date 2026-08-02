@@ -87,7 +87,10 @@ param(
   [switch]$SkipIntegrationTests,
   [int]$ClusterReadyTimeoutSeconds = 60,
   [int]$ClusterStopTimeoutSeconds = 60,
-  [int]$MaxTotalSeconds = 480
+  # Angehoben von 480 auf 900: mit dem vierten Integrationslauf (administrative
+  # Benutzerverwaltung) ist ein weiterer Node-Prozess samt Argon2id-Laeufen
+  # hinzugekommen. Alle uebrigen Zeitgrenzen bleiben unveraendert.
+  [int]$MaxTotalSeconds = 900
 )
 
 $ErrorActionPreference = "Stop"
@@ -179,7 +182,15 @@ $files = @(
   # die Kette bleibt lesbar, und ein spaeter ergaenztes Recht kann keine
   # bestehende Negativprobe still entwerten.
   (Join-Path $migrationRoot "0016_ap14b_image_grants.sql"),
-  (Join-Path $testRoot "22_ap14b_images.sql")
+  (Join-Path $testRoot "22_ap14b_images.sql"),
+  # 0017 und 23 schliessen die Kette ab. Die Reihenfolge ist zwingend: die
+  # Migration erteilt das spaltenbezogene update auf public.profiles.role, und
+  # erst danach kann ihr Smoke es unter app_user nachweisen. Beide stehen
+  # ausserdem HINTER 19a_ap14b_grant_reset.sql: dessen pauschales
+  # `revoke all on all tables in schema public` soll den Spaltengrant aus 0017
+  # gar nicht erst erreichen koennen.
+  (Join-Path $migrationRoot "0017_ap14b_admin_user_management.sql"),
+  (Join-Path $testRoot "23_ap14b_admin_users.sql")
 )
 foreach ($file in $files) {
   if (-not (Test-Path -LiteralPath $file)) { throw "Testdatei fehlt: $file" }
@@ -197,9 +208,13 @@ $moduleHooksApp = Join-Path $appRoot "test\integration\module-hooks-app.mjs"
 # Betriebssystem). Das ist AUSDRUECKLICH KEIN MinIO und kein MinIO-Nachweis.
 $imagesIntegrationTest = Join-Path $appRoot "test\integration\ap14b-images.int.mjs"
 $s3TestEndpoint = Join-Path $appRoot "test\integration\s3-test-endpoint.mjs"
+# Vierter Integrationslauf: die administrative Benutzerverwaltung. Er benutzt
+# ausdruecklich module-hooks.mjs und NICHT module-hooks-app.mjs - er braucht die
+# ECHTE Sitzungsauswertung und darf sie nicht durch einen Sitzungsstub ersetzen.
+$adminUsersIntegrationTest = Join-Path $appRoot "test\integration\ap14b-admin-users.int.mjs"
 if (-not $SkipIntegrationTests) {
   foreach ($file in @($integrationTest, $moduleHooks, $masterdataIntegrationTest, $moduleHooksApp,
-      $imagesIntegrationTest, $s3TestEndpoint)) {
+      $imagesIntegrationTest, $s3TestEndpoint, $adminUsersIntegrationTest)) {
     if (-not (Test-Path -LiteralPath $file)) { throw "Testdatei fehlt: $file" }
   }
   if (-not (Test-Path -LiteralPath $NodeExe)) {
@@ -809,14 +824,17 @@ try {
   }
 
   Write-Host ""
-  Write-Host "--- AP14/B-Pruefungen aus 19_ap14b_platform.sql, 19a_ap14b_grant_reset.sql, 20_ap14b_data.sql, 21_ap14b_masterdata_inventory.sql und 22_ap14b_images.sql ---"
+  Write-Host "--- AP14/B-Pruefungen aus 19_ap14b_platform.sql, 19a_ap14b_grant_reset.sql, 20_ap14b_data.sql, 21_ap14b_masterdata_inventory.sql, 22_ap14b_images.sql und 23_ap14b_admin_users.sql ---"
   # Die Ueberschrift nennt Smoke 21 ausdruecklich mit. Er benutzt aber eigene
   # Fallpraefixe (M fuer Stammdaten, N fuer Inventar) und wuerde vom bisherigen
   # Muster "SMOKE [PRD]\d+" nicht erfasst - der Auszug waere irrefuehrend, weil
   # er eine Datei ankuendigt, aus der keine Zeile erscheint. Deshalb die zweite
   # Bedingung. Fuer Smoke 22 gilt dasselbe: er benutzt B (fachliche Faelle der
   # Bilddokumentation) und G (Rechte- und Negativfaelle) und braucht deshalb eine
-  # eigene, dritte Bedingung.
+  # eigene, dritte Bedingung. Fuer Smoke 23 gilt dasselbe ein weiteres Mal: er
+  # benutzt U (administrative Benutzerverwaltung) und schliesst mit
+  # "SMOKE U-ENDE" ab - beides braucht eine eigene, vierte Bedingung, sonst
+  # bliebe der Nachweis der Benutzerverwaltung im Auszug unsichtbar.
   $allOutput |
     Where-Object {
       ($_ -match "(19_ap14b_platform|19a_ap14b_grant_reset|20_ap14b_data)" -and $_ -match "SMOKE [PRD]\d+") -or
@@ -825,7 +843,16 @@ try {
       # "SMOKE [BG]\d+" nicht (auf BG folgt ein Bindestrich, keine Ziffer). Ohne
       # die dritte Alternative liefe der Smoke sichtbar bis G5 und seine
       # Abschlussbestaetigung fehlte im Konsolenauszug - ein stiller Nachweisverlust.
-      ($_ -match "22_ap14b_images" -and $_ -match "SMOKE (B\d+|G\d+|BG-ENDE)")
+      ($_ -match "22_ap14b_images" -and $_ -match "SMOKE (B\d+|G\d+|BG-ENDE)") -or
+      # Bewusst verallgemeinert auf "SMOKE U<...>": das fruehere Muster
+      # "SMOKE (U\d+|U-ENDE)" verlangte unmittelbar hinter dem U entweder eine
+      # Ziffer oder genau die Zeichenfolge "-ENDE". Der Block "SMOKE U-FIXTURES
+      # OK ..." aus 23_ap14b_admin_users.sql erfuellt beides nicht und wurde
+      # deshalb aus dem Konsolenauszug herausgefiltert, obwohl er geprueft wird -
+      # ein stiller Nachweisverlust. "SMOKE U\S+" erfasst jede Fallkennung
+      # dieses Smokes; die Einschraenkung auf die Datei steht ohnehin in der
+      # ersten Bedingung dieser Alternative.
+      ($_ -match "23_ap14b_admin_users" -and $_ -match "SMOKE U\S+")
     } |
     ForEach-Object { Write-Host (($_ -split "NOTICE:\s+")[-1]) }
 
@@ -936,6 +963,43 @@ grant connect on database "$database" to "$appRole";
     if ($imagesRun.ExitCode -ne 0) {
       throw ("Integrationstests des Bildpfades fehlgeschlagen (Exit {0})." -f
         $imagesRun.ExitCode)
+    }
+
+    Write-Host ""
+    Write-Host "Fuehre Integrationstests der administrativen Benutzerverwaltung aus ..."
+    # Vierter, gleichartiger Aufruf mit derselben Auswertung. Er benutzt
+    # ausdruecklich module-hooks.mjs wie der erste Lauf und NICHT
+    # module-hooks-app.mjs: geprueft werden die echten Modulfunktionen aus
+    # src/lib/admin-users.ts ZUSAMMEN mit der echten Sitzungsauswertung aus
+    # src/lib/auth-service.ts; ein Sitzungsstub wuerde genau den Nachweis
+    # entwerten. Er steht bewusst als LETZTER Lauf: seine Administratorkonten
+    # tragen einen echten Argon2id-Hash und wuerden die Bootstrap-Ausgangslage
+    # des ersten Laufs (usableAdminCount) mitzaehlen. Der Test raeumt sie
+    # vollstaendig ab.
+    try {
+      $env:AP14B_APP_DATABASE_URL = $appUrl
+      $env:AP14B_ADMIN_DATABASE_URL = $adminUrl
+      # Pflichtmodus auch lokal: fehlt eine der beiden Verbindungsvariablen,
+      # bricht der Test ab, statt still zu ueberspringen. Ein lokaler Lauf soll
+      # genauso wenig einen Nachweis vortaeuschen wie die CI, in der
+      # run_db_tests.sh denselben Schalter setzt. Er wird wie die beiden
+      # Verbindungsvariablen im finally wieder entfernt.
+      $env:AP14B_REQUIRE_INTEGRATION = "1"
+      $adminUsersRun = Invoke-HandleSafeProcess -FilePath $NodeExe -Label "integration_admin_users" `
+        -TimeoutSeconds 900 -WorkingDirectory $appRoot `
+        -Arguments @("--disable-warning=MODULE_TYPELESS_PACKAGE_JSON",
+          "--import", "./test/integration/module-hooks.mjs",
+          "./test/integration/ap14b-admin-users.int.mjs")
+    }
+    finally {
+      Remove-Item Env:\AP14B_APP_DATABASE_URL -ErrorAction SilentlyContinue
+      Remove-Item Env:\AP14B_ADMIN_DATABASE_URL -ErrorAction SilentlyContinue
+      Remove-Item Env:\AP14B_REQUIRE_INTEGRATION -ErrorAction SilentlyContinue
+    }
+    $adminUsersRun.Output | ForEach-Object { Write-Host $_ }
+    if ($adminUsersRun.ExitCode -ne 0) {
+      throw ("Integrationstests der administrativen Benutzerverwaltung fehlgeschlagen (Exit {0})." -f
+        $adminUsersRun.ExitCode)
     }
   }
 

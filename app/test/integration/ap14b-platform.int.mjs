@@ -325,6 +325,73 @@ function runBootstrap(args, password) {
   });
 }
 
+/**
+ * Anweisungstext des Kindprozesses fuer die Startgate-Probe.
+ *
+ * Er oeffnet GENAU EINE Transaktion ueber die Fassade aus src/lib/db und meldet
+ * das Ergebnis. Der Fehler wird ausdruecklich gefangen und ausgegeben, damit der
+ * Exitcode bestimmt ist und die vollstaendige Meldung samt Aufrufkette geprueft
+ * werden kann - auch daraufhin, was sie NICHT enthaelt.
+ */
+const PROBE_SOURCE = `
+const { withUserTransaction } = await import(${JSON.stringify(
+  new URL("../../src/lib/db/index.ts", import.meta.url).href,
+)});
+try {
+  await withUserTransaction(${JSON.stringify(DISPO.id)}, (client) =>
+    client.query("select 1 as eins"),
+  );
+  console.log("STARTGATE-PASSIERT");
+} catch (error) {
+  console.error(error);
+  process.exitCode = 7;
+} finally {
+  await globalThis.__kabelbereitschaftPool?.end();
+}
+`;
+
+/**
+ * Startet einen KINDPROZESS, der die Fassade mit der uebergebenen Verbindung
+ * benutzt.
+ *
+ * Warum ein Kindprozess und nicht ein Aufruf hier: das Startgate laeuft je
+ * Prozess genau EINMAL und behaelt sein Ergebnis. Im Testprozess selbst ist es
+ * mit AP14B_APP_DATABASE_URL bereits entschieden; eine zweite Rolle liesse sich
+ * hier gar nicht mehr messen. Dasselbe Muster benutzt bereits `runBootstrap`.
+ */
+function runFacadeProbe(databaseUrl) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(
+      process.execPath,
+      [
+        "--disable-warning=MODULE_TYPELESS_PACKAGE_JSON",
+        // Dieselben Aufloesungsregeln wie im Testlauf: "server-only" und die
+        // dateiendungslosen Importe der .ts-Module.
+        "--import",
+        new URL("./module-hooks.mjs", import.meta.url).href,
+        "--input-type=module",
+        "--eval",
+        PROBE_SOURCE,
+      ],
+      {
+        cwd: fileURLToPath(APP_ROOT),
+        // Die Verbindung geht als Umgebungsvariable und NICHT als Argument: ein
+        // Argument stuende in der Prozessliste und damit ein Kennwort.
+        env: { ...process.env, DATABASE_URL: databaseUrl },
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    );
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => (stdout += chunk));
+    child.stderr.on("data", (chunk) => (stderr += chunk));
+    child.on("error", reject);
+    child.on("close", (code) => resolve({ code, stdout, stderr }));
+  });
+}
+
 // --------------------------------------------------------------------------
 
 test.before(async () => {
@@ -892,4 +959,47 @@ test("I30 nach dem Wechsel: alte Sitzung tot, neue Anmeldung ohne Wechselzwang",
       path,
     );
   }
+});
+
+// --------------------------------------------------------------------------
+// 6) Startgate der Laufzeitrolle (ADR-011 / 2.5)
+//
+// Die Waechter aus Migration 0017 kennen eine Eigentuemerausnahme. Liefe die
+// Anwendung mit der Migrations-/Eigentuemerrolle oder mit einem Superuser, waere
+// diese Ausnahme im Normalbetrieb dauerhaft erfuellt und saemtliche Waechter
+// waeren wirkungslos - ohne jede Fehlermeldung. Das Startgate in src/lib/db
+// verweigert diesen Betrieb, bevor die erste Transaktion beginnt.
+// --------------------------------------------------------------------------
+
+test("I31 Startgate: die Eigentuemerverbindung wird fail-closed abgewiesen", options, async () => {
+  const result = await runFacadeProbe(ADMIN_URL);
+  const output = `${result.stdout}${result.stderr}`;
+
+  assert.notEqual(result.code, 0, `Exitcode 0 - das Gate hat durchgelassen: ${output}`);
+  assert.ok(!output.includes("STARTGATE-PASSIERT"), output);
+  assert.match(output, /Laufzeitrolle der Datenbankverbindung nicht zulaessig/);
+  // Welche der drei Zusagen verletzt ist, haengt von der Zielumgebung ab: die
+  // Eigentuemerrolle kann Superuser sein oder "nur" Eigentuemerin. Genannt
+  // werden muss sie in jedem Fall.
+  assert.match(output, /Superuser|BYPASSRLS|Eigentuemerrolle/);
+
+  // Negativnachweis: die Ausgabe nennt weder eine Verbindungszeichenfolge noch
+  // ein Kennwort noch einen Rollennamen.
+  assert.ok(!output.includes("postgresql://"), "Verbindungszeichenfolge in der Ausgabe");
+  for (const url of [ADMIN_URL, APP_URL]) {
+    assert.ok(!output.includes(url), "Verbindungszeichenfolge in der Ausgabe");
+    const parsed = new URL(url);
+    const password = decodeURIComponent(parsed.password);
+    if (password) assert.ok(!output.includes(password), "Kennwort in der Ausgabe");
+    const role = decodeURIComponent(parsed.username);
+    if (role) assert.ok(!output.includes(role), "Rollenname in der Ausgabe");
+  }
+});
+
+test("I32 Startgate: die Anwendungsverbindung passiert es", options, async () => {
+  // Gegenprobe zu I31 - ohne sie belegte der Negativfall nur, dass irgendetwas
+  // scheitert, und nicht, dass genau die falsche Rolle scheitert.
+  const result = await runFacadeProbe(APP_URL);
+  assert.equal(result.code, 0, `${result.stdout}${result.stderr}`);
+  assert.match(result.stdout, /STARTGATE-PASSIERT/);
 });

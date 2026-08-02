@@ -504,8 +504,6 @@ test("ein Semikolon in einem Literal ist kein Trennzeichen", () => {
     "select ';'::text",
     "select 'a'';b'::text",
     'select 1 as ";"',
-    "select $tag$erste;zweite$tag$::text",
-    "select $$a;b$$::text",
     "select $1::text where $2::text = ';'",
     String.raw`select E'\';' as x`,
   ]) {
@@ -524,6 +522,424 @@ test("Kommentare koennen die Sperre nicht umgehen", () => {
   assert.equal(leadingKeyword("/* unbeendet"), "");
   assert.equal(leadingKeyword("/* a */ -- b\n select 1"), "select");
   assert.equal(leadingKeyword("\n\t COMMIT;"), "commit");
+});
+
+// ---------------------------------------------------------------------------
+// Lexikalische Haertung der Anweisungsschranke (Befund H1)
+//
+// Die Schranke prueft nicht mehr nur das erste Schluesselwort gegen eine
+// Verbotsliste, sondern
+//   1. das fuehrende Kommando gegen eine ALLOW-Liste,
+//   2. die vollstaendige Lesbarkeit der Anweisung (fail-closed),
+//   3. verbotene Bezeichner an JEDER Position.
+// Die Faelle hier sind adversarial: jeder von ihnen kam an dem alten Stand
+// vorbei. Es kommen ausschliesslich synthetische Werte vor.
+// ---------------------------------------------------------------------------
+
+/** Synthetische, untergeschobene Identitaet - gehoert zu keinem echten Konto. */
+const SMUGGLED_ID = "ac140b00-0000-0000-0000-0000000000a1";
+
+/**
+ * Formen, mit denen `set_config` erreichbar waere. Alle setzen "app.user_id"
+ * und damit die Identitaet, die saemtliche RLS-Policies auswerten.
+ */
+const SET_CONFIG_FORMS = [
+  // einfach
+  `select set_config('app.user_id', '${SMUGGLED_ID}', true)`,
+  // Gross-/Kleinschreibung
+  `SELECT SET_CONFIG('app.user_id', '${SMUGGLED_ID}', TRUE)`,
+  // schemaqualifiziert
+  `select pg_catalog.set_config('app.user_id', '${SMUGGLED_ID}', true)`,
+  // begrenzter Bezeichner
+  `select "set_config"('app.user_id', '${SMUGGLED_ID}', true)`,
+  // schemaqualifiziert UND begrenzt
+  `select pg_catalog."set_config"('app.user_id', '${SMUGGLED_ID}', true)`,
+  // Blockkommentar zwischen Name und Klammer
+  `select set_config/* dazwischen */('app.user_id', '${SMUGGLED_ID}', true)`,
+  // Zeilenumbruch zwischen Name und Klammer
+  `select set_config\n('app.user_id', '${SMUGGLED_ID}', true)`,
+  // Zeilenkommentar zwischen Name und Klammer
+  `select set_config -- dazwischen\n('app.user_id', '${SMUGGLED_ID}', true)`,
+  // in einer CTE
+  `with gesetzt as (select set_config('app.user_id', '${SMUGGLED_ID}', true) as wert)
+   select wert from gesetzt`,
+  // in einer Unterabfrage in where
+  `select 1 where (select set_config('app.user_id', '${SMUGGLED_ID}', true)) is not null`,
+  // als Wert in insert ... values (...)
+  `insert into public.audit_events (entity)
+   values (set_config('app.user_id', '${SMUGGLED_ID}', true))`,
+  // in der where-Klausel eines update
+  `update public.profiles set full_name = 'unveraendert'
+   where id::text = set_config('app.user_id', '${SMUGGLED_ID}', true)`,
+  // in der where-Klausel eines select
+  `select 1 where set_config('app.user_id', '${SMUGGLED_ID}', true) is not null`,
+];
+
+test("jede Form von set_config wird abgewiesen, an jeder Position", () => {
+  for (const statement of SET_CONFIG_FORMS) {
+    assert.equal(isAllowedStatement(statement), false, statement);
+    assert.throws(
+      () => assertAllowedStatement(statement),
+      /"set_config"/,
+      statement,
+    );
+  }
+  // Vierzehnte Form: als eigenstaendiges `values`-Kommando. Hier greift bereits
+  // die Allow-Liste des fuehrenden Kommandos - `values` ist fachlich nicht in
+  // Gebrauch.
+  const asValues = `values (set_config('app.user_id', '${SMUGGLED_ID}', true))`;
+  assert.equal(isAllowedStatement(asValues), false, asValues);
+  assert.throws(() => assertAllowedStatement(asValues), /"values"/);
+});
+
+test("ein Bezeichner mit Unicode-Escapes wird abgewiesen", () => {
+  // `U&"\0073et_config"` ist fuer PostgreSQL derselbe Name, enthaelt die
+  // Zeichenfolge `set_config` aber nicht. Jede Namenspruefung waere unterlaufen;
+  // deshalb ist diese Form als Ganzes abgewiesen.
+  const statement =
+    String.raw`select U&"\0073et_config"('app.user_id', '` + SMUGGLED_ID + `', true)`;
+  assert.ok(!statement.includes("set_config"), statement);
+  assert.equal(isAllowedStatement(statement), false, statement);
+  assert.throws(() => assertAllowedStatement(statement), /Unicode-Escapes/);
+
+  // Die Zeichenkettenform U&'...' ist dagegen ein Literal und bleibt zulaessig.
+  assert.equal(isAllowedStatement(String.raw`select U&'\0073' as x`), true);
+});
+
+test("pg_settings wird abgewiesen, obwohl update erlaubt ist", () => {
+  // Die Katalogsicht ist ueber eine Regel aktualisierbar und wirkt wie SET,
+  // also SITZUNGSWEIT und damit ueber die Poolverbindung hinaus.
+  for (const statement of [
+    `update pg_settings set setting = '${SMUGGLED_ID}' where name = 'app.user_id'`,
+    `update pg_catalog.pg_settings set setting = '${SMUGGLED_ID}' where name = 'app.user_id'`,
+    `update pg_catalog."pg_settings" set setting = '${SMUGGLED_ID}' where name = 'app.user_id'`,
+  ]) {
+    assert.equal(leadingKeyword(statement), "update", statement);
+    assert.equal(isAllowedStatement(statement), false, statement);
+    assert.throws(() => assertAllowedStatement(statement), /"pg_settings"/);
+  }
+});
+
+test("die Allow-Liste weist jedes andere Kommando ab", () => {
+  // Jeder dieser Faelle kam an der alten Verbotsliste vorbei. Gepruefte
+  // Erwartung: das fuehrende Wort wird erkannt UND in der Meldung genannt.
+  const cases = [
+    ["alter", `alter role current_user set "app.user_id" = '${SMUGGLED_ID}'`],
+    ["do", `do $$ begin perform set_config('app.user_id', '${SMUGGLED_ID}', true); end $$`],
+    ["explain", "explain (analyze) select 1"],
+    ["create", "create temp table zz_synthetisch as select 1 as x"],
+    ["copy", "copy (select 1) to stdout"],
+    ["declare", "declare zz_synthetisch cursor with hold for select 1"],
+    ["fetch", "fetch all from zz_synthetisch"],
+    ["move", "move all in zz_synthetisch"],
+    ["close", "close zz_synthetisch"],
+    ["execute", "execute zz_synthetisch"],
+    ["deallocate", "deallocate all"],
+    ["call", "call public.zz_synthetisch()"],
+    ["values", "values (1)"],
+    ["table", "table public.profiles"],
+    ["lock", "lock table public.profiles in access exclusive mode"],
+    ["truncate", "truncate table public.profiles"],
+    ["grant", "grant select on public.profiles to app_user"],
+    ["revoke", "revoke select on public.profiles from app_user"],
+    ["drop", "drop table public.profiles"],
+    ["security", "security label for synthetisch on table public.profiles is 'x'"],
+  ];
+  for (const [keyword, statement] of cases) {
+    assert.equal(leadingKeyword(statement), keyword, statement);
+    assert.equal(isAllowedStatement(statement), false, statement);
+    assert.throws(
+      () => assertAllowedStatement(statement),
+      new RegExp(`"${keyword}"`),
+      statement,
+    );
+  }
+});
+
+test("sitzungsweite Sperren, Abbrueche und dblink sind gesperrt", () => {
+  // Alle stehen in einem fuehrend zulaessigen `select` und waeren sonst offen.
+  // Sitzungsweite Sperren ueberleben die Transaktion und koennen den
+  // Schutztrigger aus Migration 0017 in das statement_timeout laufen lassen.
+  for (const [token, statement] of [
+    ["pg_advisory_lock", "select pg_advisory_lock(1)"],
+    ["pg_advisory_lock_shared", "select pg_advisory_lock_shared(1)"],
+    ["pg_advisory_unlock", "select pg_advisory_unlock(1)"],
+    ["pg_advisory_unlock_all", "select pg_advisory_unlock_all()"],
+    ["pg_terminate_backend", "select pg_terminate_backend(1)"],
+    ["pg_reload_conf", "select pg_reload_conf()"],
+    ["dblink_exec", "select dblink_exec('dbname=synthetisch', 'select 1')"],
+    ["dblink", "select * from dblink('dbname=synthetisch', 'select 1') as t(x integer)"],
+  ]) {
+    assert.equal(isAllowedStatement(statement), false, statement);
+    assert.throws(
+      () => assertAllowedStatement(statement),
+      new RegExp(`"${token}"`),
+      statement,
+    );
+  }
+  // Der transaktionslokale Bruder bleibt zulaessig: er endet mit der
+  // Transaktion und ist genau das Mittel des Schutztriggers.
+  assert.equal(isAllowedStatement("select pg_advisory_xact_lock(1)"), true);
+});
+
+test("der Zeilenkommentar endet auch an einem einzelnen CR", () => {
+  // Belegter Scannerdefekt: gesucht wurde ausschliesslich \n. Damit verschluckte
+  // der Kommentar den Rest der Zeichenkette, waehrend PostgreSQLs Lexer den
+  // Kommentar am CR beendet und ZWEI Anweisungen sieht.
+  const statement = `select 1 --x\r;select set_config('app.user_id','${SMUGGLED_ID}',true)`;
+  assert.ok(statement.includes("\r"), "das CR fehlt im Testfall");
+  assert.ok(!statement.includes("\n"), "der Fall braucht ein CR OHNE LF");
+  assert.equal(hasMultipleStatements(statement), true, statement);
+  assert.equal(isAllowedStatement(statement), false, statement);
+  assert.throws(() => assertAllowedStatement(statement), /Mehrere Anweisungen/);
+});
+
+test("ein Dollar-Quote wird abgewiesen statt nachgebildet", () => {
+  // Bewusste Verschaerfung gegenueber dem Vorgaengerstand: der las Dollar-Quotes
+  // exakt wie PostgreSQL, um sie zu ERLAUBEN. Kein Anweisungstext des Fachcodes
+  // enthaelt eines - fuer eingeschleusten Text ist Zulassen nie das Ziel.
+  for (const statement of [
+    "select $$a;b$$::text",
+    "select $tag$erste;zweite$tag$::text",
+    "select $tag$set_config('app.user_id','x',true)$tag$::text",
+    "select $tag$unbeendet",
+  ]) {
+    assert.equal(isAllowedStatement(statement), false, statement);
+    assert.throws(() => assertAllowedStatement(statement), /Dollar-Quotes/, statement);
+  }
+});
+
+test("ein Dollarzeichen in einem Bezeichner beginnt kein Dollar-Quote", () => {
+  // Belegter Scannerdefekt: bei jedem `$` begann die Quote-Erkennung. In
+  // `a$b$` erkannte sie einen Quote-Beginn und uebersprang das Semikolon;
+  // PostgreSQL liest `a$b$` als EINEN Bezeichner.
+  const statement = `select 1 as a$b$; select set_config('app.user_id','${SMUGGLED_ID}',true)`;
+  assert.equal(hasMultipleStatements(statement), true, statement);
+  assert.equal(isAllowedStatement(statement), false, statement);
+  assert.throws(() => assertAllowedStatement(statement), /Mehrere Anweisungen/);
+
+  // Die Parameterform bleibt unberuehrt - der Fachcode erzeugt sie massenhaft.
+  assert.equal(isAllowedStatement("select $1::text, $2::uuid where $3::boolean"), true);
+});
+
+test("unbeendete Konstrukte sind ein Abweisungsgrund, kein stilles Ende", () => {
+  // Die Schranke darf ihr Urteil nicht auf einen Text stuetzen, den sie nicht
+  // vollstaendig gelesen hat. `select 1 /* /* */ ; select 1` galt zuvor als
+  // EINE Anweisung, weil der geschachtelte Kommentar nicht endet.
+  for (const statement of [
+    "select 1 /* unbeendet",
+    "select 1 /* /* */ ; select 1",
+    "select 'unbeendet",
+    'select "unbeendet',
+  ]) {
+    assert.equal(isAllowedStatement(statement), false, JSON.stringify(statement));
+    assert.throws(() => assertAllowedStatement(statement), /unbeendet/, statement);
+  }
+});
+
+test("fachliche Anweisungen mit verbotenen Woertern im Inhalt bleiben zulaessig", () => {
+  // Der wichtigste Fall: eine Schranke, die fachlich gueltige Abfragen abweist,
+  // wird umgangen statt benutzt. Geprueft werden ausschliesslich Bezeichner -
+  // niemals Literale, Dollar-Quotes oder Kommentartext.
+  for (const statement of [
+    // verbotenes Wort in einem Zeichenkettenliteral
+    "select 'set_config'::text",
+    "update public.incidents set notes = 'set_config app.user_id' where id = $1::uuid",
+    // verbotenes Wort in einem Zeilenkommentar
+    "select 1 -- setzt app.user_id nicht, kein set_config hier",
+    // verbotenes Wort in einem Blockkommentar
+    "/* set_config pg_settings */ select 1",
+    // `set` als Teil eines update
+    "update public.auth_accounts set failed_attempts = 0, locked_until = null where id = $1::uuid",
+    // `end` in einem case - die echte Anweisung der Fehlversuchszaehlung
+    `update public.auth_accounts
+         set failed_attempts = $2::integer,
+             locked_until = case
+               when $2::integer >= $3::integer
+                 then now() + make_interval(mins => $4::integer)
+               else null
+             end
+         where id = $1::uuid`,
+    // `values` in einem insert, mit fuenf Parametern und einem begrenzten
+    // Bezeichner - die echte Kontaktanweisung der Stammdaten
+    `insert into public.contacts (customer_id, name, "function", email, is_active)
+           values ($1::uuid, $2, $3, $4, $5)
+           returning id`,
+    // das echte `with` der Sitzungspruefung
+    `with touched as (
+         update public.auth_sessions
+         set last_seen_at = now()
+         where id = $1::uuid
+           and account_id = $2::uuid
+           and revoked_at is null
+           and expires_at > now()
+           and last_seen_at < now() - interval '1 minute'
+         returning id
+       )
+       select a.email, a.must_change_password
+       from public.auth_sessions s
+       join public.auth_accounts a on a.id = s.account_id
+       where s.id = $1::uuid
+         and s.account_id = $2::uuid
+         and s.revoked_at is null
+         and s.expires_at > now()
+         and not a.is_disabled`,
+    // Escape-Zeichenkette der Suchfilter
+    String.raw`select 1 where search_text like $1 escape E'\\'`,
+    // begrenzter Bezeichner
+    `update public.contacts set "function" = $1 where id = $2::uuid`,
+    // abschliessendes Semikolon
+    "select 1;",
+  ]) {
+    assert.equal(isAllowedStatement(statement), true, statement);
+    assert.doesNotThrow(() => assertAllowedStatement(statement), statement);
+  }
+});
+
+test("die Meldung nennt nur den Bezeichner, niemals den Wert", () => {
+  assert.throws(
+    () =>
+      assertAllowedStatement(
+        `select set_config('app.user_id', '${SMUGGLED_ID}', true)`,
+      ),
+    (error) => {
+      assert.ok(error instanceof Error);
+      assert.match(error.message, /"set_config"/);
+      assert.ok(!error.message.includes(SMUGGLED_ID), error.message);
+      assert.ok(!error.message.includes("ac140b00"), error.message);
+      assert.ok(!error.message.includes("app.user_id"), error.message);
+      return true;
+    },
+  );
+});
+
+test("die uebrigen verbotenen Bezeichner werden ebenfalls abgewiesen", () => {
+  // Bisher belegten die Faelle oben nur einen Teil der Liste. Jeder Name hier
+  // steht in einem fuehrend ZULAESSIGEN `select` und waere ohne die
+  // positionsunabhaengige Namenspruefung offen. Alle Argumente sind
+  // synthetisch; keine Verbindung, kein Zeiger und keine Sitzung existiert.
+  for (const [token, statement] of [
+    ["pg_try_advisory_lock", "select pg_try_advisory_lock(1)"],
+    ["pg_try_advisory_lock_shared", "select pg_try_advisory_lock_shared(1)"],
+    ["pg_advisory_unlock_shared", "select pg_advisory_unlock_shared(1)"],
+    ["pg_cancel_backend", "select pg_cancel_backend(1)"],
+    // Diese drei fuehren ihr Textargument ueber SPI aus - die Wirkung von
+    // set_config waere ohne das Token set_config erreichbar.
+    ["query_to_xml", "select query_to_xml('select 1', true, false, '')"],
+    ["query_to_xmlschema", "select query_to_xmlschema('select 1', true, false, '')"],
+    [
+      "query_to_xml_and_xmlschema",
+      "select query_to_xml_and_xmlschema('select 1', true, false, '')",
+    ],
+    ["dblink_connect", "select dblink_connect('synthetisch', 'dbname=synthetisch')"],
+    ["dblink_connect_u", "select dblink_connect_u('synthetisch', 'dbname=synthetisch')"],
+    ["dblink_open", "select dblink_open('synthetisch', 'zeiger', 'select 1')"],
+    ["dblink_send_query", "select dblink_send_query('synthetisch', 'select 1')"],
+    ["dblink_fetch", "select * from dblink_fetch('synthetisch', 'zeiger', 1) as t(x integer)"],
+  ]) {
+    assert.equal(isAllowedStatement(statement), false, statement);
+    assert.throws(
+      () => assertAllowedStatement(statement),
+      new RegExp(`"${token}"`),
+      statement,
+    );
+  }
+});
+
+test("ein Zahlenliteral kann keinen verbotenen Bezeichner maskieren", () => {
+  // Belegter Scannerdefekt: der Lexer kannte keine Tokenklasse fuer Zahlen.
+  // Ziffern fielen einzeln in den Restzweig, das Wort-Token begann erst am
+  // ersten Buchstaben. Aus `1e0set_config` wurde deshalb das unverdaechtige
+  // Token `e0set_config`, und die Anweisung passierte die Schranke.
+  // PostgreSQL weist solche Texte ab Fassung 16 mit "trailing junk after
+  // numeric literal" ab; die Schranke urteilt jetzt nicht laxer als der Server.
+  for (const statement of [
+    `select 1 where 1e0set_config('app.user_id','${SMUGGLED_ID}',true) is not null`,
+    `select 1 where 0x1set_config('app.user_id','${SMUGGLED_ID}',true) is not null`,
+    `select 1 where 1_0set_config('app.user_id','${SMUGGLED_ID}',true) is not null`,
+  ]) {
+    assert.equal(isAllowedStatement(statement), false, statement);
+    assert.throws(() => assertAllowedStatement(statement), /Zahlenliteral/, statement);
+  }
+
+  // Gegenprobe: gueltige Zahlen in jeder gebraeuchlichen Form bleiben
+  // zulaessig - sonst waere die Regel im Fachbetrieb unbrauchbar.
+  for (const statement of [
+    "select 1, 1.5, 1e3 where $1::integer > 0",
+    "select 1e-3, 0x1f, 0b1010, 1_000 where $1::integer > 0",
+    "select now() - interval '1 minute' where $1::integer > 0",
+  ]) {
+    assert.equal(isAllowedStatement(statement), true, statement);
+    assert.doesNotThrow(() => assertAllowedStatement(statement), statement);
+  }
+});
+
+test("ein verdoppeltes Anfuehrungszeichen ergibt einen ANDEREN Namen", () => {
+  // Festgehalten wird das TATSAECHLICHE Verhalten: `"set""_config"` ist
+  // entquotet der Name `set"_config` und damit NICHT `set_config`. Auch
+  // PostgreSQL loest ihn nicht dorthin auf - der Aufruf liefe in "function
+  // set"_config(...) does not exist". Die Schranke weist deshalb nicht ab; sie
+  // ist an dieser Stelle so genau wie der Server und nicht laxer.
+  const doubled = `select "set""_config"('app.user_id', '${SMUGGLED_ID}', true)`;
+  assert.equal(hasMultipleStatements(doubled), false, doubled);
+  assert.equal(isAllowedStatement(doubled), true, doubled);
+
+  // Gegenprobe: OHNE Verdopplung ist es derselbe Name wie set_config.
+  const plain = `select "set_config"('app.user_id', '${SMUGGLED_ID}', true)`;
+  assert.equal(isAllowedStatement(plain), false, plain);
+  assert.throws(() => assertAllowedStatement(plain), /"set_config"/);
+});
+
+test("die Praefixliterale B und X bleiben zulaessig", () => {
+  // Sie brauchen keinen eigenen Zweig: es entsteht das Wort-Token `b` bzw. `x`
+  // - keines steht auf der Verbotsliste - und danach eine gewoehnliche,
+  // uebersprungene Zeichenkette.
+  for (const statement of [
+    "select b'0101'::bit(4)",
+    "select B'0101'::bit(4)",
+    "select x'ff'::bit(8)",
+    "select X'FF'::bit(8)",
+  ]) {
+    assert.equal(isAllowedStatement(statement), true, statement);
+  }
+
+  // Ein Semikolon IM Literal ist kein Trennzeichen - sonst wuerde die Schranke
+  // fachlich gueltige Abfragen abweisen.
+  for (const statement of ["select b'0;1'", "select x';'"]) {
+    assert.equal(hasMultipleStatements(statement), false, statement);
+    assert.equal(isAllowedStatement(statement), true, statement);
+  }
+});
+
+test('u&"..." wird auch klein geschrieben und schemaqualifiziert abgewiesen', () => {
+  // Die Form ist als GANZES abgewiesen; Schreibweise und Schemaqualifizierung
+  // duerfen daran nichts aendern.
+  for (const statement of [
+    String.raw`select u&"\0073et_config"('app.user_id', '` + SMUGGLED_ID + `', true)`,
+    String.raw`select pg_catalog.U&"\0073et_config"('app.user_id', '` +
+      SMUGGLED_ID +
+      `', true)`,
+  ]) {
+    assert.ok(!statement.includes("set_config"), statement);
+    assert.equal(isAllowedStatement(statement), false, statement);
+    assert.throws(() => assertAllowedStatement(statement), /Unicode-Escapes/, statement);
+  }
+});
+
+test("ein mit CRLF formatierter Fachtext bleibt zulaessig", () => {
+  // Windows- und OneDrive-Realitaet: ein Anweisungstext kann mit \r\n
+  // formatiert sein. Das CR ist Leerraum und darf am Urteil nichts aendern -
+  // sonst schluege die Schranke ausgerechnet auf der Entwicklungsmaschine an.
+  const statement =
+    "update public.auth_accounts\r\n" +
+    "   set failed_attempts = 0,\r\n" +
+    "       locked_until = null\r\n" +
+    " where id = $1::uuid\r\n";
+  assert.ok(statement.includes("\r\n"), "das CRLF fehlt im Testfall");
+  assert.equal(leadingKeyword(statement), "update", statement);
+  assert.equal(hasMultipleStatements(statement), false, statement);
+  assert.equal(isAllowedStatement(statement), true, statement);
+  assert.doesNotThrow(() => assertAllowedStatement(statement), statement);
 });
 
 // ---------------------------------------------------------------------------
