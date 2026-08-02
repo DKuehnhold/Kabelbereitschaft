@@ -917,7 +917,7 @@ test("V24 letzter Administrator: zwei gleichzeitige Herabstufungen", options, as
   // Beide Aufrufe handeln unter DERSELBEN Identitaet (ADMIN_A) und stufen je
   // einen ANDEREN der beiden verbliebenen Administratoren herab. Welcher der
   // beiden zuerst festschreibt, entscheidet die Datenbank - der Fall laesst
-  // deshalb VIER legitime Ausgaenge fuer den jeweils unterlegenen Aufruf zu:
+  // deshalb FUENF legitime Ausgaenge fuer den jeweils unterlegenen Aufruf zu:
   //
   //   1. Die Herabstufung von ADMIN_B gewinnt. Der Aufruf auf ADMIN_A selbst
   //      trifft danach den letzten Administrator und endet mit `last_admin`.
@@ -939,13 +939,32 @@ test("V24 letzter Administrator: zwei gleichzeitige Herabstufungen", options, as
   //      und `adminSetRole` endet fail-closed mit `not_found`. Genau dieser
   //      Ausgang trat im Linux-CI-Lauf `30733048345` auf
   //      (`erfuellt:not_found | erfuellt:changed`).
+  //   5. Die Selbstherabstufung von ADMIN_A gewinnt und schreibt fest, NACHDEM
+  //      der andere Aufruf sowohl `assertActiveAdmin` als auch das Lesen des
+  //      ZIELPROFILS bereits bestanden hat. Erst das SCHREIBEN faellt dann
+  //      unter die Policy `profiles_update` aus Migration `0001` (dort
+  //      `using`/`with check`: `public.is_admin() or id = auth.uid()`, von
+  //      `0012` mechanisch auf `app.current_user_id()` umgeschrieben). Fuer
+  //      eine FREMDE Zeile traegt davon nur `public.is_admin()`, und dieses
+  //      Praedikat ist `stable`: unter READ COMMITTED wird es pro Anweisung
+  //      neu ausgewertet. Der inzwischen zum Monteur herabgestufte Handelnde
+  //      verliert damit die SCHREIBsicht auf die Zielzeile, das
+  //      `update ... returning id` trifft null Zeilen, und `admin-users.ts`
+  //      wirft fail-closed. Geschrieben wird dabei NICHTS: null getroffene
+  //      Zeilen sind keine Aenderung, und der Transaktionswrapper rollt
+  //      zurueck. Der Advisory-Lock aus Migration `0017` liegt erst im
+  //      AFTER-Trigger und kann die Kette vor dem `update` deshalb nicht
+  //      schuetzen. Genau dieser Ausgang trat im Linux-CI-Lauf `30733682274`
+  //      auf (`abgewiesen:Error | erfuellt:changed`).
   //
-  // Die Ausgaenge 3 und 4 sind gewolltes Verhalten und keine Abschwaechung: sie
-  // verweigern frueher als der Schutztrigger, nicht spaeter, und schreiben
-  // nichts - `not_found` faellt vor dem `update`. Die EIGENTLICHE Zusicherung
-  // dieses Falls ist deshalb nicht ein bestimmtes Ergebnispaar, sondern die
-  // Invariante danach: es bleibt GENAU EIN aktiver Administrator uebrig -
-  // niemals null. Genau diese Invariante wuerde ohne den Advisory-Lock brechen.
+  // Die Ausgaenge 3, 4 und 5 sind gewolltes Verhalten und keine Abschwaechung:
+  // sie verweigern frueher als der Schutztrigger, nicht spaeter, und schreiben
+  // nichts - `not_found` faellt vor dem `update`, und Ausgang 5 trifft null
+  // Zeilen und rollt zurueck, ist also sogar strenger fail-closed als
+  // `last_admin`. Die EIGENTLICHE Zusicherung dieses Falls ist deshalb nicht
+  // ein bestimmtes Ergebnispaar, sondern die Invariante danach: es bleibt
+  // GENAU EIN aktiver Administrator uebrig - niemals null. Genau diese
+  // Invariante wuerde ohne den Advisory-Lock brechen.
   await withSoleActiveAdmins([ADMIN_A.id, ADMIN_B.id], async () => {
     assert.equal(await activeAdminCount(), 2);
     try {
@@ -964,12 +983,43 @@ test("V24 letzter Administrator: zwei gleichzeitige Herabstufungen", options, as
         adminSetRole(ADMIN_A.id, ADMIN_A.id, "monteur"),
       ]);
 
+      // Erkennt AUSSCHLIESSLICH Ausgang 5 aus dem Fallkommentar: den nach
+      // bestandener Lektuere verlorenen SCHREIBzugriff, bei dem das `update`
+      // null Zeilen trifft. Die Pruefung ist bewusst eng gefasst:
+      //   a) ueberhaupt ein `Error`,
+      //   b) EXAKT die Klasse `Error`, keine Unterklasse - ein blosses
+      //      `instanceof` waere kein Sieb, denn `AdminActionDeniedError
+      //      instanceof Error` ist ebenfalls `true`,
+      //   c) EXAKTE Gleichheit der Meldung, kein `includes`, `startsWith` oder
+      //      Muster - der Text kommt im Produktcode genau einmal vor,
+      //   d) kein `code`, denn jeder SERVERSEITIGE PostgreSQL-Fehler traegt
+      //      einen SQLSTATE; damit koennen KB001, KB002, KB003, 42501, 57014
+      //      und 40P01 nicht durchrutschen. Verbindungsseitige Fehler von `pg`
+      //      tragen keinen SQLSTATE - sie scheitern bereits an b) und c), denn
+      //      ihr Prototyp ist `DatabaseError.prototype`, nicht `Error`.
+      // Ein pauschales Akzeptieren jedes `Error` wuerde genau die Befunde KB002
+      // (Isolationsstufe nicht mehr READ COMMITTED) und KB003 (Anwendungs-
+      // schranke umgangen) verdecken.
+      const WRITE_VISIBILITY_LOST_MESSAGE =
+        "Rollenwechsel: das Profil wurde nicht geaendert.";
+      const isWriteVisibilityLost = (reason) =>
+        reason instanceof Error &&
+        Object.getPrototypeOf(reason) === Error.prototype &&
+        reason.message === WRITE_VISIBILITY_LOST_MESSAGE &&
+        reason.code === undefined;
+
       // Benennt den TATSAECHLICH erhaltenen Ausgang, damit ein Fehlschlag ohne
-      // zweiten Lauf lesbar ist. Kennungen und Meldungstexte bleiben aussen vor.
-      const describe = (outcome) =>
-        outcome.status === "fulfilled"
-          ? `erfuellt:${outcome.value.kind}`
-          : `abgewiesen:${outcome.reason?.name ?? typeof outcome.reason}`;
+      // zweiten Lauf lesbar ist. Kennungen und Meldungstexte bleiben aussen
+      // vor: Ausgang 5 erscheint als FESTER Marker, ein sonstiger nackter
+      // `Error` nur als `unerwartet`, benannte Fehlerklassen wie bisher.
+      const describe = (outcome) => {
+        if (outcome.status === "fulfilled") return `erfuellt:${outcome.value.kind}`;
+        if (isWriteVisibilityLost(outcome.reason)) {
+          return "abgewiesen:Error(schreibsicht-verloren)";
+        }
+        const name = outcome.reason?.name ?? typeof outcome.reason;
+        return name === "Error" ? "abgewiesen:Error(unerwartet)" : `abgewiesen:${name}`;
+      };
       const seen = settled.map(describe).join(" | ");
 
       const changed = settled.filter(
@@ -985,11 +1035,15 @@ test("V24 letzter Administrator: zwei gleichzeitige Herabstufungen", options, as
       const otherAccepted =
         (other.status === "fulfilled" &&
           (other.value.kind === "last_admin" || other.value.kind === "not_found")) ||
-        (other.status === "rejected" && other.reason instanceof AdminActionDeniedError);
+        (other.status === "rejected" && other.reason instanceof AdminActionDeniedError) ||
+        // Ausgang 5 bleibt eine EIGENE Disjunktion neben `last_admin`,
+        // `not_found` und `AdminActionDeniedError` - kein allgemeiner Zweig
+        // fuer beliebige Abweisungen.
+        (other.status === "rejected" && isWriteVisibilityLost(other.reason));
       assert.equal(
         otherAccepted,
         true,
-        `Der zweite Aufruf muss mit last_admin, not_found oder AdminActionDeniedError enden, erhalten: ${seen}`,
+        `Der zweite Aufruf muss mit last_admin, not_found, AdminActionDeniedError oder dem fail-closed abgebrochenen Rollenwechsel ohne getroffene Zeile enden, erhalten: ${seen}`,
       );
 
       // Die eigentliche Sicherheitsaussage - gemessen ueber den Admin-Client mit
