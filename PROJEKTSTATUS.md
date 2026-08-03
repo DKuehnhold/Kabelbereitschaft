@@ -391,3 +391,32 @@ Details: `04-UI-UX/GUI.md`, `04-UI-UX/DESIGNSYSTEM.md`.
 - **Weiter offen:** Dokumentkonsolidierung, Listen-Vollmengen und Filtertransaktionen sowie die
   sichtbaren Entscheidungen zu `fehlalarm`, Tagesgrenze, Aufgabenintegration und
   Dashboardgestaltung. AP14 Betrieb/Abnahme, RC1, V1, Tag und Release bleiben offen.
+
+## AP15-2 – quellentreue operative Dokumentkonsolidierung (2026-08-03)
+
+- **Umgesetzt, nicht committet, bei Codex zur Prüfung.** Sechs Dokumente auf den belegten
+  Ist-Stand gebracht: `README.md`, `app/README.md`, `app/supabase/README.md`,
+  `07-Betrieb/BETRIEB.md`, `07-Betrieb/BACKUP_UND_RECOVERY.md` und
+  `00-Projektsteuerung/CHANGELOG.md`. Keine Produktänderung, keine Archivierung, keine
+  Umbenennung, keine Löschung.
+- Migrationsstand überall `0001`–`0017`; Supabase erscheint nur noch als historischer Altstand,
+  historischer Pfadname oder verbotener Variablenname. Der Changelog erhielt append-only neun
+  nachgetragene Einträge (AP12 bis AP15-1); die bestehende Historie ist bytegleich.
+- `BETRIEB.md` trennt belegte lokale und CI-Wege vom nicht ausgeführten produktiven Deployment.
+  `BACKUP_UND_RECOVERY.md` führt PostgreSQL 18 und MinIO als gemeinsam zu sichernde Einheit und
+  hält fest: für den Objektspeicher existiert **kein** Sicherungsverfahren, ein Recovery-Test hat
+  **nicht** stattgefunden, Aufbewahrungsfristen und RPO/RTO bleiben offener Betreiberentscheid.
+- **Nachweise:** `git diff --check` Exit 0; Diffumfang exakt acht versionierte Dateien — die sechs
+  operativen Kerndokumente plus die Abschlussnotizen in `PROJEKT_WISSEN.md` und `PROJEKTSTATUS.md`
+  selbst; Changelog-Diff ein einziger Einfügehunk mit null entfernten Zeilen; alle referenzierten
+  Pfade vorhanden. Kein Test-, Build- oder Datenbanklauf ausgeführt — dieser Schritt ändert keinen
+  Code.
+- **Provenienz der AP14B-CI-Kennungen (geklärt, kein Widerspruch):** zum Fachstand `530a1f0` gehören
+  CI `30790933496` und Container-Image `30790933449`, zum nachfolgenden Dokumentationsstand `a86d7a6`
+  CI `30791223313` und Container-Image `30791223304` — jeweils `completed/success`. `530a1f0` ist
+  Vorfahr von `a86d7a6` (`git merge-base --is-ancestor` Exit 0, von Claude selbst erhoben); die
+  operative Statusdatei nennt den späteren Abschlussstand, der Dateistand
+  von `a86d7a6` nannte im Text noch den vorangehenden. Die Laufergebnisse hat Codex über die
+  GitHub-API erhoben, Claude nicht selbst abgerufen.
+- Einzelheiten: `PROJEKT_WISSEN.md`, Abschnitt „AP15-2 — quellentreue operative
+  Dokumentkonsolidierung".

@@ -736,6 +736,47 @@ Claude am jetzigen Endstand selbst erhoben.
   quellentreue Dokumentkonsolidierung; Archivierung oder Löschung benötigt einen gesondert
   belegten, verlustfreien Schnitt.
 
+## AP15-2 — quellentreue operative Dokumentkonsolidierung (2026-08-03, nicht committet)
+
+- **Umfang:** sechs Dokumente auf den belegten Ist-Stand gebracht — `README.md`, `app/README.md`,
+  `app/supabase/README.md`, `07-Betrieb/BETRIEB.md`, `07-Betrieb/BACKUP_UND_RECOVERY.md` und
+  `00-Projektsteuerung/CHANGELOG.md`. **Keine Produktänderung**, keine Archivierung, keine
+  Umbenennung, keine Löschung; `app/supabase/` bleibt als historischer Pfadname erhalten.
+- Die überholten Supabase-, Migrations- und Testaussagen sind ersetzt: Migrationsstand überall
+  `0001`–`0017`, Supabase erscheint nur noch als historischer Altstand, historischer Pfadname oder
+  verbotener Variablenname. Der Changelog erhielt **append-only** neun nachgetragene Einträge
+  (AP12 bis AP15-1) oberhalb der unveränderten Historie.
+- `BETRIEB.md` trennt belegte lokale und CI-Wege ausdrücklich vom **nicht ausgeführten**
+  produktiven Deployment. `BACKUP_UND_RECOVERY.md` ersetzt die Supabase-Zielannahme durch
+  PostgreSQL 18 und MinIO, führt Datenbank- und Objektstand als gemeinsam zu sichernde Einheit
+  (`incident_images.storage_path`) und hält fest, dass für den Objektspeicher **kein**
+  Sicherungsverfahren existiert und **kein** Recovery-Test stattgefunden hat. Keine
+  Aufbewahrungsfrist, kein bestätigtes RPO/RTO.
+- **Nachweise (von Claude selbst erhoben):** `git diff --check` Exit 0; Diffumfang exakt acht
+  versionierte Dateien — die sechs operativen Kerndokumente plus die Abschlussnotizen in
+  `PROJEKT_WISSEN.md` und `PROJEKTSTATUS.md` selbst; der Changelog-Diff ist ein einziger
+  Einfügehunk (`@@ -7,0 +8,212 @@`) mit **null** entfernten Zeilen, die Historie also bytegleich;
+  alle referenzierten Pfade per `git ls-files` vorhanden. Es wurde **kein** Test-, Build- oder
+  Datenbanklauf ausgeführt — dieser Schritt ändert keinen Code.
+- **In der Prüfung korrigierte Sachfehler:** die Runner wenden Migrationen und Smokes
+  **verschränkt** und nicht sequenziell an (die Verschränkung ist zwingend, sonst scheitern die
+  Negativfälle aus `20_ap14b_data.sql`); die Kette ist wegen `0013` und `19a` **nicht durchgehend
+  additiv**; `0002_storage.sql` trägt keine AP-Nummer (AP2 ist `0003`); `0017` enthält **vier**
+  Audittrigger; der JWT trägt an Nutzdaten nur `sub` und `sid`, Auth.js ergänzt `iat`, `exp`
+  und `jti`.
+- **Provenienz der AP14B-CI-Kennungen (geklärt, kein Widerspruch):** es gibt zwei aufeinanderfolgende
+  grüne Commitstände. Zum Fachstand `530a1f0` (2026-08-03 08:39:47 +0200) gehören CI `30790933496` und
+  Container-Image `30790933449`; zum nachfolgenden Dokumentationsstand `a86d7a6` (2026-08-03 08:45:06
+  +0200) gehören CI `30791223313` und Container-Image `30791223304` — jeweils `completed/success`.
+  `530a1f0` ist Vorfahr von `a86d7a6` (`git merge-base --is-ancestor` Exit 0, von Claude selbst erhoben).
+  Die operative Statusdatei `.claude/automation/status/fortschritt.json` nennt zutreffend das spätere
+  Paar; der Dateistand von `a86d7a6` hielt im Text noch das frühere fest. Die Laufergebnisse selbst hat
+  Codex über die GitHub-API erhoben; Claude hat sie nicht selbst abgerufen.
+- **Weiterhin offen und ausdrücklich nicht behauptet:** produktives Deployment, Restore, DNS,
+  Reverse-Proxy-Route, MinIO-Provisionierung, Browser-/Offline-Abnahme, Aufbewahrungsfristen,
+  RC1, Tag, Release und die V1-Entscheidung. `deploy/README.md:344` nennt weiterhin
+  „0001…0016" und ist damit überholt — die Datei stand nicht auf der Positivliste.
+
 ## Definitionen und Begriffe
 - **AP1–AP7:** Arbeitspakete (Grundgerüst → Vorgänge → Material → Bilder → Offline/PWA → E2E/Härtung → Release Readiness).
 - **Outbox:** IndexedDB-Warteschlange vorgemerkter Notizen/Statusänderungen.
