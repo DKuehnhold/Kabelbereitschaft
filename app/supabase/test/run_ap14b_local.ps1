@@ -3,7 +3,18 @@
 # Reihenfolge gemaess ADR-011 / 2.10:
 #   bootstrap/01-03  ->  migrations/0001-0011  ->  Smokes 15-18
 #   ->  migrations/0012, 0013, 0014  ->  Smokes 19, 20
+#   ->  migrations/0015, 0016, 0017  ->  Smokes 21, 22, 23
+#   ->  Smoke 24 (AP15-1, Statuskennzahlen des Dashboards, Fallkennung K)
 #   ->  Integrationstests des Anwendungscodes (test/integration)
+#
+# Smoke 24 steht bewusst als LETZTER Eintrag der SQL-Kette und braucht keine
+# eigene Migration: seine fuenf Kennzahlen zaehlen ABSOLUT ueber die gesamte
+# public.incident_list_view, duerfen die Fixtures der Vorgaengerdateien also
+# nicht voraussetzen. Er nimmt seine eigene Wirkung am Ende vollstaendig per
+# rollback zurueck. Dazu gehoert ein FUENFTER Node-Lauf
+# (test/integration/ap15-dashboard-metrics.int.mjs): er belegt mit dem echten
+# Anwendungscode aus src/lib/incident-metrics.ts, dass Anwendungsabfrage und
+# Terminalstatusliste zusammenpassen - das kann der SQL-Smoke nicht leisten.
 #
 # Die bash-Fassung run_db_tests.sh bleibt der Weg fuer die CI; diese Datei ist
 # das Windows-Gegenstueck und ergaenzt run_ap12_local.ps1 (das bewusst bei 0011
@@ -90,7 +101,11 @@ param(
   # Angehoben von 480 auf 900: mit dem vierten Integrationslauf (administrative
   # Benutzerverwaltung) ist ein weiterer Node-Prozess samt Argon2id-Laeufen
   # hinzugekommen. Alle uebrigen Zeitgrenzen bleiben unveraendert.
-  [int]$MaxTotalSeconds = 900
+  # Angehoben von 900 auf 1200: mit dem fuenften Integrationslauf
+  # (Statuskennzahlen des Dashboards, AP15-1) ist ein weiterer Node-Prozess
+  # hinzugekommen, und die SQL-Kette hat zusaetzlich Smoke 24 erhalten. Alle
+  # uebrigen Zeitgrenzen bleiben unveraendert.
+  [int]$MaxTotalSeconds = 1200
 )
 
 $ErrorActionPreference = "Stop"
@@ -190,7 +205,15 @@ $files = @(
   # `revoke all on all tables in schema public` soll den Spaltengrant aus 0017
   # gar nicht erst erreichen koennen.
   (Join-Path $migrationRoot "0017_ap14b_admin_user_management.sql"),
-  (Join-Path $testRoot "23_ap14b_admin_users.sql")
+  (Join-Path $testRoot "23_ap14b_admin_users.sql"),
+  # 24 steht GANZ AM ENDE der Kette und braucht keine eigene Migration: seine
+  # fuenf Kennzahlen zaehlen ABSOLUT ueber die gesamte
+  # public.incident_list_view und nicht relativ ueber eigene Kennungen. Er darf
+  # deshalb weder die Fixtures der Vorgaengerdateien voraussetzen noch ihre
+  # Zaehlungen stoeren; seine gesamte Wirkungsphase wird am Ende per rollback
+  # zurueckgenommen. Ein Aufraeumen per DELETE ist wegen der unbedingten
+  # Loeschsperre trg_incident_tasks_no_delete (0011:113-123) nicht moeglich.
+  (Join-Path $testRoot "24_ap15_dashboard_metrics.sql")
 )
 foreach ($file in $files) {
   if (-not (Test-Path -LiteralPath $file)) { throw "Testdatei fehlt: $file" }
@@ -212,9 +235,15 @@ $s3TestEndpoint = Join-Path $appRoot "test\integration\s3-test-endpoint.mjs"
 # ausdruecklich module-hooks.mjs und NICHT module-hooks-app.mjs - er braucht die
 # ECHTE Sitzungsauswertung und darf sie nicht durch einen Sitzungsstub ersetzen.
 $adminUsersIntegrationTest = Join-Path $appRoot "test\integration\ap14b-admin-users.int.mjs"
+# Fuenfter Integrationslauf (AP15-1): die Statuskennzahlen des Dashboards. Er
+# benutzt die bereits vorhandene Hooks-Datei $moduleHooksApp, weil er die
+# Anwendungsmodule laedt und ausserhalb von Next Ersatz fuer `next/cache` und
+# `@/lib/auth` braucht. Eine eigene Hooks-Datei entsteht dafuer nicht.
+$metricsIntegrationTest = Join-Path $appRoot "test\integration\ap15-dashboard-metrics.int.mjs"
 if (-not $SkipIntegrationTests) {
   foreach ($file in @($integrationTest, $moduleHooks, $masterdataIntegrationTest, $moduleHooksApp,
-      $imagesIntegrationTest, $s3TestEndpoint, $adminUsersIntegrationTest)) {
+      $imagesIntegrationTest, $s3TestEndpoint, $adminUsersIntegrationTest,
+      $metricsIntegrationTest)) {
     if (-not (Test-Path -LiteralPath $file)) { throw "Testdatei fehlt: $file" }
   }
   if (-not (Test-Path -LiteralPath $NodeExe)) {
@@ -824,7 +853,7 @@ try {
   }
 
   Write-Host ""
-  Write-Host "--- AP14/B-Pruefungen aus 19_ap14b_platform.sql, 19a_ap14b_grant_reset.sql, 20_ap14b_data.sql, 21_ap14b_masterdata_inventory.sql, 22_ap14b_images.sql und 23_ap14b_admin_users.sql ---"
+  Write-Host "--- AP14/B- und AP15-Pruefungen aus 19_ap14b_platform.sql, 19a_ap14b_grant_reset.sql, 20_ap14b_data.sql, 21_ap14b_masterdata_inventory.sql, 22_ap14b_images.sql, 23_ap14b_admin_users.sql und 24_ap15_dashboard_metrics.sql ---"
   # Die Ueberschrift nennt Smoke 21 ausdruecklich mit. Er benutzt aber eigene
   # Fallpraefixe (M fuer Stammdaten, N fuer Inventar) und wuerde vom bisherigen
   # Muster "SMOKE [PRD]\d+" nicht erfasst - der Auszug waere irrefuehrend, weil
@@ -852,7 +881,15 @@ try {
       # ein stiller Nachweisverlust. "SMOKE U\S+" erfasst jede Fallkennung
       # dieses Smokes; die Einschraenkung auf die Datei steht ohnehin in der
       # ersten Bedingung dieser Alternative.
-      ($_ -match "23_ap14b_admin_users" -and $_ -match "SMOKE U\S+")
+      ($_ -match "23_ap14b_admin_users" -and $_ -match "SMOKE U\S+") -or
+      # Smoke 24 (AP15-1) benutzt die Fallkennung K und kennt zusaetzlich
+      # "SMOKE K-FIXTURES" und "SMOKE K-ENDE". Ohne diese fuenfte Alternative
+      # waere der gesamte Kennzahlnachweis im Konsolenauszug unsichtbar - genau
+      # die Lehre, die in den Zeilen daruber schon zweimal festgehalten ist.
+      # "SMOKE K\S+" erfasst deshalb von Anfang an jede Fallkennung dieses
+      # Smokes; die Einschraenkung auf die Datei steht in der ersten Bedingung
+      # dieser Alternative.
+      ($_ -match "24_ap15_dashboard_metrics" -and $_ -match "SMOKE K\S+")
     } |
     ForEach-Object { Write-Host (($_ -split "NOTICE:\s+")[-1]) }
 
@@ -1001,10 +1038,48 @@ grant connect on database "$database" to "$appRole";
       throw ("Integrationstests der administrativen Benutzerverwaltung fehlgeschlagen (Exit {0})." -f
         $adminUsersRun.ExitCode)
     }
+
+    Write-Host ""
+    Write-Host "Fuehre Integrationstests der Dashboard-Statuskennzahlen aus (AP15-1) ..."
+    # Fuenfter, gleichartiger Aufruf mit derselben Auswertung - ebenfalls ueber
+    # Invoke-HandleSafeProcess und ausdruecklich NICHT ueber eine Pipeline
+    # (Begruendung im Kopf dieser Datei, Zeilen zur Handle-Sicherheit, und in
+    # Invoke-HandleSafeProcess selbst). Er benutzt module-hooks-app.mjs wie der
+    # Stammdaten- und der Bildlauf: geprueft wird das Modul
+    # src/lib/incident-metrics.ts, das ausserhalb von Next Ersatz fuer
+    # `next/cache` und `@/lib/auth` braucht.
+    #
+    # Er steht bewusst NACH der Benutzerverwaltung: jene raeumt ihre
+    # Administratorkonten selbst ab, und diese Suite legt keine an. Er ergaenzt
+    # den SQL-Smoke 24 an genau der Stelle, die eine SQL-Datei nicht belegen
+    # kann - der Uebereinstimmung von Anwendungsabfrage und TERMINAL_STATUS aus
+    # src/lib/status.ts.
+    try {
+      $env:AP14B_APP_DATABASE_URL = $appUrl
+      $env:AP14B_ADMIN_DATABASE_URL = $adminUrl
+      # Pflichtmodus wie beim vierten Lauf: fehlt eine der beiden
+      # Verbindungsvariablen, bricht der Test ab, statt still zu ueberspringen.
+      $env:AP14B_REQUIRE_INTEGRATION = "1"
+      $metricsRun = Invoke-HandleSafeProcess -FilePath $NodeExe -Label "integration_ap15_metrics" `
+        -TimeoutSeconds 900 -WorkingDirectory $appRoot `
+        -Arguments @("--disable-warning=MODULE_TYPELESS_PACKAGE_JSON",
+          "--import", "./test/integration/module-hooks-app.mjs",
+          "./test/integration/ap15-dashboard-metrics.int.mjs")
+    }
+    finally {
+      Remove-Item Env:\AP14B_APP_DATABASE_URL -ErrorAction SilentlyContinue
+      Remove-Item Env:\AP14B_ADMIN_DATABASE_URL -ErrorAction SilentlyContinue
+      Remove-Item Env:\AP14B_REQUIRE_INTEGRATION -ErrorAction SilentlyContinue
+    }
+    $metricsRun.Output | ForEach-Object { Write-Host $_ }
+    if ($metricsRun.ExitCode -ne 0) {
+      throw ("Integrationstests der Dashboard-Statuskennzahlen fehlgeschlagen (Exit {0})." -f
+        $metricsRun.ExitCode)
+    }
   }
 
   Write-Host ""
-  Write-Host "ERGEBNIS: AP10/AP11/AP12/AP13/AP14B DATENBANKTESTS ERFOLGREICH." -ForegroundColor Green
+  Write-Host "ERGEBNIS: AP10/AP11/AP12/AP13/AP14B/AP15 DATENBANKTESTS ERFOLGREICH." -ForegroundColor Green
 }
 finally {
   # Notbudget: ab hier gilt ausschliesslich die feste Aufraeumfrist, unabhaengig

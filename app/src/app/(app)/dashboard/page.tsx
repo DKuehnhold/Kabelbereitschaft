@@ -3,6 +3,7 @@ import { requireSession } from "@/lib/auth";
 import { listIncidents, getStages, getMonteure } from "@/lib/incidents";
 import { getLowStockMaterials, type LowStockRow } from "@/lib/inventory";
 import { getTodaysImageCount } from "@/lib/images-server";
+import { getIncidentStatusMetrics } from "@/lib/incident-metrics";
 import { isOpenStatus } from "@/lib/status";
 import { StatCard } from "@/components/incidents/StatCard";
 import { IncidentsTable } from "@/components/incidents/IncidentsTable";
@@ -23,8 +24,8 @@ export default async function DashboardPage() {
   const today = startOfToday();
 
   if (session.role === "monteur") {
+    const metrics = await getIncidentStatusMetrics();
     const offen = rows.filter((r) => isOpenStatus(r.status));
-    const technisch = rows.filter((r) => r.status === "technisch_abgeschlossen");
     const heute = rows.filter((r) =>
       r.assignments.some(
         (a) => a.monteur_id === session.userId && new Date(a.assigned_at) >= today,
@@ -34,8 +35,8 @@ export default async function DashboardPage() {
       <div className="space-y-6">
         <h1 className="text-2xl font-semibold text-slate-900">Mein Dashboard</h1>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <StatCard label="Meine offenen Einsätze" value={offen.length} accent="blue" />
-          <StatCard label="Technisch abgeschlossen" value={technisch.length} accent="green" />
+          <StatCard label="Meine offenen Einsätze" value={metrics.offen} accent="blue" />
+          <StatCard label="Technisch abgeschlossen" value={metrics.technisch_abgeschlossen} accent="green" />
           <StatCard label="Heute übernommen" value={heute.length} accent="indigo" />
         </div>
         <div>
@@ -52,24 +53,21 @@ export default async function DashboardPage() {
 
   // Disposition / Administration
   const isAdmin = session.role === "admin";
-  const [stages, monteure, lowStock, imagesToday] = await Promise.all([
+  const [stages, monteure, lowStock, imagesToday, metrics] = await Promise.all([
     getStages(),
     getMonteure(),
     isAdmin ? getLowStockMaterials() : Promise.resolve<LowStockRow[]>([]),
     getTodaysImageCount(),
+    getIncidentStatusMetrics(),
   ]);
-  const openRows = rows.filter((r) => isOpenStatus(r.status));
-  const monteureImEinsatz = new Set(
-    openRows.flatMap((r) => r.assignments.filter((a) => a.is_active).map((a) => a.monteur_id)),
-  ).size;
 
   const stats = {
-    offen: openRows.length,
-    technisch: rows.filter((r) => r.status === "technisch_abgeschlossen").length,
+    offen: metrics.offen,
+    technisch: metrics.technisch_abgeschlossen,
     heute: rows.filter((r) => new Date(r.created_at) >= today).length,
-    monteure: monteureImEinsatz,
-    wartenDb: rows.filter((r) => r.status === "warten_auf_db").length,
-    wartenMaterial: rows.filter((r) => r.status === "warten_auf_material").length,
+    monteure: metrics.monteure_im_einsatz,
+    wartenDb: metrics.warten_auf_db,
+    wartenMaterial: metrics.warten_auf_material,
   };
 
   return (

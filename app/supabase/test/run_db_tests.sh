@@ -14,10 +14,24 @@
 # lokaler AP12/AP13-Nachweis unveraendert; run_ap14b_local.ps1 ist das Windows-
 # Gegenstueck zu dieser Datei.
 #
+# Neu aus AP15-1: als LETZTER Eintrag der SQL-Kette laeuft
+# 24_ap15_dashboard_metrics.sql (Statuskennzahlen des Dashboards, Fallkennung K).
+# Er steht bewusst ganz am Ende, weil seine fuenf Kennzahlen ABSOLUT ueber die
+# gesamte public.incident_list_view zaehlen: er darf die Fixtures der
+# Vorgaengerdateien nicht voraussetzen und nimmt seine eigene Wirkung am Ende
+# vollstaendig per rollback zurueck. Eine neue Migration braucht er nicht - die
+# Migrationskette endet unveraendert bei 0017.
+#
 # Seit AP14/B laufen hier NICHT mehr ausschliesslich SQL-Dateien: nach der
 # SQL-Kette kann optional der Integrationstest der administrativen
 # Benutzerverwaltung (Node, echter Anwendungscode aus src/lib/admin-users.ts)
 # gegen dieselbe temporaere Datenbank ausgefuehrt werden.
+#
+# Seit AP15-1 sind es ZWEI Node-Suiten: zusaetzlich laufen die Statuskennzahlen
+# des Dashboards (test/integration/ap15-dashboard-metrics.int.mjs, echter
+# Anwendungscode aus src/lib/incident-metrics.ts). Beide Suiten haengen an
+# derselben Steuerung AP14B_INTEGRATION und laufen gegen dieselbe temporaere
+# Datenbank.
 #
 # Aufruf:
 #   PGHOST=localhost PGPORT=5432 PGUSER=postgres PGPASSWORD=... ./run_db_tests.sh
@@ -103,6 +117,17 @@ FILES=(
   # gar nicht erst erreichen koennen.
   "${MIGRATIONS}/0017_ap14b_admin_user_management.sql"
   "${TEST_ROOT}/23_ap14b_admin_users.sql"
+  # 24 steht GANZ AM ENDE der Kette und braucht keine eigene Migration. Grund:
+  # seine fuenf Kennzahlen zaehlen ABSOLUT ueber die gesamte
+  # public.incident_list_view und nicht relativ ueber eigene Kennungen. Er darf
+  # deshalb weder die Fixtures der Vorgaengerdateien voraussetzen noch ihre
+  # Zaehlungen stoeren: seine Sollwerte sind Differenzen (Staffsicht)
+  # beziehungsweise Absolutwerte auf einer nachweislich leeren Ausgangslage
+  # (neu angelegte Monteure), und die gesamte Wirkungsphase wird am Ende per
+  # rollback zurueckgenommen. Ein Aufraeumen per DELETE ist wegen der
+  # unbedingten Loeschsperre trg_incident_tasks_no_delete (0011:113-123) nicht
+  # moeglich; der Smoke begruendet das in seinem Kopf.
+  "${TEST_ROOT}/24_ap15_dashboard_metrics.sql"
 )
 
 for f in "${FILES[@]}"; do
@@ -257,7 +282,14 @@ if [[ "${AP14B_INTEGRATION}" == "require" ]]; then
   }
   readonly INT_HOOKS="${APP_ROOT}/test/integration/module-hooks.mjs"
   readonly INT_TEST="${APP_ROOT}/test/integration/ap14b-admin-users.int.mjs"
-  for f in "${INT_HOOKS}" "${INT_TEST}"; do
+  # Zweite Suite (AP15-1). Sie braucht eine ANDERE Hooks-Datei als die
+  # Benutzerverwaltung: module-hooks-app.mjs stellt den Ersatz fuer `next/cache`
+  # und `@/lib/auth` bereit, den die Anwendungsmodule ausserhalb von Next
+  # verlangen. Beide Konstanten tragen deshalb eigene Namen - `readonly` laesst
+  # eine Wiederverwendung ohnehin nicht zu.
+  readonly INT_HOOKS_APP="${APP_ROOT}/test/integration/module-hooks-app.mjs"
+  readonly INT_TEST_AP15="${APP_ROOT}/test/integration/ap15-dashboard-metrics.int.mjs"
+  for f in "${INT_HOOKS}" "${INT_TEST}" "${INT_HOOKS_APP}" "${INT_TEST_AP15}"; do
     [[ -f "${f}" ]] || { echo "FEHLER: Testdatei fehlt: ${f}" >&2; exit 66; }
   done
 
@@ -333,12 +365,36 @@ SQL
     exit 1
   fi
 
-  INTEGRATION_RESULT="ausgefuehrt (AP14B_INTEGRATION=require)"
+  echo
+  echo "Fuehre Integrationstest der Dashboard-Statuskennzahlen aus (AP15-1) ..."
+  # Zweiter, gleich gebauter Aufruf: dieselben beiden Verbindungszeichenfolgen,
+  # derselbe Zuweisungspraefix (kein Kennwort in der Prozessliste), derselbe
+  # Pflichtmodus AP14B_REQUIRE_INTEGRATION=1. Einziger Unterschied ist die
+  # Hooks-Datei: diese Suite laedt die Anwendungsmodule und braucht deshalb
+  # module-hooks-app.mjs.
+  if ! (
+    cd "${APP_ROOT}" &&
+      AP14B_REQUIRE_INTEGRATION=1 \
+      AP14B_APP_DATABASE_URL="postgresql://${APP_ROLE}:${APP_ROLE_PASSWORD}@${PGHOST}:${PGPORT}/${DB}" \
+      AP14B_ADMIN_DATABASE_URL="postgresql://${PGUSER}@${PGHOST}:${PGPORT}/${DB}" \
+      node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON \
+      --import ./test/integration/module-hooks-app.mjs \
+      test/integration/ap15-dashboard-metrics.int.mjs
+  ); then
+    echo "FEHLER: der Integrationstest der Dashboard-Statuskennzahlen ist fehlgeschlagen." >&2
+    exit 1
+  fi
+
+  # Beide Suiten sind gelaufen und beide haben mit 0 geendet - genau das, und
+  # nichts darueber hinaus, sagt diese Zeile aus.
+  INTEGRATION_RESULT="beide Suiten ausgefuehrt (administrative Benutzerverwaltung und Dashboard-Statuskennzahlen, AP14B_INTEGRATION=require)"
 else
   echo
   echo "=================================================================="
   echo "HINWEIS: Der Integrationstest der administrativen Benutzerverwaltung"
   echo "         wurde NICHT ausgefuehrt (AP14B_INTEGRATION=\"${AP14B_INTEGRATION}\")."
+  echo "         Dasselbe gilt fuer den Integrationstest der"
+  echo "         Dashboard-Statuskennzahlen (AP15-1): auch er lief NICHT."
   echo "         Dieser Lauf belegt ausschliesslich die SQL-Kette. Fuer den"
   echo "         vollstaendigen Nachweis ist AP14B_INTEGRATION=require noetig."
   echo "=================================================================="
@@ -346,5 +402,5 @@ else
 fi
 
 echo
-echo "ERGEBNIS: AP10/AP11/AP12/AP13/AP14B DATENBANKTESTS ERFOLGREICH."
-echo "ERGEBNIS: Integrationstest der administrativen Benutzerverwaltung: ${INTEGRATION_RESULT}"
+echo "ERGEBNIS: AP10/AP11/AP12/AP13/AP14B/AP15 DATENBANKTESTS ERFOLGREICH."
+echo "ERGEBNIS: Integrationsphase (administrative Benutzerverwaltung und Dashboard-Statuskennzahlen): ${INTEGRATION_RESULT}"
