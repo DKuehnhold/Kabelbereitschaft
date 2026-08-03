@@ -3,8 +3,8 @@
 
 > **Aktueller Stand (2026-08-03).** Zielplattform bleibt ADR-011: PostgreSQL 18, Auth.js v5, MinIO
 > und Containerbetrieb hinter dem internen Reverse-Proxy; Supabase ist kein Ziel. Bestätigter
-> technischer Referenzstand ist `8b65f4ed9c1175ddec3aca5045a5a59906b95c68`
-> (`feat: add RLS-bound dashboard status metrics`) auf `main`. AP15-1 berechnet die fünf
+> technischer Referenzstand ist `40606eeea98baccf6192ad99d3ccac81fc7f0258`
+> (`docs: consolidate operational platform guidance`) auf `main`. AP15-1 berechnet die fünf
 > statusbasierten Dashboardkennzahlen jetzt in einer RLS-gebundenen PostgreSQL-Abfrage über
 > `public.incident_list_view`; sichtbare Oberfläche, Tageskennzahlen und Listen blieben
 > unverändert. Die administrative Benutzerverwaltung nach ADR-011 ist serverseitig umgesetzt:
@@ -31,8 +31,11 @@
 > „AP14/B — Bilder und Uploads auf MinIO“. Damit sind die **AP14/B-Datenpfade technisch
 > abgeschlossen**. **AP14 insgesamt bleibt offen:** echte IT-Adressen und die Same-Origin-Route am
 > internen Reverse-Proxy, produktiver Betrieb und Deployment, die vollständige `@app`-/Offline-
-> Abnahme sowie die CSP-Auswertung sind **nicht** erbracht. Nächster nicht-visueller Arbeitsblock
-> ist **AP15 Dokumentkonsolidierung**. Die sichtbare GUI der Benutzerverwaltung wartet
+> Abnahme sowie die CSP-Auswertung sind **nicht** erbracht. AP15-2 hat die operative
+> Dokumentation quellentreu konsolidiert; CI `30814390705` mit `verify`, `database`, `container`
+> und `objectstore` sowie Container-Image `30814390702` sind jeweils `completed/success`.
+> Nächster nicht-visueller Arbeitsblock ist die verbleibende AP15-Konfigurations- und
+> CI-Wahrheit. Die sichtbare GUI der Benutzerverwaltung wartet
 > weiterhin auf die gemeinsame Designentscheidung mit Dennis.
 > V1 bleibt Produktionssperre, Branding bleibt separat, GUI-/Designarbeit wartet auf Dennis.
 
@@ -736,7 +739,11 @@ Claude am jetzigen Endstand selbst erhoben.
   quellentreue Dokumentkonsolidierung; Archivierung oder Löschung benötigt einen gesondert
   belegten, verlustfreien Schnitt.
 
-## AP15-2 — quellentreue operative Dokumentkonsolidierung (2026-08-03, nicht committet)
+## AP15-2 — quellentreue operative Dokumentkonsolidierung (2026-08-03)
+
+- **Abgeschlossen auf `main`:** Commit `40606eeea98baccf6192ad99d3ccac81fc7f0258`.
+  CI `30814390705` mit `verify`, `database`, `container` und `objectstore` sowie
+  Container-Image `30814390702` sind `completed/success`.
 
 - **Umfang:** sechs Dokumente auf den belegten Ist-Stand gebracht — `README.md`, `app/README.md`,
   `app/supabase/README.md`, `07-Betrieb/BETRIEB.md`, `07-Betrieb/BACKUP_UND_RECOVERY.md` und

@@ -394,7 +394,9 @@ Details: `04-UI-UX/GUI.md`, `04-UI-UX/DESIGNSYSTEM.md`.
 
 ## AP15-2 – quellentreue operative Dokumentkonsolidierung (2026-08-03)
 
-- **Umgesetzt, nicht committet, bei Codex zur Prüfung.** Sechs Dokumente auf den belegten
+- **Abgeschlossen auf `main`:** Commit `40606eeea98baccf6192ad99d3ccac81fc7f0258`.
+  CI `30814390705` mit `verify`, `database`, `container` und `objectstore` sowie
+  Container-Image `30814390702` sind `completed/success`. Sechs Dokumente auf den belegten
   Ist-Stand gebracht: `README.md`, `app/README.md`, `app/supabase/README.md`,
   `07-Betrieb/BETRIEB.md`, `07-Betrieb/BACKUP_UND_RECOVERY.md` und
   `00-Projektsteuerung/CHANGELOG.md`. Keine Produktänderung, keine Archivierung, keine
