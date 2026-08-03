@@ -8,13 +8,15 @@
 
 > **Aktueller Stand (2026-08-03).** Zielplattform bleibt ADR-011: PostgreSQL 18, Auth.js v5, MinIO
 > und Containerbetrieb hinter dem internen Reverse-Proxy; Supabase ist kein Ziel. Bestätigter
-> Technischer Referenzstand ist `530a1f05f079ee2f2ce04403475c6a32d03a9e3a` auf `main`;
-> Pull Request #6 ist geschlossen und gemergt. Die administrative Benutzerverwaltung nach ADR-011
+> technischer Referenzstand ist `8b65f4ed9c1175ddec3aca5045a5a59906b95c68` auf `main`.
+> AP15-1 stellt die fünf statusbasierten Dashboardkennzahlen auf eine RLS-gebundene
+> PostgreSQL-Abfrage um, ohne die sichtbare Oberfläche, Tageskennzahlen oder Listen zu ändern.
+> Die administrative Benutzerverwaltung nach ADR-011
 > ist serverseitig umgesetzt (temporärer Passwort-Reset, Deaktivierung/Reaktivierung,
 > Rollenwechsel, Sitzungswiderruf und Audit). Der V24-Wettlauftest akzeptiert zusätzlich nur den
 > exakt belegten `pg`-`DatabaseError` des Profilwächters mit SQLSTATE `KB003`, exaktem Namen und
-> exakter Meldung; andere SQLSTATEs bleiben rot. Der abschließende main-CI-Lauf `30790933496`
-> mit allen vier Jobs und der Container-Image-Lauf `30790933449` sind jeweils
+> exakter Meldung; andere SQLSTATEs bleiben rot. Der abschließende main-CI-Lauf `30800335370`
+> mit allen vier Jobs und der Container-Image-Lauf `30800335380` sind jeweils
 > `completed/success`. Die früheren Stände
 > `79d88449f9e481b1148f902e175f46f9d07ef35d` und `22db6dad8958146be4de667a55e89ba170e73b7c` sind
 > Vorfahren und damit überholt. Die Datenpfade für Vorgänge, Aufgaben und Offline-Sync, für
@@ -26,7 +28,7 @@
 > ihre historischen Prüfnachweise unverändert. **AP14 insgesamt bleibt offen:** echte IT-Adressen
 > und die Same-Origin-Route am internen Reverse-Proxy, produktiver Betrieb und Deployment, die
 > vollständige `@app`-/Offline-Abnahme und die CSP-Auswertung sind nicht erbracht. Nächster
-> nicht-visueller Arbeitsblock ist AP15 Konsolidierung und Archivierung. Die sichtbare GUI der
+> nicht-visueller Arbeitsblock ist AP15 Dokumentkonsolidierung. Die sichtbare GUI der
 > Benutzerverwaltung wartet auf Dennis. V1 bleibt
 > Produktionssperre, Branding bleibt separat, GUI-/Designarbeit wartet auf Dennis.
 
@@ -373,3 +375,19 @@ Details: `04-UI-UX/GUI.md`, `04-UI-UX/DESIGNSYSTEM.md`.
   der Benutzerverwaltung wartet weiter auf Dennis.**
 - Einzelheiten: `PROJEKT_WISSEN.md` (Abschnitt „AP14/B — Bilder und Uploads auf MinIO") und
   `00-Projektsteuerung/ROADMAP_AP12_AP15_ENTWURF.md` (B.4, Version 1.19).
+
+## AP15-1 – RLS-gebundene Dashboard-Statuskennzahlen (2026-08-03)
+
+- **Abgeschlossen auf `main`:** Commit `8b65f4ed9c1175ddec3aca5045a5a59906b95c68`.
+  CI `30800335370` mit `verify`, `database`, `container` und `objectstore` sowie
+  Container-Image `30800335380` sind `completed/success`.
+- Die fünf statusbasierten Dashboardkennzahlen werden in einer identitätsgebundenen,
+  parametrisierten PostgreSQL-Abfrage über `public.incident_list_view` berechnet. Keine
+  Migration, kein neues Recht, kein `SECURITY DEFINER` und keine zweite Terminalstatusliste.
+  Sichtbare Oberfläche, Tageskennzahlen, Listen und `/meine-einsaetze` blieben unverändert.
+- **Codex-Gate:** TypeScript und ESLint Exit 0, 97/97 Unit-Tests, Produktions-Build Exit 0,
+  `git diff --check` Exit 0 sowie vollständiger PostgreSQL-18-Lauf mit Migrationen 0001–0017,
+  Smokes 15–24 und 141/141 Integrationsfällen bei skipped 0. Bereinigung vollständig belegt.
+- **Weiter offen:** Dokumentkonsolidierung, Listen-Vollmengen und Filtertransaktionen sowie die
+  sichtbaren Entscheidungen zu `fehlalarm`, Tagesgrenze, Aufgabenintegration und
+  Dashboardgestaltung. AP14 Betrieb/Abnahme, RC1, V1, Tag und Release bleiben offen.

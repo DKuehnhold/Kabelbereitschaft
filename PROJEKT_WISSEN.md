@@ -3,17 +3,19 @@
 
 > **Aktueller Stand (2026-08-03).** Zielplattform bleibt ADR-011: PostgreSQL 18, Auth.js v5, MinIO
 > und Containerbetrieb hinter dem internen Reverse-Proxy; Supabase ist kein Ziel. Bestätigter
-> Technischer Referenzstand ist `530a1f05f079ee2f2ce04403475c6a32d03a9e3a`
-> (`test: accept exact fail-closed KB003 race`) auf `main`; Pull Request #6 ist geschlossen und
-> gemergt. Die administrative Benutzerverwaltung nach ADR-011 ist serverseitig umgesetzt:
+> technischer Referenzstand ist `8b65f4ed9c1175ddec3aca5045a5a59906b95c68`
+> (`feat: add RLS-bound dashboard status metrics`) auf `main`. AP15-1 berechnet die fünf
+> statusbasierten Dashboardkennzahlen jetzt in einer RLS-gebundenen PostgreSQL-Abfrage über
+> `public.incident_list_view`; sichtbare Oberfläche, Tageskennzahlen und Listen blieben
+> unverändert. Die administrative Benutzerverwaltung nach ADR-011 ist serverseitig umgesetzt:
 > Passwort-Reset mit temporärem Passwort und `must_change_password`, Deaktivierung/Reaktivierung
 > und Rollenwechsel widerrufen die Zielsitzungen transaktional und erzeugen Auditereignisse.
 > Migration `0017` schützt insbesondere den letzten aktiven Administrator und die aktive
 > Administrator-Identität fail-closed. Der V24-Wettlauftest erkennt nach zwei diagnostischen
 > Linux-Läufen zusätzlich nur den exakt belegten `pg`-`DatabaseError` mit `name = error`,
 > SQLSTATE `KB003` und der zeichengenauen Meldung des Profilwächters; andere SQLSTATEs und
-> Meldungen bleiben rot. Der abschließende main-CI-Lauf `30790933496` mit den Jobs `verify`,
-> `database`, `container` und `objectstore` sowie Container-Image `30790933449` sind jeweils
+> Meldungen bleiben rot. Der abschließende main-CI-Lauf `30800335370` mit den Jobs `verify`,
+> `database`, `container` und `objectstore` sowie Container-Image `30800335380` sind jeweils
 > `completed/success`. Die früheren Stände
 > `79d88449f9e481b1148f902e175f46f9d07ef35d` und `22db6dad8958146be4de667a55e89ba170e73b7c`
 > sind Vorfahren und damit überholt. Die Datenpfade
@@ -30,7 +32,7 @@
 > abgeschlossen**. **AP14 insgesamt bleibt offen:** echte IT-Adressen und die Same-Origin-Route am
 > internen Reverse-Proxy, produktiver Betrieb und Deployment, die vollständige `@app`-/Offline-
 > Abnahme sowie die CSP-Auswertung sind **nicht** erbracht. Nächster nicht-visueller Arbeitsblock
-> ist **AP15 Konsolidierung und Archivierung**. Die sichtbare GUI der Benutzerverwaltung wartet
+> ist **AP15 Dokumentkonsolidierung**. Die sichtbare GUI der Benutzerverwaltung wartet
 > weiterhin auf die gemeinsame Designentscheidung mit Dennis.
 > V1 bleibt Produktionssperre, Branding bleibt separat, GUI-/Designarbeit wartet auf Dennis.
 
@@ -62,7 +64,7 @@ CSV-Export, Offlinebetrieb mit Synchronisation und Konfliktbehandlung.
 - **HEIC:** nicht akzeptiert (keine zuverlässige Browser-Vorschau/Verarbeitung).
 - **Sicherheitsheader (AP7):** harte Header durchsetzend; CSP zunächst Report-Only.
 - **Release:** Semantic Versioning; erster RC `v1.0.0-rc.1`; **Tag/Release nur mit Nutzerfreigabe**.
-- **Migrationen:** additiv/idempotent; aktuell `0001`–`0016` (Stand 2026-08-01). Sie liegen
+- **Migrationen:** additiv/idempotent; aktuell `0001`–`0017` (Stand 2026-08-03). Sie liegen
   vollständig auf `main`.
 - **Zielplattform (ADR-011):** keine Supabase-Cloud und kein selbst gehostetes Supabase.
   Ziel sind interne PostgreSQL-18-Dienste, Auth.js v5 mit serverseitigem Sitzungswiderruf,
@@ -708,6 +710,31 @@ Claude am jetzigen Endstand selbst erhoben.
 - Die CSP wird weiterhin nur als `Content-Security-Policy-Report-Only` ausgeliefert; die Umstellung
   auf die durchsetzende Variante ist eine eigene, im Browser zu verifizierende Entscheidung.
 - V1 bleibt Produktionssperre; die Aufbewahrungsentscheidung ist offen.
+
+## AP15-1 — RLS-gebundene Dashboard-Statuskennzahlen (2026-08-03, auf main)
+
+- **Status:** Commit `8b65f4ed9c1175ddec3aca5045a5a59906b95c68` ist auf `main` und
+  `origin/main`. CI `30800335370` (`verify`, `database`, `container`, `objectstore`) und
+  Container-Image `30800335380` sind vollständig `completed/success`.
+- `app/src/lib/incident-metrics.ts` liefert fünf Statuskennzahlen in genau einer
+  `withUserTransaction()` und einer parametrisierten Abfrage über die
+  `security_invoker`-View `public.incident_list_view`. Die offene Statusmenge stammt aus
+  `TERMINAL_STATUS`; es gibt keine zweite Statusliste, keine Migration, kein neues Recht und
+  keinen `SECURITY DEFINER`-Helfer. Das Dashboard verwendet diese Werte ohne sichtbare
+  JSX-, Text-, Klassen- oder Reihenfolgeänderung. `/meine-einsaetze` blieb unverändert, weil
+  dort keine Statuskennzahl existiert und eine Umstellung die sichtbare Listenstruktur
+  betroffen hätte.
+- **Unabhängig durch Codex verifiziert:** TypeScript und ESLint Exit 0, 97/97 Unit-Tests,
+  Produktions-Build Exit 0, `git diff --check` Exit 0 sowie vollständiger PostgreSQL-18-Lauf
+  mit Migrationen `0001`–`0017`, Smokes 15–24 und fünf Integrationssuiten
+  (32/31/37/31/10 = 141/141, skipped 0). Temporäres Cluster, Datenbank, Rolle, Port und
+  Arbeitsverzeichnis wurden entfernt.
+- **Grenzen:** Kachelwerte und Listen stammen weiterhin aus getrennten Transaktionen und können
+  bei einem gleichzeitigen Schreibvorgang kurzfristig um eins abweichen. `fehlalarm`-Semantik,
+  Datumsgrenze der Tageskennzahlen, Listen-Vollmengen, sichtbare Aufgabenintegration und
+  Dashboardgestaltung wurden nicht verändert. Nächster nicht-visueller Schritt ist die
+  quellentreue Dokumentkonsolidierung; Archivierung oder Löschung benötigt einen gesondert
+  belegten, verlustfreien Schnitt.
 
 ## Definitionen und Begriffe
 - **AP1–AP7:** Arbeitspakete (Grundgerüst → Vorgänge → Material → Bilder → Offline/PWA → E2E/Härtung → Release Readiness).
