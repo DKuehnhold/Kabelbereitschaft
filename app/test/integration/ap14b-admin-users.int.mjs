@@ -1012,12 +1012,19 @@ test("V24 letzter Administrator: zwei gleichzeitige Herabstufungen", options, as
       // zweiten Lauf lesbar ist. Kennungen und Meldungstexte bleiben aussen
       // vor: Ausgang 5 erscheint als FESTER Marker, ein sonstiger nackter
       // `Error` nur als `unerwartet`, benannte Fehlerklassen wie bisher.
+      // Ein abgewiesener Fehler mit nichtleerem, stringfoermigem `code`
+      // haengt ihn als SQLSTATE an (Beispiel `abgewiesen:error(42501)`),
+      // da der `name` eines pg-DatabaseError stets nur `"error"` ist.
       const describe = (outcome) => {
         if (outcome.status === "fulfilled") return `erfuellt:${outcome.value.kind}`;
         if (isWriteVisibilityLost(outcome.reason)) {
           return "abgewiesen:Error(schreibsicht-verloren)";
         }
         const name = outcome.reason?.name ?? typeof outcome.reason;
+        const code = outcome.reason?.code;
+        if (typeof code === "string" && code !== "") {
+          return `abgewiesen:${name}(${code})`;
+        }
         return name === "Error" ? "abgewiesen:Error(unerwartet)" : `abgewiesen:${name}`;
       };
       const seen = settled.map(describe).join(" | ");
