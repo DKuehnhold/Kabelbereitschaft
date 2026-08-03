@@ -54,7 +54,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { Client } from "pg";
+// `DatabaseError` kommt aus dem BEREITS vorhandenen Paket `pg` - keine neue
+// Abhaengigkeit. Im Baum liegt genau EINE `pg`-Installation, und
+// `pg/esm/index.mjs` re-exportiert dieselbe Klasse wie der CJS-Einstieg. Ein
+// `instanceof DatabaseError` traegt deshalb ueber die Modulgrenze zu
+// `src/lib/db` hinweg. Lagen jemals zwei Kopien im Baum, waere das Praedikat
+// `false` und der betroffene Fall damit rot - also fail-closed.
+import { Client, DatabaseError } from "pg";
 
 const APP_URL = process.env.AP14B_APP_DATABASE_URL?.trim();
 const ADMIN_URL = process.env.AP14B_ADMIN_DATABASE_URL?.trim();
@@ -917,7 +923,7 @@ test("V24 letzter Administrator: zwei gleichzeitige Herabstufungen", options, as
   // Beide Aufrufe handeln unter DERSELBEN Identitaet (ADMIN_A) und stufen je
   // einen ANDEREN der beiden verbliebenen Administratoren herab. Welcher der
   // beiden zuerst festschreibt, entscheidet die Datenbank - der Fall laesst
-  // deshalb FUENF legitime Ausgaenge fuer den jeweils unterlegenen Aufruf zu:
+  // deshalb SECHS legitime Ausgaenge fuer den jeweils unterlegenen Aufruf zu:
   //
   //   1. Die Herabstufung von ADMIN_B gewinnt. Der Aufruf auf ADMIN_A selbst
   //      trifft danach den letzten Administrator und endet mit `last_admin`.
@@ -956,12 +962,33 @@ test("V24 letzter Administrator: zwei gleichzeitige Herabstufungen", options, as
   //      AFTER-Trigger und kann die Kette vor dem `update` deshalb nicht
   //      schuetzen. Genau dieser Ausgang trat im Linux-CI-Lauf `30733682274`
   //      auf (`abgewiesen:Error | erfuellt:changed`).
+  //   6. Die Selbstherabstufung von ADMIN_A gewinnt und schreibt fest, NACHDEM
+  //      der andere Aufruf `assertActiveAdmin` bestanden hat. Der
+  //      BEFORE-UPDATE-Waechter `trg_protect_profile_active_admin` aus
+  //      Migration `0017` prueft die Adminrolle des Handelnden ueber
+  //      `public.is_active_admin_actor()` als eigene Anweisung und damit unter
+  //      READ COMMITTED mit einem FRISCHEN Schnappschuss. Er sieht die nun
+  //      nicht mehr aktive Identitaet und verweigert fail-closed mit SQLSTATE
+  //      `KB003`. Weil der Trigger BEFORE UPDATE ist, wird NICHTS geschrieben:
+  //      die Anweisung bricht ab, der Audittrigger ist AFTER UPDATE und feuert
+  //      nicht, und der Transaktionswrapper rollt zurueck.
+  //      `revokeOpenSessions` wird nie erreicht. Unterschied zu Ausgang 5:
+  //      dort verliert der Handelnde die SCHREIBsicht der Policy
+  //      `profiles_update` und das `update` trifft null Zeilen; hier passiert
+  //      die Zeile die Policy noch, und erst der Waechter verweigert. Die
+  //      beiden Ausgaenge schliessen einander aus. Genau dieser Ausgang trat im
+  //      Linux-CI-Lauf `30787829314` auf
+  //      (`abgewiesen:error(KB003) | erfuellt:changed`).
   //
-  // Die Ausgaenge 3, 4 und 5 sind gewolltes Verhalten und keine Abschwaechung:
-  // sie verweigern frueher als der Schutztrigger, nicht spaeter, und schreiben
-  // nichts - `not_found` faellt vor dem `update`, und Ausgang 5 trifft null
-  // Zeilen und rollt zurueck, ist also sogar strenger fail-closed als
-  // `last_admin`. Die EIGENTLICHE Zusicherung dieses Falls ist deshalb nicht
+  // Die Ausgaenge 3, 4, 5 und 6 sind gewolltes Verhalten und keine
+  // Abschwaechung: sie verweigern frueher als der Schutztrigger, nicht spaeter,
+  // und schreiben nichts - `not_found` faellt vor dem `update`, und Ausgang 5
+  // trifft null Zeilen und rollt zurueck, ist also sogar strenger fail-closed
+  // als `last_admin`. Ausgang 6 verweigert seinerseits FRUEHER und STRENGER als
+  // der fachliche `last_admin`-Pfad: `KB003` bricht die Anweisung schon im
+  // BEFORE-Trigger ab, noch bevor der Schutz des letzten aktiven Administrators
+  // ueberhaupt greifen muesste - eine ZUSAETZLICHE Verweigerung und keine
+  // Erlaubnis. Die EIGENTLICHE Zusicherung dieses Falls ist deshalb nicht
   // ein bestimmtes Ergebnispaar, sondern die Invariante danach: es bleibt
   // GENAU EIN aktiver Administrator uebrig - niemals null. Genau diese
   // Invariante wuerde ohne den Advisory-Lock brechen.
@@ -1008,6 +1035,39 @@ test("V24 letzter Administrator: zwei gleichzeitige Herabstufungen", options, as
         reason.message === WRITE_VISIBILITY_LOST_MESSAGE &&
         reason.code === undefined;
 
+      // Erkennt AUSSCHLIESSLICH Ausgang 6 aus dem Fallkommentar: die
+      // fail-closed Verweigerung des BEFORE-UPDATE-Waechters auf
+      // `public.profiles`. Alle fuenf Merkmale muessen zugleich zutreffen:
+      //   a) `instanceof Error` - ueberhaupt ein Fehlerobjekt, kein geworfener
+      //      String und kein `undefined`,
+      //   b) `instanceof DatabaseError` - EINE echte serverseitige
+      //      `pg`-Fehlerantwort, keine Unterklasse eines Anwendungsfehlers,
+      //      kein nackter `Error` und kein beliebiges Objekt, das nur ein Feld
+      //      `code` traegt (`pg-errors.ts` prueft bewusst nur strukturell und
+      //      gibt diese Zusage nicht her). `pg` liegt genau EINMAL im Baum;
+      //      andernfalls faellt die Pruefung fail-closed rot,
+      //   c) `name === "error"` - redundant zur Klassenpruefung, aber
+      //      ausdruecklich festgehalten, weil die CI-Diagnose genau diesen
+      //      `name` gemeldet hat. Ein kuenftiges `pg` mit abweichendem `name`
+      //      soll auffallen statt still durchzurutschen,
+      //   d) `code === "KB003"` - haelt KB001, KB002, KB004, 42501, 57014,
+      //      40P01 und jeden Fehler ohne SQLSTATE draussen,
+      //   e) EXAKTE Gleichheit der Meldung, kein `includes`, `startsWith` oder
+      //      Muster - sie trennt den profiles-Waechter (`0017:950`) vom
+      //      auth_accounts-Waechter (`0017:878`), der denselben SQLSTATE
+      //      `KB003` traegt und ROT bleiben muss.
+      // Zu `isWriteVisibilityLost` ist das Praedikat strukturell DISJUNKT: jenes
+      // verlangt `Object.getPrototypeOf(reason) === Error.prototype` und
+      // `reason.code === undefined`.
+      const PROFILE_GUARD_DENIED_MESSAGE =
+        "Rollenwechsel auf public.profiles ohne aktive Adminrolle verweigert.";
+      const isProfileGuardDenied = (reason) =>
+        reason instanceof Error &&
+        reason instanceof DatabaseError &&
+        reason.name === "error" &&
+        reason.code === "KB003" &&
+        reason.message === PROFILE_GUARD_DENIED_MESSAGE;
+
       // Benennt den TATSAECHLICH erhaltenen Ausgang, damit ein Fehlschlag ohne
       // zweiten Lauf lesbar ist. Kennungen und Meldungstexte bleiben aussen
       // vor: Ausgang 5 erscheint als FESTER Marker, ein sonstiger nackter
@@ -1046,11 +1106,14 @@ test("V24 letzter Administrator: zwei gleichzeitige Herabstufungen", options, as
         // Ausgang 5 bleibt eine EIGENE Disjunktion neben `last_admin`,
         // `not_found` und `AdminActionDeniedError` - kein allgemeiner Zweig
         // fuer beliebige Abweisungen.
-        (other.status === "rejected" && isWriteVisibilityLost(other.reason));
+        (other.status === "rejected" && isWriteVisibilityLost(other.reason)) ||
+        // Ausgang 6 bleibt ebenfalls eine EIGENE Disjunktion - kein allgemeiner
+        // Zweig fuer beliebige Abweisungen.
+        (other.status === "rejected" && isProfileGuardDenied(other.reason));
       assert.equal(
         otherAccepted,
         true,
-        `Der zweite Aufruf muss mit last_admin, not_found, AdminActionDeniedError oder dem fail-closed abgebrochenen Rollenwechsel ohne getroffene Zeile enden, erhalten: ${seen}`,
+        `Der zweite Aufruf muss mit last_admin, not_found, AdminActionDeniedError, dem fail-closed abgebrochenen Rollenwechsel ohne getroffene Zeile oder der fail-closed Verweigerung des Rollenwaechters auf den Profilen enden, erhalten: ${seen}`,
       );
 
       // Die eigentliche Sicherheitsaussage - gemessen ueber den Admin-Client mit
