@@ -4,16 +4,18 @@
 > (`00-Projektsteuerung/ROADMAP_AP12_AP15_ENTWURF.md`, B.1/B.8). Abgelöste Dublette:
 > `00-Projektsteuerung/PROJEKTSTATUS.md` (als historisch markiert, nicht gelöscht).
 > Endgültige Konsolidierung und Archivierung erfolgen in AP15.
-> Stand: 2026-08-02
+> Stand: 2026-08-03
 
-> **Aktueller Stand (2026-08-02).** Zielplattform bleibt ADR-011: PostgreSQL 18, Auth.js v5, MinIO
+> **Aktueller Stand (2026-08-03).** Zielplattform bleibt ADR-011: PostgreSQL 18, Auth.js v5, MinIO
 > und Containerbetrieb hinter dem internen Reverse-Proxy; Supabase ist kein Ziel. Bestätigter
-> Technischer Referenzstand ist `62ab167dafd344c754eb00e19fe1c69e92950a2e` auf `main`;
+> Technischer Referenzstand ist `530a1f05f079ee2f2ce04403475c6a32d03a9e3a` auf `main`;
 > Pull Request #6 ist geschlossen und gemergt. Die administrative Benutzerverwaltung nach ADR-011
 > ist serverseitig umgesetzt (temporärer Passwort-Reset, Deaktivierung/Reaktivierung,
-> Rollenwechsel, Sitzungswiderruf und Audit). Der abschließende PR-CI-Lauf `30734789895`, der
-> main-CI-Lauf `30735713849` mit allen vier Jobs und der Container-Image-Lauf `30735713852` sind
-> jeweils `completed/success`. Die früheren Stände
+> Rollenwechsel, Sitzungswiderruf und Audit). Der V24-Wettlauftest akzeptiert zusätzlich nur den
+> exakt belegten `pg`-`DatabaseError` des Profilwächters mit SQLSTATE `KB003`, exaktem Namen und
+> exakter Meldung; andere SQLSTATEs bleiben rot. Der abschließende main-CI-Lauf `30790933496`
+> mit allen vier Jobs und der Container-Image-Lauf `30790933449` sind jeweils
+> `completed/success`. Die früheren Stände
 > `79d88449f9e481b1148f902e175f46f9d07ef35d` und `22db6dad8958146be4de667a55e89ba170e73b7c` sind
 > Vorfahren und damit überholt. Die Datenpfade für Vorgänge, Aufgaben und Offline-Sync, für
 > Stammdaten und Inventar sowie für Bilder und Uploads sind auf PostgreSQL 18 und den privaten

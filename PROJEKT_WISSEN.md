@@ -1,17 +1,20 @@
 # Projektwissen – Kabelbereitschaft
-> Stand: 2026-08-02 · Nur bestätigte Ergebnisse. Nicht ausgeführte Prüfungen sind als offen markiert.
+> Stand: 2026-08-03 · Nur bestätigte Ergebnisse. Nicht ausgeführte Prüfungen sind als offen markiert.
 
-> **Aktueller Stand (2026-08-02).** Zielplattform bleibt ADR-011: PostgreSQL 18, Auth.js v5, MinIO
+> **Aktueller Stand (2026-08-03).** Zielplattform bleibt ADR-011: PostgreSQL 18, Auth.js v5, MinIO
 > und Containerbetrieb hinter dem internen Reverse-Proxy; Supabase ist kein Ziel. Bestätigter
-> Technischer Referenzstand ist `62ab167dafd344c754eb00e19fe1c69e92950a2e`
-> (`test: cover final fail-closed admin race`) auf `main`; Pull Request #6 ist geschlossen und
+> Technischer Referenzstand ist `530a1f05f079ee2f2ce04403475c6a32d03a9e3a`
+> (`test: accept exact fail-closed KB003 race`) auf `main`; Pull Request #6 ist geschlossen und
 > gemergt. Die administrative Benutzerverwaltung nach ADR-011 ist serverseitig umgesetzt:
 > Passwort-Reset mit temporärem Passwort und `must_change_password`, Deaktivierung/Reaktivierung
 > und Rollenwechsel widerrufen die Zielsitzungen transaktional und erzeugen Auditereignisse.
 > Migration `0017` schützt insbesondere den letzten aktiven Administrator und die aktive
-> Administrator-Identität fail-closed. Der abschließende PR-CI-Lauf `30734789895` sowie die
-> main-Läufe CI `30735713849` (Jobs `verify`, `database`, `container`, `objectstore`) und
-> Container-Image `30735713852` sind jeweils `completed/success`. Die früheren Stände
+> Administrator-Identität fail-closed. Der V24-Wettlauftest erkennt nach zwei diagnostischen
+> Linux-Läufen zusätzlich nur den exakt belegten `pg`-`DatabaseError` mit `name = error`,
+> SQLSTATE `KB003` und der zeichengenauen Meldung des Profilwächters; andere SQLSTATEs und
+> Meldungen bleiben rot. Der abschließende main-CI-Lauf `30790933496` mit den Jobs `verify`,
+> `database`, `container` und `objectstore` sowie Container-Image `30790933449` sind jeweils
+> `completed/success`. Die früheren Stände
 > `79d88449f9e481b1148f902e175f46f9d07ef35d` und `22db6dad8958146be4de667a55e89ba170e73b7c`
 > sind Vorfahren und damit überholt. Die Datenpfade
 > für **Vorgänge, Aufgaben und Offline-Sync** sind auf PostgreSQL 18 migriert, lokal und in der CI
