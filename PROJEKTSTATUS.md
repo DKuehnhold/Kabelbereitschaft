@@ -4,12 +4,12 @@
 > (`00-Projektsteuerung/ROADMAP_AP12_AP15_ENTWURF.md`, B.1/B.8). Abgelöste Dublette:
 > `00-Projektsteuerung/PROJEKTSTATUS.md` (als historisch markiert, nicht gelöscht).
 > Endgültige Konsolidierung und Archivierung erfolgen in AP15.
-> Stand: 2026-08-08
+> Stand: 2026-08-09
 
-> **Aktueller Stand (2026-08-08).** Zielplattform bleibt ADR-011: PostgreSQL 18, Auth.js v5, MinIO
+> **Aktueller Stand (2026-08-09).** Zielplattform bleibt ADR-011: PostgreSQL 18, Auth.js v5, MinIO
 > und Containerbetrieb hinter dem internen Reverse-Proxy; Supabase ist kein Ziel. Bestätigter
-> technischer Referenzstand ist `40606eeea98baccf6192ad99d3ccac81fc7f0258`
-> (`docs: consolidate operational platform guidance`) auf `main`.
+> technischer Referenzstand ist `9aaebdf7df0f76b5d80d1e39801e42480ac82b37`
+> (`test(ci): gate all postgres integration suites`) auf `main`.
 > AP15-1 stellt die fünf statusbasierten Dashboardkennzahlen auf eine RLS-gebundene
 > PostgreSQL-Abfrage um, ohne die sichtbare Oberfläche, Tageskennzahlen oder Listen zu ändern.
 > Die administrative Benutzerverwaltung nach ADR-011
@@ -28,10 +28,12 @@
 > AP14/B-Angaben beschreiben den Stand jenes Tages, sind in diesen Merges enthalten und behalten
 > ihre historischen Prüfnachweise unverändert. **AP14 insgesamt bleibt offen:** echte IT-Adressen
 > und die Same-Origin-Route am internen Reverse-Proxy, produktiver Betrieb und Deployment, die
-> vollständige `@app`-/Offline-Abnahme und die CSP-Auswertung sind nicht erbracht. Nächster
-> nicht-visueller Arbeitsblock sind die verbliebenen AP15-Fachbefunde und die Einordnung der nur
-> lokal laufenden Integrationssuiten; AP15-2 (Dokumentkonsolidierung) und AP15-3 (Runtime- und
-> CI-Wahrheit) liegen vor. AP15-3 ist mit `0f3d0bd` auf `main` gepusht; Container-Image
+> vollständige `@app`-/Offline-Abnahme und die CSP-Auswertung sind nicht erbracht. AP15-2
+> (Dokumentkonsolidierung), AP15-3 (Runtime- und CI-Wahrheit), AP15-4 (read-only Audit) und AP15-5
+> (fünf Integrationssuiten als CI-Gate) liegen vor; nächster nicht-visueller Arbeitsblock sind
+> ausschließlich die verbliebenen AP15-Fachbefunde (`fehlalarm`-Semantik, Datumsherkunft und
+> Tagesgrenze der Tageskennzahlen, Filteroptionen in drei Transaktionen, Vollmengen-Reads der
+> Listen). AP15-3 ist mit `0f3d0bd` auf `main` gepusht; Container-Image
 > `31273906147` und die CI-Jobs `database`, `container` und `objectstore` des Laufs `31273906163`
 > sind `completed/success`, der Job `verify` war dort rot im Produktionsaudit (`nanoid <3.3.17`,
 > GHSA-2v37-7h3g-55p8). Behoben ist das mit dem Korrekturcommit
@@ -40,7 +42,13 @@
 > (`93150848358`), `database` (`93150848347`), `container` (`93150848324`) und `objectstore`
 > (`93150848342`), ebenso der Container-Image-Lauf `31276526192`. AP15-3 ist damit technisch
 > abgeschlossen; die Lauf- und Jobkennungen sind durch Codex berichtet und von Claude nicht selbst
-> abgerufen. Die sichtbare GUI
+> abgerufen. AP15-5 ist mit `9aaebdf` (`test(ci): gate all postgres integration suites`) auf `main`:
+> der Job `database` führt seither alle fünf PostgreSQL-Integrationssuiten fail-closed aus, auch die
+> zuvor nur lokal laufenden `ap14b-platform`, `ap14b-masterdata-inventory` und `ap14b-images`; die
+> historischen Smokes `00` und `10`–`14` bleiben unverändert und nicht in der Kette. CI-Lauf
+> `31282034577` mit allen vier Jobs und Container-Image-Lauf `31282034552` sind `completed/success`
+> (durch Codex berichtet, von Claude nicht selbst abgerufen).
+> Die sichtbare GUI
 > der Benutzerverwaltung wartet auf Dennis. V1 bleibt
 > Produktionssperre, Branding bleibt separat, GUI-/Designarbeit wartet auf Dennis.
 
@@ -507,3 +515,39 @@ Details: `04-UI-UX/GUI.md`, `04-UI-UX/DESIGNSYSTEM.md`.
   ist. Kein Merge, kein Tag, kein Release, keine RC1- oder V1-Freigabe; AP14 Betrieb/Abnahme, die
   sichtbare GUI und die V1-Entscheidung bleiben unverändert offen.
 - Einzelheiten: `PROJEKT_WISSEN.md`, Abschnitt „AP15-3 — Runtime- und CI-Wahrheit konsolidiert".
+
+## AP15-4/AP15-5 – fünf PostgreSQL-Suiten als Linux-CI-Gate (2026-08-08/09, auf `main` als `9aaebdf`)
+
+- **AP15-4 (read-only Audit, keine Datei geändert):** Die frühere Aussage, im Linux-Runner
+  `app/supabase/test/run_db_tests.sh` laufe nur die Admin-Suite, war überholt — er startete bereits
+  `ap14b-admin-users` und `ap15-dashboard-metrics`. Nur lokal liefen `ap14b-platform`,
+  `ap14b-masterdata-inventory` und `ap14b-images`; diese drei kannten keinen Pflichtmodus und
+  endeten bei fehlenden Verbindungsvariablen still mit Exit-Code 0.
+- **AP15-5 (Umfang):** Commit `9aaebdf7df0f76b5d80d1e39801e42480ac82b37`
+  (`test(ci): gate all postgres integration suites`), zwölf Dateien — `.github/workflows/ci.yml`,
+  `app/supabase/test/run_db_tests.sh`, vier Integrationssuiten, `module-hooks-app.mjs` und fünf
+  Auftragsdateien unter `.claude/automation/tasks/`. Kein Produktcode, keine Migration, kein Paket,
+  kein Lockfile, kein neuer Job, kein Secret.
+- **Verhalten:** Der bestehende Job `database` führt fünf Suiten in fester Reihenfolge aus —
+  `ap14b-platform` → `ap14b-masterdata-inventory` → `ap14b-images` → `ap14b-admin-users` →
+  `ap15-dashboard-metrics` —, jede in einem eigenen Prozessblock mit
+  `AP14B_REQUIRE_INTEGRATION=1`, der den Runner fail-closed beendet, bevor die nächste Suite läuft.
+  Die Bildsuite läuft gegen einen prozessinternen synthetischen S3-Endpunkt und ist **kein**
+  MinIO-Ersatz; der echte MinIO-Nachweis bleibt der getrennte Job `objectstore`.
+- **Historische Smokes:** `00` und `10` bis `14` bleiben unverändert als Historienevidence und sind
+  nicht Teil der CI-Kette; keine Löschung, keine Archivierung. In der Kette laufen `15` bis `24`.
+- **Nachweise, von Claude im AP15-5-Lauf selbst lokal erhoben (Windows, PostgreSQL 18.4):** SQL-Kette
+  ohne `SMOKE … FAIL`, 141/141 Integrationsfälle (32+31+37+31+10), `fail 0`, `skipped 0`, Exit 0;
+  temporäres Cluster, Datenbank, Rolle, Port und Artefakte restlos entfernt, Dienst
+  `postgresql-x64-18` unangetastet. Shell-/Node-Syntax und `git diff --check` je Exit 0.
+- **GitHub-CI zu `9aaebdf`, durch Codex berichtet und von Claude nicht selbst abgerufen:** CI-Lauf
+  `31282034577` `completed/success` mit `verify` (`93164818889`), `objectstore` (`93164818903`),
+  `database` (`93164818909`) und `container` (`93164818928`), je `completed/success`;
+  Container-Image-Lauf `31282034552` `completed/success`.
+- **Offen:** die verbliebenen AP15-Fachbefunde (`fehlalarm`-Semantik, Datumsherkunft und Tagesgrenze
+  der Tageskennzahlen, Filteroptionen in drei Transaktionen, Vollmengen-Reads der Listen), AP14
+  Betrieb und Abnahme, echte IT-Endpunkte und Reverse-Proxy-Route, Browser-/Offline-Abnahme,
+  CSP-Auswertung, RC1, V1, Tag und Release. Commit und Push erfolgten außerhalb dieses
+  Claude-Laufs; kein Merge, kein Tag, kein Release, keine RC1- oder V1-Freigabe.
+- Einzelheiten: `PROJEKT_WISSEN.md`, Abschnitt „AP15-4/AP15-5 — fünf PostgreSQL-Suiten als
+  Linux-CI-Gate“.

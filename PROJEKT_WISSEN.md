@@ -1,10 +1,10 @@
 # Projektwissen – Kabelbereitschaft
-> Stand: 2026-08-08 · Nur bestätigte Ergebnisse. Nicht ausgeführte Prüfungen sind als offen markiert.
+> Stand: 2026-08-09 · Nur bestätigte Ergebnisse. Nicht ausgeführte Prüfungen sind als offen markiert.
 
-> **Aktueller Stand (2026-08-08).** Zielplattform bleibt ADR-011: PostgreSQL 18, Auth.js v5, MinIO
+> **Aktueller Stand (2026-08-09).** Zielplattform bleibt ADR-011: PostgreSQL 18, Auth.js v5, MinIO
 > und Containerbetrieb hinter dem internen Reverse-Proxy; Supabase ist kein Ziel. Bestätigter
-> technischer Referenzstand ist `40606eeea98baccf6192ad99d3ccac81fc7f0258`
-> (`docs: consolidate operational platform guidance`) auf `main`. AP15-1 berechnet die fünf
+> technischer Referenzstand ist `9aaebdf7df0f76b5d80d1e39801e42480ac82b37`
+> (`test(ci): gate all postgres integration suites`) auf `main`. AP15-1 berechnet die fünf
 > statusbasierten Dashboardkennzahlen jetzt in einer RLS-gebundenen PostgreSQL-Abfrage über
 > `public.incident_list_view`; sichtbare Oberfläche, Tageskennzahlen und Listen blieben
 > unverändert. Die administrative Benutzerverwaltung nach ADR-011 ist serverseitig umgesetzt:
@@ -49,10 +49,15 @@
 > (`93150848358`), `database` (`93150848347`), `container` (`93150848324`) und `objectstore`
 > (`93150848342`), ebenso der Container-Image-Lauf `31276526192`. AP15-3 ist damit technisch
 > abgeschlossen; die Lauf- und Jobkennungen sind durch Codex berichtet und von Claude nicht selbst
-> abgerufen. Nächster nicht-visueller
-> Arbeitsblock sind die verbliebenen AP15-Fachbefunde (`fehlalarm`-Semantik, Datumsherkunft der
-> Tageskennzahlen, Filteroptionen in drei Transaktionen, Vollmengen-Reads der Listen) sowie die
-> Einordnung der nur lokal laufenden Integrationssuiten und der sechs historischen Smokes. Die
+> abgerufen. AP15-4 (read-only Audit) und AP15-5 sind abgeschlossen: der bestehende CI-Job
+> `database` führt seit dem Commit `9aaebdf` (`test(ci): gate all postgres integration suites`) auf
+> `main` **alle fünf** PostgreSQL-Integrationssuiten fail-closed aus; die zuvor nur lokal laufenden
+> Suiten `ap14b-platform`, `ap14b-masterdata-inventory` und `ap14b-images` sind darin enthalten.
+> Die historischen Smokes `00` und `10`–`14` bleiben unverändert als Historienevidence und werden
+> nicht in die CI-Kette aufgenommen (Einzelheiten im Abschnitt „AP15-4/AP15-5“). Nächster
+> nicht-visueller Arbeitsblock sind ausschließlich die verbliebenen AP15-Fachbefunde
+> (`fehlalarm`-Semantik, Datumsherkunft und Tagesgrenze der Tageskennzahlen, Filteroptionen in drei
+> Transaktionen, Vollmengen-Reads der Listen). Die
 > sichtbare GUI der Benutzerverwaltung wartet weiterhin auf die gemeinsame Designentscheidung mit
 > Dennis.
 > V1 bleibt Produktionssperre, Branding bleibt separat, GUI-/Designarbeit wartet auf Dennis.
@@ -588,6 +593,9 @@ Commit. `main` steht inzwischen auf `cbe17b3`.
   Transaktionen, die Eindeutigkeit greift nur auf `profile_id` — und die fehlende Ausführung der
   beiden Node-Integrationssuiten im Linux-CI-Skript `run_db_tests.sh`: dort läuft ausschließlich die
   SQL-Kette, was gleichermaßen für den bestehenden Plattformtest gilt und damit keine Regression ist.
+  **Nachtrag 2026-08-09:** der zweite Restpunkt ist mit dem Commit `9aaebdf` erledigt —
+  `run_db_tests.sh` startet neben der SQL-Kette fünf Node-Integrationssuiten (siehe Abschnitt
+  „AP15-4/AP15-5“). Der erste Restpunkt bleibt unverändert offen.
 - **Grenze:** Supabase bleibt ausschließlich für **Bilder und Uploads** sowie die dafür noch
   benötigten Clientdateien und Pakete in Betrieb. Der funktionale Restbestand unter `app/src` sind
   genau sieben Dateien — `lib/images-server.ts`, `lib/image-upload-core.ts`, `lib/image-actions.ts`,
@@ -891,6 +899,57 @@ Claude am jetzigen Endstand selbst erhoben.
   unverändert Exit 1 und ist kein CI-Gate. Commit und Push erfolgten außerhalb dieses
   Claude-Laufs; kein Merge, kein Tag, kein Release, keine RC1- oder V1-Freigabe. AP14
   Betrieb/Abnahme, die sichtbare GUI und die V1-Entscheidung bleiben unverändert offen.
+
+## AP15-4/AP15-5 — fünf PostgreSQL-Suiten als Linux-CI-Gate (2026-08-08/09, auf `main` als `9aaebdf`)
+
+- **Auditbefund AP15-4 (read-only, keine Datei geändert).** Die frühere Aussage, im
+  Linux-Runner `app/supabase/test/run_db_tests.sh` laufe nur die Admin-Suite, war überholt: er
+  startete bereits `ap14b-admin-users` und `ap15-dashboard-metrics`. Ausschließlich lokal liefen
+  `ap14b-platform`, `ap14b-masterdata-inventory` und `ap14b-images`; diese drei kannten zudem keinen
+  Pflichtmodus und endeten bei fehlenden Verbindungsvariablen still mit Exit-Code 0.
+- **Umfang AP15-5.** Commit `9aaebdf7df0f76b5d80d1e39801e42480ac82b37`
+  (`test(ci): gate all postgres integration suites`) auf `main`, zwölf Dateien:
+  `.github/workflows/ci.yml`, `app/supabase/test/run_db_tests.sh`, die vier Suiten
+  `ap14b-platform`, `ap14b-masterdata-inventory`, `ap14b-images` und `ap14b-admin-users`,
+  `app/test/integration/module-hooks-app.mjs` sowie fünf Auftragsdateien unter
+  `.claude/automation/tasks/`. Den Pflichtmodus erhielten die ersten drei Suiten; in
+  `ap14b-admin-users` und `module-hooks-app.mjs` ist ausschließlich Kommentartext geändert. Kein
+  Produktcode, keine Migration, kein Paket, kein Lockfile, kein neuer Job und kein Secret.
+- **Verhalten.** Der bestehende CI-Job `database` führt die fünf Suiten in fester Reihenfolge aus:
+  `ap14b-platform` → `ap14b-masterdata-inventory` → `ap14b-images` → `ap14b-admin-users` →
+  `ap15-dashboard-metrics`. Jede läuft in einem eigenen Prozessblock mit
+  `AP14B_REQUIRE_INTEGRATION=1` und beendet den Runner fail-closed, bevor die nächste Suite startet.
+  Die Stellung der Plattformsuite an erster Stelle ist gekoppelt: ihr Fall I13 sichert
+  `usableAdminCount() == 0` als Ausgangslage zu, und die Admin-Fixtures der
+  Benutzerverwaltungssuite würden dort mitgezählt.
+- **Abgrenzung MinIO.** Die Bildsuite läuft gegen den prozessinternen synthetischen S3-Endpunkt
+  `app/test/integration/s3-test-endpoint.mjs`, ausdrücklich **kein** MinIO-Ersatz. Der echte
+  MinIO-Nachweis bleibt allein der getrennte Job `objectstore`.
+- **Historische Smokes.** `00_stub_auth_storage.sql` und die Präfixe `10` bis `14` bleiben
+  unverändert als Historienevidence und werden **nicht** in die aktuelle CI-Kette aufgenommen; sie
+  sind gegen die heutige Kette nicht lauffähig. Keine Löschung, keine Archivierung, keine
+  Umbenennung. Im Job `database` laufen `15` bis `24` samt Bootstrap und Migrationen `0001`–`0017`.
+- **Nachweise, von Claude im AP15-5-Lauf selbst lokal erhoben (Windows, PostgreSQL 18.4,
+  temporäres Wegwerfcluster).** Die gesamte SQL-Kette lief ohne eine einzige `SMOKE … FAIL`-Zeile;
+  die fünf Suiten ergaben 32 + 31 + 37 + 31 + 10 = **141/141**, `fail 0`, `skipped 0`, Exit 0.
+  Temporäres Cluster, Datenbank, Rolle, Port und Artefakte wurden restlos entfernt, der Dienst
+  `postgresql-x64-18` blieb unangetastet. Statisch und unabhängig von Codex: Shell- und
+  Node-Syntax sowie `git diff --check` je Exit 0; fünf Suitenaufrufe genau einmal und in der
+  belegten Reihenfolge; fünf Pflichtmodus-Zuweisungen; drei Pflichtmodus-Negativläufe Exit 1, deren
+  Meldung ausschließlich Variablennamen nennt; dieselben drei Suiten ohne Pflichtmodus Exit 0 und
+  vollständig übersprungen.
+- **GitHub-CI zu `9aaebdf` (durch Codex berichtet, von Claude nicht selbst abgerufen).** Der
+  CI-Lauf `31282034577` ist `completed/success` mit allen vier Jobs `verify` (`93164818889`),
+  `objectstore` (`93164818903`), `database` (`93164818909`) und `container` (`93164818928`), je
+  `completed/success`; der Container-Image-Lauf `31282034552` ist ebenfalls `completed/success`.
+- **Grenzen.** Der lokale Nachweis ist ein Windows-Nachweis und ersetzt den Linux-Runner nicht; er
+  belegt weder MinIO-Betrieb noch eine produktive Umgebung. `shellcheck` ist auf dem Arbeitsrechner
+  nicht installiert und wurde nicht ausgeführt. Offen bleiben die verbliebenen AP15-Fachbefunde
+  (`fehlalarm`-Semantik, Datumsherkunft und Tagesgrenze der Tageskennzahlen, Filteroptionen in drei
+  Transaktionen, Vollmengen-Reads der Listen), AP14 Betrieb und Abnahme, echte IT-Endpunkte und
+  Reverse-Proxy-Route, Browser-/Offline-Abnahme, CSP-Auswertung, RC1, V1, Tag und Release. Commit
+  und Push erfolgten außerhalb dieses Claude-Laufs; kein Merge, kein Tag, kein Release, keine RC1-
+  oder V1-Freigabe.
 
 ## Definitionen und Begriffe
 - **AP1–AP7:** Arbeitspakete (Grundgerüst → Vorgänge → Material → Bilder → Offline/PWA → E2E/Härtung → Release Readiness).
