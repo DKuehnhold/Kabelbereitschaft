@@ -34,13 +34,17 @@
 > Abnahme sowie die CSP-Auswertung sind **nicht** erbracht. AP15-2 hat die operative
 > Dokumentation quellentreu konsolidiert; CI `30814390705` mit `verify`, `database`, `container`
 > und `objectstore` sowie Container-Image `30814390702` sind jeweils `completed/success`.
-> AP15-3 hat die Runtime- und CI-Wahrheit nachgezogen (2026-08-03, ergänzt 2026-08-08, noch nicht
-> committet): `deploy/README.md` nennt die Migrationskette `0001`–`0017`, trennt den CI-Prüflauf aus
+> AP15-3 hat die Runtime- und CI-Wahrheit nachgezogen (2026-08-03, ergänzt 2026-08-08) und ist mit
+> `0f3d0bdba30934ac503dde766789e602b0225529` (`chore(ci): align AP15-3 runtime truth`) auf `main`
+> gepusht: `deploy/README.md` nennt die Migrationskette `0001`–`0017`, trennt den CI-Prüflauf aus
 > Bootstrap und Kette vom Containerstart und produktiven Deployment, `app/.env.example` führt
 > `AUTH_URL` sichtbar, `.github/workflows/ci.yml` setzt die Unit-Tests als hartes Gate im Job
 > `verify`, und der Kopfkommentar von `deploy/scripts/rollback.sh` bezeichnet die Migrationen nicht
-> mehr als additiv. Ein GitHub-CI-Lauf für AP15-3 ist noch **nicht** erfolgt und wird hier nicht
-> behauptet. Nächster nicht-visueller
+> mehr als additiv. Container-Image `31273906147` sowie die CI-Jobs `database`, `container` und
+> `objectstore` des Laufs `31273906163` sind `completed/success`; der Job `verify` desselben Laufs
+> ist **rot** im Schritt `npm audit --audit-level=high --omit=dev` (`nanoid <3.3.17`, high,
+> GHSA-2v37-7h3g-55p8, Pfad `node_modules/postcss/node_modules/nanoid`). Lokal ist das mit einer
+> reinen Lockfile-Änderung behoben; ein grüner Folgelauf ist **nicht** belegt. Nächster nicht-visueller
 > Arbeitsblock sind die verbliebenen AP15-Fachbefunde (`fehlalarm`-Semantik, Datumsherkunft der
 > Tageskennzahlen, Filteroptionen in drei Transaktionen, Vollmengen-Reads der Listen) sowie die
 > Einordnung der nur lokal laufenden Integrationssuiten und der sechs historischen Smokes. Die
@@ -796,7 +800,7 @@ Claude am jetzigen Endstand selbst erhoben.
   RC1, Tag, Release und die V1-Entscheidung. `deploy/README.md` nannte zum Stand von AP15-2
   weiterhin „0001…0016" und war damit überholt — **mit AP15-3 behoben** (siehe Abschnitt „AP15-3").
 
-## AP15-3 — Runtime- und CI-Wahrheit konsolidiert (2026-08-03, ergänzt 2026-08-08, nicht committet)
+## AP15-3 — Runtime- und CI-Wahrheit konsolidiert (2026-08-03, ergänzt 2026-08-08, gepusht als `0f3d0bd`)
 
 - **Umfang:** vier versionierte Dateien — `deploy/README.md`, `app/.env.example`,
   `.github/workflows/ci.yml` und `deploy/scripts/rollback.sh` (dort nur der Kopfkommentar) — plus
@@ -823,9 +827,9 @@ Claude am jetzigen Endstand selbst erhoben.
   Einordnung — im Containerbetrieb Pflicht (Startabbruch mit Exit-Code 78), lokal optional; ist sie
   gesetzt, muss `S3_PUBLIC_BASE_URL` denselben Origin haben. Keine echte interne Adresse.
 - **`.github/workflows/ci.yml`:** ein neuer Schritt „Unit-Tests (hartes Gate)" mit
-  `npm run test:unit` im Job `verify`, ohne `continue-on-error`. Die vorhandenen Unit-Tests **würden**
-  damit erstmals in der CI laufen; belegt ist das erst nach Push und tatsächlichem Lauf. Kein Test,
-  kein Job und kein npm-Skript geändert.
+  `npm run test:unit` im Job `verify`, ohne `continue-on-error`. Die vorhandenen Unit-Tests laufen
+  damit erstmals in der CI; im Lauf `31273906163` ist dieser Schritt auf dem Runner
+  `completed/success` (durch Codex berichtet). Kein Test, kein Job und kein npm-Skript geändert.
 - **Betriebsgrenzen, unverändert offen:** CI-Prüfungen sind kein Nachweis einer produktiven
   Umgebung und kein Nachweis der echten Reverse-Proxy-Route. Offen bleiben die produktive
   MinIO-Provisionierung, Sicherung und Recovery der Objektdaten, der Healthcheck des
@@ -837,9 +841,41 @@ Claude am jetzigen Endstand selbst erhoben.
   `bash -n deploy/scripts/rollback.sh` Exit 0 und der mechanische Vergleich der ausführbaren Zeilen
   von `rollback.sh` gegen `HEAD` ohne Unterschied (Kommentare und Leerzeilen ausgeschlossen). Kein
   Datenbank-, Docker-, Compose-, MinIO- oder Playwright-Lauf ausgeführt und keiner behauptet.
-- **Kein GitHub-CI-Ergebnis für AP15-3.** Ob das neue Unit-Test-Gate auf dem Runner grün läuft, ist
-  erst nach Push und tatsächlichem Lauf belegt; das ergänzt Codex. Kein Commit, kein Push, kein
-  Merge, kein Tag, kein Release.
+- **GitHub-CI zu AP15-3 (2026-08-08).** Der Commit `0f3d0bdba30934ac503dde766789e602b0225529`
+  (`chore(ci): align AP15-3 runtime truth`) ist auf `main` gepusht. Container-Image `31273906147`
+  ist `completed/success`; im CI-Lauf `31273906163` sind `database`, `container` und `objectstore`
+  `completed/success`, der Job `verify` ist **rot** im Schritt
+  `npm audit --audit-level=high --omit=dev`: `nanoid <3.3.17`, Severity high, GHSA-2v37-7h3g-55p8,
+  Pfad `node_modules/postcss/node_modules/nanoid`. Innerhalb dieses roten Jobs sind die vorgelagerten
+  Schritte grün: `Unit-Tests (hartes Gate)` ist `completed/success` (19:14:36Z–19:14:38Z), ebenso
+  Lint, TypeScript, Service-Worker-Syntax und Build. Der Job `verify` blieb allein deshalb rot, weil
+  erst der nachfolgende harte Schritt `Audit Produktion (high/critical als Gate)` scheiterte; der
+  informative Dev-Audit und die Playwright-Schritte wurden danach übersprungen. Das mit AP15-3
+  eingeführte Unit-Test-Gate ist damit auf dem Runner belegt; ein vollständig grüner CI-Gesamtlauf
+  bleibt weiterhin unbelegt. Die Schritt- und Zeitangaben sind durch Codex berichtet und von Claude
+  nicht selbst abgerufen.
+- **Lokale Korrektur des Produktionsaudits (2026-08-08, nicht committet).** Einzige geänderte
+  versionierte Datei ist `app/package-lock.json`; `app/package.json` ist bitgleich zu `HEAD`. Unter
+  dem bestehenden Override `postcss 8.5.24` löst nanoid jetzt auf `3.3.18` statt `3.3.16` auf —
+  innerhalb der von PostCSS deklarierten Range `^3.3.16`, ohne neue direkte Abhängigkeit und ohne
+  neuen Override. Erzeugt mit `npm update nanoid --package-lock-only --ignore-scripts` (Exit 0);
+  aus dem HEAD-Stand wiederholt ausgeführt ergibt sich derselbe Blob `1e973c34`. Nachweise, von
+  Claude selbst erhoben: `npm ci --ignore-scripts` Exit 0 ohne Lockfile-Änderung,
+  `npm ls nanoid postcss --omit=dev --all` Exit 0 mit
+  `next@16.2.12 -> postcss@8.5.24 (overridden) -> nanoid@3.3.18`,
+  `npm audit --audit-level=high --omit=dev` Exit 0 (`found 0 vulnerabilities`), Unit-Tests 97/97
+  Exit 0 (`fail 0`, `skipped 0`), TypeScript Exit 0, ESLint Exit 0, Produktions-Build Exit 0,
+  `git diff --check` Exit 0. **Ein grüner GitHub-CI-Folgelauf wird nicht behauptet** — er folgt erst
+  nach Push durch Codex.
+- **Nebenbefund im Lockfile-Diff.** Neben der nanoid-Auflösung entfernt npm 11.13.0 fünf
+  versionslose `dev`/`optional`-Stub-Einträge (`@emnapi/core`, `@emnapi/runtime`,
+  `@napi-rs/wasm-runtime`, `@tybys/wasm-util`, `tslib`). Das ist kein Paketupdate: ein Kontrolllauf
+  `npm install --package-lock-only --ignore-scripts` **ohne** nanoid-Update entfernt dieselben fünf
+  Einträge. Kein weiteres Paket ändert Version, `resolved` oder `integrity`. Der dev-Audit
+  `npm audit --audit-level=high` bleibt lokal Exit 1 (`brace-expansion`, `js-yaml`, beide nur unter
+  `eslint`/`minimatch`); dieser Schritt ist in `.github/workflows/ci.yml` ausdrücklich informativ
+  und mit `continue-on-error: true` versehen und blockiert die CI nicht. Kein Commit, kein Push,
+  kein Merge, kein Tag, kein Release.
 
 ## Definitionen und Begriffe
 - **AP1–AP7:** Arbeitspakete (Grundgerüst → Vorgänge → Material → Bilder → Offline/PWA → E2E/Härtung → Release Readiness).

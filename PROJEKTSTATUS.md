@@ -31,7 +31,11 @@
 > vollständige `@app`-/Offline-Abnahme und die CSP-Auswertung sind nicht erbracht. Nächster
 > nicht-visueller Arbeitsblock sind die verbliebenen AP15-Fachbefunde und die Einordnung der nur
 > lokal laufenden Integrationssuiten; AP15-2 (Dokumentkonsolidierung) und AP15-3 (Runtime- und
-> CI-Wahrheit) liegen vor, AP15-3 noch nicht committet und ohne GitHub-CI-Lauf. Die sichtbare GUI
+> CI-Wahrheit) liegen vor. AP15-3 ist mit `0f3d0bd` auf `main` gepusht; Container-Image
+> `31273906147` und die CI-Jobs `database`, `container` und `objectstore` des Laufs `31273906163`
+> sind `completed/success`, der Job `verify` ist rot im Produktionsaudit (`nanoid <3.3.17`,
+> GHSA-2v37-7h3g-55p8). Lokal ist das mit einer reinen Lockfile-Änderung behoben; ein grüner
+> Folgelauf ist nicht belegt. Die sichtbare GUI
 > der Benutzerverwaltung wartet auf Dennis. V1 bleibt
 > Produktionssperre, Branding bleibt separat, GUI-/Designarbeit wartet auf Dennis.
 
@@ -426,7 +430,7 @@ Details: `04-UI-UX/GUI.md`, `04-UI-UX/DESIGNSYSTEM.md`.
 - Einzelheiten: `PROJEKT_WISSEN.md`, Abschnitt „AP15-2 — quellentreue operative
   Dokumentkonsolidierung".
 
-## AP15-3 – Runtime- und CI-Wahrheit konsolidiert (2026-08-03, ergänzt 2026-08-08, nicht committet)
+## AP15-3 – Runtime- und CI-Wahrheit konsolidiert (2026-08-03, ergänzt 2026-08-08, gepusht als `0f3d0bd`)
 
 - **Umfang:** `deploy/README.md`, `app/.env.example`, `.github/workflows/ci.yml` und der
   Kopfkommentar von `deploy/scripts/rollback.sh` plus die Abschlussnotizen in `PROJEKT_WISSEN.md`
@@ -450,8 +454,9 @@ Details: `04-UI-UX/GUI.md`, `04-UI-UX/DESIGNSYSTEM.md`.
   im Containerbetrieb Pflicht (Startabbruch mit Exit-Code 78), lokal optional; ist sie gesetzt,
   muss `S3_PUBLIC_BASE_URL` denselben Origin haben. Keine echte interne Adresse.
 - `.github/workflows/ci.yml` führt `npm run test:unit` als hartes Gate im Job `verify` aus — ohne
-  `continue-on-error`, ohne Testabschaltung. Die vorhandenen Unit-Tests **würden** damit erstmals in
-  der CI laufen; belegt ist das erst nach Push und tatsächlichem Lauf.
+  `continue-on-error`, ohne Testabschaltung. Die vorhandenen Unit-Tests laufen damit erstmals in der
+  CI; im Lauf `31273906163` ist der Schritt `Unit-Tests (hartes Gate)` auf dem Runner
+  `completed/success` (durch Codex berichtet).
 - **Laufverlauf:** Der erste Orchestratorlauf `kb-ap15-3-runtime-ci-truth` endete nach den
   Änderungen technisch mit Exit-Code 1, weil der Claude-API-Endpunkt nicht mehr aufgelöst werden
   konnte (`ENOTFOUND`). Ein begrenzter Korrekturlauf hat anschließend die Migrationsaussage
@@ -467,6 +472,23 @@ Details: `04-UI-UX/GUI.md`, `04-UI-UX/DESIGNSYSTEM.md`.
   Kein Datenbank-, Docker-, MinIO- oder Playwright-Lauf ausgeführt und keiner behauptet.
 - **Offen:** produktive MinIO-Provisionierung, Sicherung und Recovery der Objektdaten, Healthcheck
   des Compose-Dienstes `minio`, echte IT-Endpunkte und Reverse-Proxy-Route, Browser-/Offline-
-  Abnahme, CSP-Auswertung, V1. **Kein GitHub-CI-Ergebnis für AP15-3** — das ergänzt Codex nach Push
-  und tatsächlichem Lauf. Kein Commit, kein Push, kein Merge, kein Tag, kein Release.
+  Abnahme, CSP-Auswertung, V1.
+- **GitHub-CI zu AP15-3 (2026-08-08).** Commit `0f3d0bd` ist auf `main` gepusht. Container-Image
+  `31273906147` sowie die Jobs `database`, `container` und `objectstore` des CI-Laufs `31273906163`
+  sind `completed/success`; `verify` ist **rot** im Schritt
+  `npm audit --audit-level=high --omit=dev` (`nanoid <3.3.17`, high, GHSA-2v37-7h3g-55p8, Pfad
+  `node_modules/postcss/node_modules/nanoid`). Die vorgelagerten Schritte desselben Jobs sind grün:
+  `Unit-Tests (hartes Gate)`, Lint, TypeScript, Service-Worker-Syntax und Build sind
+  `completed/success`. `verify` blieb allein wegen des nachfolgenden harten Produktionsaudits rot;
+  der informative Dev-Audit und Playwright wurden danach übersprungen. Ein vollständig grüner
+  CI-Gesamtlauf ist weiterhin nicht belegt (Schrittangaben durch Codex berichtet, von Claude nicht
+  selbst abgerufen).
+- **Lokale Korrektur, nicht committet (2026-08-08).** `app/package-lock.json` ist die einzige
+  geänderte versionierte Datei, `app/package.json` bitgleich zu `HEAD`. nanoid löst unter dem
+  bestehenden Override `postcss 8.5.24` jetzt auf `3.3.18` statt `3.3.16` auf, innerhalb der Range
+  `^3.3.16` und ohne neue direkte Abhängigkeit. Von Claude selbst erhoben:
+  `npm audit --audit-level=high --omit=dev` Exit 0, `npm ci --ignore-scripts` Exit 0 ohne
+  Lockfile-Änderung, Unit-Tests 97/97, TypeScript, ESLint, Produktions-Build und `git diff --check`
+  je Exit 0. **Ein grüner CI-Folgelauf wird nicht behauptet.** Kein Commit, kein Push, kein Merge,
+  kein Tag, kein Release.
 - Einzelheiten: `PROJEKT_WISSEN.md`, Abschnitt „AP15-3 — Runtime- und CI-Wahrheit konsolidiert".
