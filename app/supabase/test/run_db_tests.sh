@@ -23,28 +23,44 @@
 # Migrationskette endet unveraendert bei 0017.
 #
 # Seit AP14/B laufen hier NICHT mehr ausschliesslich SQL-Dateien: nach der
-# SQL-Kette kann optional der Integrationstest der administrativen
-# Benutzerverwaltung (Node, echter Anwendungscode aus src/lib/admin-users.ts)
-# gegen dieselbe temporaere Datenbank ausgefuehrt werden.
+# SQL-Kette koennen optional Node-Suiten mit echtem Anwendungscode gegen
+# dieselbe temporaere Datenbank ausgefuehrt werden.
 #
-# Seit AP15-1 sind es ZWEI Node-Suiten: zusaetzlich laufen die Statuskennzahlen
-# des Dashboards (test/integration/ap15-dashboard-metrics.int.mjs, echter
-# Anwendungscode aus src/lib/incident-metrics.ts). Beide Suiten haengen an
-# derselben Steuerung AP14B_INTEGRATION und laufen gegen dieselbe temporaere
-# Datenbank.
+# Seit AP15-5 sind es FUENF Node-Suiten. Sie laufen in genau dieser Reihenfolge:
+#   1. test/integration/ap14b-platform.int.mjs               (src/lib/db,
+#      src/lib/auth-service, scripts/bootstrap-admin.mjs)
+#   2. test/integration/ap14b-masterdata-inventory.int.mjs   (src/lib/masterdata*,
+#      src/lib/inventory*)
+#   3. test/integration/ap14b-images.int.mjs                 (src/lib/image-*,
+#      src/lib/images-server, src/lib/minio-storage gegen den prozessinternen
+#      synthetischen S3-Testendpunkt - ausdruecklich KEIN MinIO)
+#   4. test/integration/ap14b-admin-users.int.mjs            (src/lib/admin-users)
+#   5. test/integration/ap15-dashboard-metrics.int.mjs       (src/lib/incident-metrics)
+#
+# Die Reihenfolge 1 vor 4 ist ZWINGEND: Fall I13 der Plattformsuite sichert
+# `usableAdminCount() == 0` als Ausgangslage zu; gezaehlt werden dort
+# anmeldefaehige Administratoren mit Argon2id-Hash. Die Konten der Suite der
+# administrativen Benutzerverwaltung entstehen zur Laufzeit mit einem echten
+# Argon2id-Hash; ihre beiden aktiven, nicht gesperrten Admin-Fixtures wuerden
+# dort mitgezaehlt. Die Benutzerverwaltung raeumt ihre Konten selbst ab; die
+# Reihenfolge ist trotzdem einzuhalten.
+#
+# Alle fuenf Suiten haengen an derselben Steuerung AP14B_INTEGRATION und laufen
+# gegen dieselbe temporaere Datenbank.
 #
 # Aufruf:
 #   PGHOST=localhost PGPORT=5432 PGUSER=postgres PGPASSWORD=... ./run_db_tests.sh
 #
 # Steuerung der Integrationsphase:
-#   AP14B_INTEGRATION=require   Der Integrationstest MUSS laufen und MUSS
-#                               gelingen. Jede fehlende Voraussetzung (node,
-#                               app/node_modules, Testdateien, Zufallsquelle
-#                               fuer das Rollenkennwort) beendet den Lauf
-#                               fail-closed mit einem Exitcode ungleich 0.
-#   sonst / nicht gesetzt       Der Integrationstest laeuft NICHT. Der Verzicht
-#                               wird ausdruecklich gemeldet - es gibt keinen
-#                               stillen Verzicht.
+#   AP14B_INTEGRATION=require   Alle fuenf Integrationssuiten MUESSEN laufen und
+#                               MUESSEN gelingen. Jede fehlende Voraussetzung
+#                               (node, app/node_modules, Testdateien,
+#                               Zufallsquelle fuer das Rollenkennwort) beendet
+#                               den Lauf fail-closed mit einem Exitcode ungleich
+#                               0.
+#   sonst / nicht gesetzt       Keine der fuenf Integrationssuiten laeuft. Der
+#                               Verzicht wird ausdruecklich gemeldet - es gibt
+#                               keinen stillen Verzicht.
 #
 # Verhalten:
 #   - legt eine temporaere Datenbank an und entfernt sie am Ende immer
@@ -52,8 +68,9 @@
 #   - massgeblich ist der Exitcode von psql; NOTICE-Ausgaben auf stderr sind
 #     kein Fehler (gleiche Begruendung wie in der PowerShell-Fassung)
 #   - jede Zeile der Form "SMOKE ... FAIL" laesst den Lauf fehlschlagen
-#   - im Modus "require" laesst zusaetzlich jeder Exitcode ungleich 0 des
-#     Node-Laufs den gesamten Lauf fehlschlagen
+#   - im Modus "require" laesst zusaetzlich jeder Exitcode ungleich 0 einer der
+#     fuenf Node-Suiten den gesamten Lauf fehlschlagen; die jeweils folgenden
+#     Suiten laufen dann nicht mehr
 
 set -euo pipefail
 
@@ -246,21 +263,21 @@ grep -E 'SMOKE[[:space:]]+[^[:space:]]+[[:space:]]+OK' "${LOG}" | sed -E 's/^.*N
 echo "--- Ende des Sammelauszugs ---"
 
 # ---------------------------------------------------------------------------
-# Integrationsphase (AP14/B, administrative Benutzerverwaltung)
+# Integrationsphase (AP14/B und AP15, fuenf Node-Suiten in fester Reihenfolge)
 #
 # Sie steht bewusst HINTER der FAIL-Auswertung der SQL-Kette: erst wenn die
 # Datenbankseite nachweislich in Ordnung ist, hat ein Lauf des Anwendungscodes
-# gegen dieselbe Datenbank Aussagekraft. Die Ausgabe des Node-Laufs geht
-# ausdruecklich direkt auf die Konsole und NICHT in ${LOG}; ${LOG} bleibt damit
-# die reine Sammeldatei der SQL-Kette und die obige FAIL-Suche unveraendert
-# wirksam.
+# gegen dieselbe Datenbank Aussagekraft. Die Ausgabe JEDES der fuenf Node-Laeufe
+# geht ausdruecklich direkt auf die Konsole und NICHT in ${LOG}; ${LOG} bleibt
+# damit die reine Sammeldatei der SQL-Kette und die obige FAIL-Suche
+# unveraendert wirksam.
 #
 # Der zulaessige Wertebereich von AP14B_INTEGRATION wird bereits ganz oben
 # geprueft, bevor eine Datenbank entsteht.
 # ---------------------------------------------------------------------------
 if [[ "${AP14B_INTEGRATION}" == "require" ]]; then
   echo
-  echo "Integrationstest der administrativen Benutzerverwaltung (Modus: require) ..."
+  echo "Integrationssuiten (fuenf, Modus: require) ..."
 
   # Fail-closed, Schritt fuer Schritt: jede fehlende Voraussetzung beendet den
   # Lauf mit einem Exitcode ungleich 0 und benennt die Ursache. Ein stilles
@@ -270,7 +287,7 @@ if [[ "${AP14B_INTEGRATION}" == "require" ]]; then
   # module-hooks.mjs geladenen .ts-Module). Eine aeltere Fassung faellt beim
   # Laden mit einem Exitcode ungleich 0 auf und wird unten erfasst.
   command -v node >/dev/null 2>&1 || {
-    echo "FEHLER: node nicht gefunden - der Integrationstest kann nicht laufen." >&2
+    echo "FEHLER: node nicht gefunden - die fuenf Integrationssuiten koennen nicht laufen." >&2
     exit 69
   }
   # Konkret das Paketverzeichnis von pg: fehlt es, ist "npm ci" nicht gelaufen.
@@ -282,14 +299,27 @@ if [[ "${AP14B_INTEGRATION}" == "require" ]]; then
   }
   readonly INT_HOOKS="${APP_ROOT}/test/integration/module-hooks.mjs"
   readonly INT_TEST="${APP_ROOT}/test/integration/ap14b-admin-users.int.mjs"
-  # Zweite Suite (AP15-1). Sie braucht eine ANDERE Hooks-Datei als die
+  # Suite der Dashboard-Statuskennzahlen (AP15-1); sie laeuft als FUENFTE. Sie
+  # braucht eine ANDERE Hooks-Datei als die
   # Benutzerverwaltung: module-hooks-app.mjs stellt den Ersatz fuer `next/cache`
   # und `@/lib/auth` bereit, den die Anwendungsmodule ausserhalb von Next
   # verlangen. Beide Konstanten tragen deshalb eigene Namen - `readonly` laesst
   # eine Wiederverwendung ohnehin nicht zu.
   readonly INT_HOOKS_APP="${APP_ROOT}/test/integration/module-hooks-app.mjs"
   readonly INT_TEST_AP15="${APP_ROOT}/test/integration/ap15-dashboard-metrics.int.mjs"
-  for f in "${INT_HOOKS}" "${INT_TEST}" "${INT_HOOKS_APP}" "${INT_TEST_AP15}"; do
+  # Die drei seit AP15-5 zusaetzlich hier laufenden Suiten. Auch sie tragen
+  # EIGENE Namen: die Konstanten oben sind `readonly` und nicht wiederverwendbar.
+  readonly INT_TEST_PLATFORM="${APP_ROOT}/test/integration/ap14b-platform.int.mjs"
+  readonly INT_TEST_MASTERDATA="${APP_ROOT}/test/integration/ap14b-masterdata-inventory.int.mjs"
+  readonly INT_TEST_IMAGES="${APP_ROOT}/test/integration/ap14b-images.int.mjs"
+  # Keine Suite, sondern eine Voraussetzung der Bildsuite: ap14b-images.int.mjs
+  # importiert diese Datei STATISCH (dort Zeile 68). Fehlt sie, waere die Ursache
+  # ohne diese Pruefung nur eine "Cannot find module"-Meldung aus dem Ladevorgang
+  # und der Grund muesste erst gesucht werden.
+  readonly INT_S3_ENDPOINT="${APP_ROOT}/test/integration/s3-test-endpoint.mjs"
+  for f in "${INT_HOOKS}" "${INT_TEST}" "${INT_HOOKS_APP}" "${INT_TEST_AP15}" \
+    "${INT_TEST_PLATFORM}" "${INT_TEST_MASTERDATA}" "${INT_TEST_IMAGES}" \
+    "${INT_S3_ENDPOINT}"; do
     [[ -f "${f}" ]] || { echo "FEHLER: Testdatei fehlt: ${f}" >&2; exit 66; }
   done
 
@@ -339,6 +369,80 @@ SQL
     exit 1
   fi
 
+  echo
+  echo "Fuehre Integrationstest der Plattform aus ..."
+  # ERSTER der fuenf Aufrufe, und diese Stellung ist ZWINGEND: sein Fall I13
+  # sichert `usableAdminCount() == 0` als Ausgangslage zu; die Zaehlfunktion
+  # `usableAdminCount()` steht in derselben Suite und zaehlt anmeldefaehige
+  # Administratoren mit Argon2id-Hash. Die Konten der Suite der administrativen
+  # Benutzerverwaltung entstehen zur Laufzeit mit echten Argon2id-Hashes; ihre
+  # beiden aktiven, nicht gesperrten Admin-Fixtures wuerden dort mitgezaehlt.
+  # Er muss deshalb VOR ap14b-admin-users laufen.
+  #
+  # Wie bei allen fuenf Aufrufen: alle Werte gehen als Umgebungsvariablen
+  # (Zuweisungspraefix) an node und NICHT als Argumente - in der Prozessliste
+  # steht damit kein Kennwort. Die Verbindungszeichenfolge der EIGENTUEMERROLLE
+  # traegt bewusst KEIN eingebettetes Kennwort (Begruendung beim Aufruf der
+  # administrativen Benutzerverwaltung weiter unten). Er benutzt
+  # module-hooks.mjs: geprueft wird die echte Sitzungsauswertung, kein
+  # Sitzungsstub.
+  if ! (
+    cd "${APP_ROOT}" &&
+      AP14B_REQUIRE_INTEGRATION=1 \
+      AP14B_APP_DATABASE_URL="postgresql://${APP_ROLE}:${APP_ROLE_PASSWORD}@${PGHOST}:${PGPORT}/${DB}" \
+      AP14B_ADMIN_DATABASE_URL="postgresql://${PGUSER}@${PGHOST}:${PGPORT}/${DB}" \
+      node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON \
+      --import ./test/integration/module-hooks.mjs \
+      test/integration/ap14b-platform.int.mjs
+  ); then
+    echo "FEHLER: der Integrationstest der Plattform ist fehlgeschlagen." >&2
+    exit 1
+  fi
+
+  echo
+  echo "Fuehre Integrationstest der Stammdaten- und Inventarmodule aus ..."
+  # Zweiter, gleich gebauter Aufruf. Er braucht eine ANDERE Hooks-Datei als der
+  # Plattformlauf: module-hooks-app.mjs stellt den Ersatz fuer `next/cache` und
+  # `@/lib/auth` bereit, den die Fachmodule ausserhalb von Next verlangen.
+  if ! (
+    cd "${APP_ROOT}" &&
+      AP14B_REQUIRE_INTEGRATION=1 \
+      AP14B_APP_DATABASE_URL="postgresql://${APP_ROLE}:${APP_ROLE_PASSWORD}@${PGHOST}:${PGPORT}/${DB}" \
+      AP14B_ADMIN_DATABASE_URL="postgresql://${PGUSER}@${PGHOST}:${PGPORT}/${DB}" \
+      node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON \
+      --import ./test/integration/module-hooks-app.mjs \
+      test/integration/ap14b-masterdata-inventory.int.mjs
+  ); then
+    echo "FEHLER: der Integrationstest der Stammdaten- und Inventarmodule ist fehlgeschlagen." >&2
+    exit 1
+  fi
+
+  echo
+  echo "Fuehre Integrationstest des Bildpfades aus ..."
+  # Dritter, gleich gebauter Aufruf mit derselben Hooks-Datei wie der
+  # Stammdatenlauf.
+  #
+  # SEIN GEGENUEBER IST AUSDRUECKLICH KEIN MinIO: die Suite startet ueber
+  # `startS3TestEndpoint()` den prozessinternen synthetischen S3-kompatiblen
+  # Testendpunkt aus test/integration/s3-test-endpoint.mjs; ihren eigenen
+  # Abgrenzungsblock dazu traegt die Suite im Dateikopf. Der gepruefte
+  # ANWENDUNGSCODE ist der echte, ersetzt ist ausschliesslich der
+  # Objektspeicher als Gegenueber. Der echte MinIO-Nachweis bleibt der
+  # getrennte CI-Job `objectstore`; dieser Block ersetzt ihn nicht.
+  if ! (
+    cd "${APP_ROOT}" &&
+      AP14B_REQUIRE_INTEGRATION=1 \
+      AP14B_APP_DATABASE_URL="postgresql://${APP_ROLE}:${APP_ROLE_PASSWORD}@${PGHOST}:${PGPORT}/${DB}" \
+      AP14B_ADMIN_DATABASE_URL="postgresql://${PGUSER}@${PGHOST}:${PGPORT}/${DB}" \
+      node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON \
+      --import ./test/integration/module-hooks-app.mjs \
+      test/integration/ap14b-images.int.mjs
+  ); then
+    echo "FEHLER: der Integrationstest des Bildpfades ist fehlgeschlagen." >&2
+    exit 1
+  fi
+
+  echo
   echo "Fuehre Integrationstest der administrativen Benutzerverwaltung aus ..."
   # Die Verbindungszeichenfolge der EIGENTUEMERROLLE traegt bewusst KEIN
   # eingebettetes Kennwort: der Node-Treiber pg faellt fuer eine Verbindung ohne
@@ -367,11 +471,11 @@ SQL
 
   echo
   echo "Fuehre Integrationstest der Dashboard-Statuskennzahlen aus (AP15-1) ..."
-  # Zweiter, gleich gebauter Aufruf: dieselben beiden Verbindungszeichenfolgen,
-  # derselbe Zuweisungspraefix (kein Kennwort in der Prozessliste), derselbe
-  # Pflichtmodus AP14B_REQUIRE_INTEGRATION=1. Einziger Unterschied ist die
-  # Hooks-Datei: diese Suite laedt die Anwendungsmodule und braucht deshalb
-  # module-hooks-app.mjs.
+  # Fuenfter und letzter, gleich gebauter Aufruf: dieselben beiden
+  # Verbindungszeichenfolgen, derselbe Zuweisungspraefix (kein Kennwort in der
+  # Prozessliste), derselbe Pflichtmodus AP14B_REQUIRE_INTEGRATION=1. Einziger
+  # Unterschied zum Aufruf der Benutzerverwaltung ist die Hooks-Datei: diese
+  # Suite laedt die Anwendungsmodule und braucht deshalb module-hooks-app.mjs.
   if ! (
     cd "${APP_ROOT}" &&
       AP14B_REQUIRE_INTEGRATION=1 \
@@ -385,16 +489,19 @@ SQL
     exit 1
   fi
 
-  # Beide Suiten sind gelaufen und beide haben mit 0 geendet - genau das, und
-  # nichts darueber hinaus, sagt diese Zeile aus.
-  INTEGRATION_RESULT="beide Suiten ausgefuehrt (administrative Benutzerverwaltung und Dashboard-Statuskennzahlen, AP14B_INTEGRATION=require)"
+  # Alle fuenf Suiten sind gelaufen und alle fuenf haben mit 0 geendet - genau
+  # das, und nichts darueber hinaus, sagt diese Zeile aus.
+  INTEGRATION_RESULT="alle fuenf Suiten ausgefuehrt (Plattform, Stammdaten und Inventar, Bildpfad, administrative Benutzerverwaltung, Dashboard-Statuskennzahlen; AP14B_INTEGRATION=require)"
 else
   echo
   echo "=================================================================="
-  echo "HINWEIS: Der Integrationstest der administrativen Benutzerverwaltung"
-  echo "         wurde NICHT ausgefuehrt (AP14B_INTEGRATION=\"${AP14B_INTEGRATION}\")."
-  echo "         Dasselbe gilt fuer den Integrationstest der"
-  echo "         Dashboard-Statuskennzahlen (AP15-1): auch er lief NICHT."
+  echo "HINWEIS: Keine der fuenf Integrationssuiten wurde ausgefuehrt"
+  echo "         (AP14B_INTEGRATION=\"${AP14B_INTEGRATION}\"). Ausgelassen sind:"
+  echo "         1. Plattform (ap14b-platform.int.mjs)"
+  echo "         2. Stammdaten und Inventar (ap14b-masterdata-inventory.int.mjs)"
+  echo "         3. Bildpfad (ap14b-images.int.mjs)"
+  echo "         4. administrative Benutzerverwaltung (ap14b-admin-users.int.mjs)"
+  echo "         5. Dashboard-Statuskennzahlen (ap15-dashboard-metrics.int.mjs)"
   echo "         Dieser Lauf belegt ausschliesslich die SQL-Kette. Fuer den"
   echo "         vollstaendigen Nachweis ist AP14B_INTEGRATION=require noetig."
   echo "=================================================================="
@@ -403,4 +510,4 @@ fi
 
 echo
 echo "ERGEBNIS: AP10/AP11/AP12/AP13/AP14B/AP15 DATENBANKTESTS ERFOLGREICH."
-echo "ERGEBNIS: Integrationsphase (administrative Benutzerverwaltung und Dashboard-Statuskennzahlen): ${INTEGRATION_RESULT}"
+echo "ERGEBNIS: Integrationsphase (Plattform, Stammdaten und Inventar, Bildpfad, administrative Benutzerverwaltung, Dashboard-Statuskennzahlen): ${INTEGRATION_RESULT}"

@@ -1,5 +1,5 @@
-// AP14/B: Auflösungsregeln für die Integrationstests der FACHMODULE
-// (Stammdaten und Inventar) ohne Next.js.
+// AP14/B: Auflösungsregeln für die Integrationstests der FACHMODULE ohne
+// Next.js: Stammdaten und Inventar, Bildpfad, Dashboardkennzahlen.
 //
 // Warum es diese ZWEITE Hooks-Datei gibt: `module-hooks.mjs` bleibt
 // unverändert. Die dort geprüften Module (`src/lib/db`,
@@ -7,8 +7,8 @@
 // brauchen zwei weitere. Würden sie in `module-hooks.mjs` ergänzt, sähen die
 // bestehenden Integrationstests eine andere Auflösung als bisher - insbesondere
 // eine ERSETZTE Sitzungsauswertung. Genau das darf dort nicht passieren.
-// Diese Datei wird deshalb AUSSCHLIESSLICH von
-// `ap14b-masterdata-inventory.int.mjs` benutzt (eigener Node-Aufruf im Runner).
+// Der Linux-CI-Runner run_db_tests.sh lädt sie deshalb per `--import` nur für
+// ap14b-masterdata-inventory, ap14b-images und ap15-dashboard-metrics.
 //
 // Regeln 1 und 2 sind wörtlich die aus `module-hooks.mjs`:
 //
@@ -36,10 +36,10 @@
 //      (dann liefert `getSessionProfile()` NULL), damit der fail-closed Pfad
 //      auch im Test nachweisbar bleibt.
 //
-// Geprüft werden die Fachmodule selbst: `src/lib/masterdata.ts`,
-// `src/lib/masterdata-actions.ts`, `src/lib/inventory.ts` und
-// `src/lib/inventory-actions.ts` einschließlich `src/lib/db`. Es wird kein SQL
-// im Test nachgebaut.
+// Geprüft werden die Fachmodule selbst: die jeweilige Suite importiert den
+// echten Anwendungscode, über den auch die echte DB-Schicht `src/lib/db`
+// läuft. Eingespeist werden nur Next-Kontext und Sitzungsidentität über die
+// oben beschriebenen Stubs; Anwendungs-SQL wird im Test nicht nachgebaut.
 //
 // Node führt die TypeScript-Dateien selbst mit Typentfernung aus (>= 22.18);
 // es wird nichts vorher übersetzt und keine zweite Fassung des Codes erzeugt.

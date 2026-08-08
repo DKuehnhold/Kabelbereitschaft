@@ -107,14 +107,25 @@ jobs:
   # run_ap12_local.ps1 (PowerShell/Windows). Hier laufen dieselben Dateien in
   # derselben Reihenfolge gegen einen PostgreSQL-18-Service.
   #
-  # AP14/B: nach der SQL-Kette laeuft zusaetzlich der Integrationstest der
-  # administrativen Benutzerverwaltung (echter Anwendungscode aus
-  # app/src/lib/admin-users.ts gegen dieselbe temporaere Datenbank). Er laeuft
-  # FAIL-CLOSED und doppelt gesichert:
+  # AP14/B: nach der SQL-Kette laufen zusaetzlich Node-Integrationssuiten mit
+  # echtem Anwendungscode gegen dieselbe temporaere Datenbank. Seit AP15-5 sind
+  # es FUENF Suiten, und sie laufen in dieser festen Reihenfolge:
+  #   1. ap14b-platform.int.mjs              (app/src/lib/db, auth-service)
+  #   2. ap14b-masterdata-inventory.int.mjs  (masterdata*, inventory*)
+  #   3. ap14b-images.int.mjs                (Bildpfad gegen den prozessinternen
+  #      synthetischen S3-Testendpunkt - KEIN MinIO; der MinIO-Nachweis bleibt
+  #      der getrennte Job "objectstore")
+  #   4. ap14b-admin-users.int.mjs           (app/src/lib/admin-users.ts)
+  #   5. ap15-dashboard-metrics.int.mjs      (app/src/lib/incident-metrics.ts)
+  # Die Reihenfolge 1 vor 4 ist ZWINGEND (Fall I13 der Plattformsuite setzt
+  # `usableAdminCount() == 0` voraus, und die Konten der Suite 4 tragen echte
+  # Argon2id-Hashes, die dort mitgezaehlt wuerden).
+  #
+  # Alle fuenf laufen FAIL-CLOSED und doppelt gesichert:
   #   1. AP14B_INTEGRATION: require - run_db_tests.sh bricht mit einem Exitcode
   #      ungleich 0 ab, sobald eine Voraussetzung fehlt (node, node_modules/pg,
   #      Testdateien, Zufallsquelle, Rollenanlage).
-  #   2. Das Skript setzt fuer den Node-Lauf zusaetzlich
+  #   2. Das Skript setzt fuer JEDEN der fuenf Node-Laeufe zusaetzlich
   #      AP14B_REQUIRE_INTEGRATION=1; ein leerer oder falscher Verbindungswert
   #      fuehrt dort zum Abbruch beim Laden des Moduls statt zu einem Skip.
   # Ein fehlender Verbindungswert kann damit keinen gruenen Lauf ohne Nachweis
@@ -151,7 +162,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y postgresql-client
 
-      - name: Datenbankpruefungen (Migrationen 0001-0017 + Smokes AP10-AP14B + Admin-Integrationstest)
+      - name: Datenbankpruefungen (Migrationen 0001-0017, Smokes 15-24, fuenf Integrationssuiten)
         run: |
           chmod +x supabase/test/run_db_tests.sh
           supabase/test/run_db_tests.sh
@@ -160,7 +171,8 @@ jobs:
           PGPORT: "5432"
           PGUSER: postgres
           PGPASSWORD: ci_only_not_a_secret
-          # Pflichtmodus: der Integrationstest MUSS laufen und MUSS gelingen.
+          # Pflichtmodus: ALLE FUENF Integrationssuiten MUESSEN laufen und
+          # MUESSEN gelingen (Reihenfolge und Begruendung im Kommentar oben).
           AP14B_INTEGRATION: require
 
   # AP14/A8: Containerbau und Stack-Validierung. Kein Push, kein Deployment.

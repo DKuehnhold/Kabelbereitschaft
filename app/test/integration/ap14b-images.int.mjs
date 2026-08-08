@@ -13,6 +13,16 @@
 // Ohne diese beiden Variablen werden alle Pruefungen uebersprungen; die Datei
 // ist damit in einer Umgebung ohne Datenbank harmlos.
 //
+// BETRIEBSART "PFLICHTMODUS" (AP14B_REQUIRE_INTEGRATION=1): dann gilt das
+// Ueberspringen ausdruecklich NICHT. Fehlt eine der beiden Verbindungsvariablen,
+// bricht die Datei bereits beim Laden ab. Grund: in der GitHub-CI darf ein
+// fehlender Verbindungswert nicht zu einem gruenen Lauf ohne Nachweis fuehren -
+// ein stiller Skip waere dort ein vorgetaeuschter Nachweis. Dasselbe
+// fail-closed Muster benutzen ap14b-admin-users.int.mjs,
+// ap15-dashboard-metrics.int.mjs und ap14b-minio-live.int.mjs. Ohne den
+// Schalter - also im lokalen Gebrauch ohne Datenbank - bleibt das
+// Skip-Verhalten unveraendert.
+//
 // WARUM DIESE DATEI NOETIG IST: der SQL-Smoke 22 misst die Datenbankseite
 // (Rechte, RLS, Trigger, Chronik) und spricht den Objektspeicher ausdruecklich
 // NICHT an (22_ap14b_images.sql:34-39). Der Objektschluessel, die signierte URL,
@@ -60,6 +70,36 @@ import { startS3TestEndpoint } from "./s3-test-endpoint.mjs";
 const APP_URL = process.env.AP14B_APP_DATABASE_URL?.trim();
 const ADMIN_URL = process.env.AP14B_ADMIN_DATABASE_URL?.trim();
 const ENABLED = Boolean(APP_URL && ADMIN_URL);
+
+/**
+ * Pflichtmodus: der Lauf DARF nicht uebersprungen werden.
+ *
+ * Gesetzt wird er von der CI (app/supabase/test/run_db_tests.sh, Job `database`).
+ * Dort ist ein Skip kein harmloses "keine Datenbank vorhanden", sondern ein
+ * gruener Lauf ohne jeden Nachweis. Lokal bleibt der Schalter ungesetzt und das
+ * bisherige Skip-Verhalten unveraendert.
+ */
+const REQUIRE_INTEGRATION = process.env.AP14B_REQUIRE_INTEGRATION?.trim() === "1";
+
+if (REQUIRE_INTEGRATION && !ENABLED) {
+  // Abbruch statt Skip, und zwar SOFORT beim Laden des Moduls: ein `skip` liefe
+  // mit Exitcode 0 durch. Die Meldung nennt ausschliesslich die NAMEN der
+  // fehlenden Variablen - niemals einen Wert und niemals eine
+  // Verbindungszeichenfolge (Muster aus ap14b-admin-users.int.mjs).
+  // Diese Pruefung steht ZWINGEND vor startS3TestEndpoint(): wirft das Modul
+  // spaeter, ist `test.after` noch nicht registriert und ein geoeffneter
+  // Testendpunkt haette keinen Schliesspfad mehr.
+  const missing = [
+    ["AP14B_APP_DATABASE_URL", APP_URL],
+    ["AP14B_ADMIN_DATABASE_URL", ADMIN_URL],
+  ]
+    .filter(([, value]) => !value)
+    .map(([name]) => name);
+  throw new Error(
+    `AP14/B-Integrationsnachweis des Bildpfades nicht lauffaehig, Pflichtvariablen fehlen: ${missing.join(", ")}. ` +
+      "Bei gesetztem AP14B_REQUIRE_INTEGRATION=1 wird dieser Lauf ausdruecklich NICHT uebersprungen.",
+  );
+}
 
 /**
  * Verschiebung der Uhr, die der Testendpunkt fuer die Ablaufpruefung benutzt.

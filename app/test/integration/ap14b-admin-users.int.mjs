@@ -45,11 +45,13 @@
 // keinen echten Zugang gelten. Kein Hashliteral steht im Quelltext: jeder Hash
 // entsteht zur Laufzeit ueber die zentrale Implementierung.
 //
-// REIHENFOLGE IM RUNNER: dieser Lauf steht bewusst als LETZTER der vier
-// Integrationslaeufe. Seine Administratorkonten tragen - anders als die des
-// Smokes 23 - einen echten Argon2id-Hash und wuerden `usableAdminCount()` aus
-// ap14b-platform.int.mjs (Fall I13) mitzaehlen. `test.after` raeumt sie
-// vollstaendig ab; die Reihenfolge ist trotzdem einzuhalten.
+// REIHENFOLGE IM RUNNER: dieser Lauf steht im AP15-5-Linux-Runner
+// app/supabase/test/run_db_tests.sh bewusst als VIERTER von fuenf
+// Integrationslaeufen und laeuft vor ap15-dashboard-metrics.int.mjs. Seine
+// Administratorkonten tragen - anders als die des Smokes 23 - einen echten
+// Argon2id-Hash und wuerden `usableAdminCount()` aus ap14b-platform.int.mjs
+// (Fall I13) mitzaehlen. `test.after` raeumt sie vollstaendig ab; die
+// Reihenfolge ist trotzdem einzuhalten.
 
 import test from "node:test";
 import assert from "node:assert/strict";
