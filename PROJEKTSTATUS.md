@@ -33,9 +33,14 @@
 > lokal laufenden Integrationssuiten; AP15-2 (Dokumentkonsolidierung) und AP15-3 (Runtime- und
 > CI-Wahrheit) liegen vor. AP15-3 ist mit `0f3d0bd` auf `main` gepusht; Container-Image
 > `31273906147` und die CI-Jobs `database`, `container` und `objectstore` des Laufs `31273906163`
-> sind `completed/success`, der Job `verify` ist rot im Produktionsaudit (`nanoid <3.3.17`,
-> GHSA-2v37-7h3g-55p8). Lokal ist das mit einer reinen Lockfile-Änderung behoben; ein grüner
-> Folgelauf ist nicht belegt. Die sichtbare GUI
+> sind `completed/success`, der Job `verify` war dort rot im Produktionsaudit (`nanoid <3.3.17`,
+> GHSA-2v37-7h3g-55p8). Behoben ist das mit dem Korrekturcommit
+> `47704e027371fe4a0c0b70c579ee26f09756029a` (`fix(deps): update transitive nanoid`) auf `main`:
+> der CI-Folgelauf `31276526201` ist `completed/success` mit allen vier Jobs `verify`
+> (`93150848358`), `database` (`93150848347`), `container` (`93150848324`) und `objectstore`
+> (`93150848342`), ebenso der Container-Image-Lauf `31276526192`. AP15-3 ist damit technisch
+> abgeschlossen; die Lauf- und Jobkennungen sind durch Codex berichtet und von Claude nicht selbst
+> abgerufen. Die sichtbare GUI
 > der Benutzerverwaltung wartet auf Dennis. V1 bleibt
 > Produktionssperre, Branding bleibt separat, GUI-/Designarbeit wartet auf Dennis.
 
@@ -430,7 +435,7 @@ Details: `04-UI-UX/GUI.md`, `04-UI-UX/DESIGNSYSTEM.md`.
 - Einzelheiten: `PROJEKT_WISSEN.md`, Abschnitt „AP15-2 — quellentreue operative
   Dokumentkonsolidierung".
 
-## AP15-3 – Runtime- und CI-Wahrheit konsolidiert (2026-08-03, ergänzt 2026-08-08, gepusht als `0f3d0bd`)
+## AP15-3 – Runtime- und CI-Wahrheit konsolidiert (2026-08-03, ergänzt 2026-08-08, gepusht als `0f3d0bd`, korrigiert mit `47704e0`)
 
 - **Umfang:** `deploy/README.md`, `app/.env.example`, `.github/workflows/ci.yml` und der
   Kopfkommentar von `deploy/scripts/rollback.sh` plus die Abschlussnotizen in `PROJEKT_WISSEN.md`
@@ -480,15 +485,25 @@ Details: `04-UI-UX/GUI.md`, `04-UI-UX/DESIGNSYSTEM.md`.
   `node_modules/postcss/node_modules/nanoid`). Die vorgelagerten Schritte desselben Jobs sind grün:
   `Unit-Tests (hartes Gate)`, Lint, TypeScript, Service-Worker-Syntax und Build sind
   `completed/success`. `verify` blieb allein wegen des nachfolgenden harten Produktionsaudits rot;
-  der informative Dev-Audit und Playwright wurden danach übersprungen. Ein vollständig grüner
-  CI-Gesamtlauf ist weiterhin nicht belegt (Schrittangaben durch Codex berichtet, von Claude nicht
-  selbst abgerufen).
-- **Lokale Korrektur, nicht committet (2026-08-08).** `app/package-lock.json` ist die einzige
-  geänderte versionierte Datei, `app/package.json` bitgleich zu `HEAD`. nanoid löst unter dem
+  der informative Dev-Audit und Playwright wurden danach übersprungen. Dieser Lauf bleibt der
+  zunächst rote Produktionsaudit-Lauf des Featurecommits; der vollständig grüne Gesamtlauf folgte
+  erst mit dem Korrekturcommit `47704e0` (Schritt-, Lauf- und Jobangaben durch Codex berichtet, von
+  Claude nicht selbst abgerufen).
+- **Korrektur des Produktionsaudits, committet als `47704e0` (2026-08-08).**
+  `app/package-lock.json` ist die einzige geänderte Abhängigkeitsdatei, `app/package.json`
+  bitgleich zu `HEAD`. nanoid löst unter dem
   bestehenden Override `postcss 8.5.24` jetzt auf `3.3.18` statt `3.3.16` auf, innerhalb der Range
   `^3.3.16` und ohne neue direkte Abhängigkeit. Von Claude selbst erhoben:
   `npm audit --audit-level=high --omit=dev` Exit 0, `npm ci --ignore-scripts` Exit 0 ohne
   Lockfile-Änderung, Unit-Tests 97/97, TypeScript, ESLint, Produktions-Build und `git diff --check`
-  je Exit 0. **Ein grüner CI-Folgelauf wird nicht behauptet.** Kein Commit, kein Push, kein Merge,
-  kein Tag, kein Release.
+  je Exit 0; diese Nachweise stammen aus dem lokalen Korrekturlauf vor dem Commit.
+- **Grüner CI-Folgelauf (2026-08-08).** Zum Korrekturcommit
+  `47704e027371fe4a0c0b70c579ee26f09756029a` (`fix(deps): update transitive nanoid`) auf `main` ist
+  der CI-Lauf `31276526201` `completed/success` mit allen vier Jobs: `verify` (`93150848358`),
+  `database` (`93150848347`), `container` (`93150848324`) und `objectstore` (`93150848342`), je
+  `completed/success`. Der Container-Image-Lauf `31276526192` ist ebenfalls `completed/success`.
+  AP15-3 ist damit technisch abgeschlossen. Die Lauf- und Jobkennungen sind durch Codex berichtet
+  und von Claude nicht selbst abgerufen; lokal belegt ist nur, dass `47704e02` der HEAD von `main`
+  ist. Kein Merge, kein Tag, kein Release, keine RC1- oder V1-Freigabe; AP14 Betrieb/Abnahme, die
+  sichtbare GUI und die V1-Entscheidung bleiben unverändert offen.
 - Einzelheiten: `PROJEKT_WISSEN.md`, Abschnitt „AP15-3 — Runtime- und CI-Wahrheit konsolidiert".

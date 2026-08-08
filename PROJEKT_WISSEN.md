@@ -43,8 +43,13 @@
 > mehr als additiv. Container-Image `31273906147` sowie die CI-Jobs `database`, `container` und
 > `objectstore` des Laufs `31273906163` sind `completed/success`; der Job `verify` desselben Laufs
 > ist **rot** im Schritt `npm audit --audit-level=high --omit=dev` (`nanoid <3.3.17`, high,
-> GHSA-2v37-7h3g-55p8, Pfad `node_modules/postcss/node_modules/nanoid`). Lokal ist das mit einer
-> reinen Lockfile-Änderung behoben; ein grüner Folgelauf ist **nicht** belegt. Nächster nicht-visueller
+> GHSA-2v37-7h3g-55p8, Pfad `node_modules/postcss/node_modules/nanoid`). Behoben ist das mit dem
+> Korrekturcommit `47704e027371fe4a0c0b70c579ee26f09756029a` (`fix(deps): update transitive nanoid`)
+> auf `main`: der CI-Folgelauf `31276526201` ist `completed/success` mit allen vier Jobs `verify`
+> (`93150848358`), `database` (`93150848347`), `container` (`93150848324`) und `objectstore`
+> (`93150848342`), ebenso der Container-Image-Lauf `31276526192`. AP15-3 ist damit technisch
+> abgeschlossen; die Lauf- und Jobkennungen sind durch Codex berichtet und von Claude nicht selbst
+> abgerufen. Nächster nicht-visueller
 > Arbeitsblock sind die verbliebenen AP15-Fachbefunde (`fehlalarm`-Semantik, Datumsherkunft der
 > Tageskennzahlen, Filteroptionen in drei Transaktionen, Vollmengen-Reads der Listen) sowie die
 > Einordnung der nur lokal laufenden Integrationssuiten und der sechs historischen Smokes. Die
@@ -800,7 +805,7 @@ Claude am jetzigen Endstand selbst erhoben.
   RC1, Tag, Release und die V1-Entscheidung. `deploy/README.md` nannte zum Stand von AP15-2
   weiterhin „0001…0016" und war damit überholt — **mit AP15-3 behoben** (siehe Abschnitt „AP15-3").
 
-## AP15-3 — Runtime- und CI-Wahrheit konsolidiert (2026-08-03, ergänzt 2026-08-08, gepusht als `0f3d0bd`)
+## AP15-3 — Runtime- und CI-Wahrheit konsolidiert (2026-08-03, ergänzt 2026-08-08, gepusht als `0f3d0bd`, korrigiert mit `47704e0`)
 
 - **Umfang:** vier versionierte Dateien — `deploy/README.md`, `app/.env.example`,
   `.github/workflows/ci.yml` und `deploy/scripts/rollback.sh` (dort nur der Kopfkommentar) — plus
@@ -851,11 +856,12 @@ Claude am jetzigen Endstand selbst erhoben.
   Lint, TypeScript, Service-Worker-Syntax und Build. Der Job `verify` blieb allein deshalb rot, weil
   erst der nachfolgende harte Schritt `Audit Produktion (high/critical als Gate)` scheiterte; der
   informative Dev-Audit und die Playwright-Schritte wurden danach übersprungen. Das mit AP15-3
-  eingeführte Unit-Test-Gate ist damit auf dem Runner belegt; ein vollständig grüner CI-Gesamtlauf
-  bleibt weiterhin unbelegt. Die Schritt- und Zeitangaben sind durch Codex berichtet und von Claude
-  nicht selbst abgerufen.
-- **Lokale Korrektur des Produktionsaudits (2026-08-08, nicht committet).** Einzige geänderte
-  versionierte Datei ist `app/package-lock.json`; `app/package.json` ist bitgleich zu `HEAD`. Unter
+  eingeführte Unit-Test-Gate ist damit auf dem Runner belegt. Dieser Lauf bleibt der zunächst rote
+  Produktionsaudit-Lauf des Featurecommits; der vollständig grüne Gesamtlauf folgte erst mit dem
+  Korrekturcommit `47704e0` (siehe „Grüner CI-Folgelauf"). Die Schritt-, Zeit-, Lauf- und
+  Jobangaben sind durch Codex berichtet und von Claude nicht selbst abgerufen.
+- **Korrektur des Produktionsaudits (2026-08-08, committet als `47704e0`).** Einzige geänderte
+  Abhängigkeitsdatei ist `app/package-lock.json`; `app/package.json` ist bitgleich zu `HEAD`. Unter
   dem bestehenden Override `postcss 8.5.24` löst nanoid jetzt auf `3.3.18` statt `3.3.16` auf —
   innerhalb der von PostCSS deklarierten Range `^3.3.16`, ohne neue direkte Abhängigkeit und ohne
   neuen Override. Erzeugt mit `npm update nanoid --package-lock-only --ignore-scripts` (Exit 0);
@@ -865,8 +871,7 @@ Claude am jetzigen Endstand selbst erhoben.
   `next@16.2.12 -> postcss@8.5.24 (overridden) -> nanoid@3.3.18`,
   `npm audit --audit-level=high --omit=dev` Exit 0 (`found 0 vulnerabilities`), Unit-Tests 97/97
   Exit 0 (`fail 0`, `skipped 0`), TypeScript Exit 0, ESLint Exit 0, Produktions-Build Exit 0,
-  `git diff --check` Exit 0. **Ein grüner GitHub-CI-Folgelauf wird nicht behauptet** — er folgt erst
-  nach Push durch Codex.
+  `git diff --check` Exit 0. Diese Nachweise stammen aus dem lokalen Korrekturlauf vor dem Commit.
 - **Nebenbefund im Lockfile-Diff.** Neben der nanoid-Auflösung entfernt npm 11.13.0 fünf
   versionslose `dev`/`optional`-Stub-Einträge (`@emnapi/core`, `@emnapi/runtime`,
   `@napi-rs/wasm-runtime`, `@tybys/wasm-util`, `tslib`). Das ist kein Paketupdate: ein Kontrolllauf
@@ -874,8 +879,18 @@ Claude am jetzigen Endstand selbst erhoben.
   Einträge. Kein weiteres Paket ändert Version, `resolved` oder `integrity`. Der dev-Audit
   `npm audit --audit-level=high` bleibt lokal Exit 1 (`brace-expansion`, `js-yaml`, beide nur unter
   `eslint`/`minimatch`); dieser Schritt ist in `.github/workflows/ci.yml` ausdrücklich informativ
-  und mit `continue-on-error: true` versehen und blockiert die CI nicht. Kein Commit, kein Push,
-  kein Merge, kein Tag, kein Release.
+  und mit `continue-on-error: true` versehen und blockiert die CI nicht.
+- **Grüner CI-Folgelauf (2026-08-08).** Zum Korrekturcommit
+  `47704e027371fe4a0c0b70c579ee26f09756029a` (`fix(deps): update transitive nanoid`) auf `main` ist
+  der CI-Lauf `31276526201` `completed/success`; alle vier Jobs sind `completed/success`: `verify`
+  (`93150848358`), `database` (`93150848347`), `container` (`93150848324`) und `objectstore`
+  (`93150848342`). Der Container-Image-Lauf `31276526192` ist ebenfalls `completed/success`. Damit
+  ist AP15-3 technisch abgeschlossen. Die Lauf- und Jobkennungen sind durch Codex berichtet und von
+  Claude nicht selbst abgerufen; lokal belegt hat Claude nur, dass `47704e02` der HEAD von `main`
+  ist und `app/package-lock.json` mit nanoid `3.3.18` enthält. Der informative dev-Audit bleibt
+  unverändert Exit 1 und ist kein CI-Gate. Commit und Push erfolgten außerhalb dieses
+  Claude-Laufs; kein Merge, kein Tag, kein Release, keine RC1- oder V1-Freigabe. AP14
+  Betrieb/Abnahme, die sichtbare GUI und die V1-Entscheidung bleiben unverändert offen.
 
 ## Definitionen und Begriffe
 - **AP1–AP7:** Arbeitspakete (Grundgerüst → Vorgänge → Material → Bilder → Offline/PWA → E2E/Härtung → Release Readiness).
