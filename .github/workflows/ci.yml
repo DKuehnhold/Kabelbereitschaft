@@ -43,6 +43,15 @@ jobs:
       - name: TypeScript
         run: npx tsc --noEmit
 
+      # AP15-3: hartes Unit-Test-Gate. Die vier Dateien app/test/*.test.mjs
+      # liefen bisher in KEINEM CI-Job und wurden nur lokal ausgefuehrt. Sie
+      # brauchen weder Datenbank noch Objektspeicher noch ein Secret und laufen
+      # deshalb hier - bewusst OHNE continue-on-error: ein roter Unit-Test
+      # bricht den Job ab. Die Arbeitsverzeichnisangabe kommt aus
+      # defaults.run.working-directory (app).
+      - name: Unit-Tests (hartes Gate)
+        run: npm run test:unit
+
       # AP14/A8: der Service Worker ist handgeschrieben und wird von keinem
       # Build-Schritt geprueft. node --check faellt bei Syntaxfehlern auf.
       - name: Service-Worker-Syntax

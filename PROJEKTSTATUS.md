@@ -4,11 +4,12 @@
 > (`00-Projektsteuerung/ROADMAP_AP12_AP15_ENTWURF.md`, B.1/B.8). Abgelöste Dublette:
 > `00-Projektsteuerung/PROJEKTSTATUS.md` (als historisch markiert, nicht gelöscht).
 > Endgültige Konsolidierung und Archivierung erfolgen in AP15.
-> Stand: 2026-08-03
+> Stand: 2026-08-08
 
-> **Aktueller Stand (2026-08-03).** Zielplattform bleibt ADR-011: PostgreSQL 18, Auth.js v5, MinIO
+> **Aktueller Stand (2026-08-08).** Zielplattform bleibt ADR-011: PostgreSQL 18, Auth.js v5, MinIO
 > und Containerbetrieb hinter dem internen Reverse-Proxy; Supabase ist kein Ziel. Bestätigter
-> technischer Referenzstand ist `8b65f4ed9c1175ddec3aca5045a5a59906b95c68` auf `main`.
+> technischer Referenzstand ist `40606eeea98baccf6192ad99d3ccac81fc7f0258`
+> (`docs: consolidate operational platform guidance`) auf `main`.
 > AP15-1 stellt die fünf statusbasierten Dashboardkennzahlen auf eine RLS-gebundene
 > PostgreSQL-Abfrage um, ohne die sichtbare Oberfläche, Tageskennzahlen oder Listen zu ändern.
 > Die administrative Benutzerverwaltung nach ADR-011
@@ -28,8 +29,10 @@
 > ihre historischen Prüfnachweise unverändert. **AP14 insgesamt bleibt offen:** echte IT-Adressen
 > und die Same-Origin-Route am internen Reverse-Proxy, produktiver Betrieb und Deployment, die
 > vollständige `@app`-/Offline-Abnahme und die CSP-Auswertung sind nicht erbracht. Nächster
-> nicht-visueller Arbeitsblock ist AP15 Dokumentkonsolidierung. Die sichtbare GUI der
-> Benutzerverwaltung wartet auf Dennis. V1 bleibt
+> nicht-visueller Arbeitsblock sind die verbliebenen AP15-Fachbefunde und die Einordnung der nur
+> lokal laufenden Integrationssuiten; AP15-2 (Dokumentkonsolidierung) und AP15-3 (Runtime- und
+> CI-Wahrheit) liegen vor, AP15-3 noch nicht committet und ohne GitHub-CI-Lauf. Die sichtbare GUI
+> der Benutzerverwaltung wartet auf Dennis. V1 bleibt
 > Produktionssperre, Branding bleibt separat, GUI-/Designarbeit wartet auf Dennis.
 
 ## Repository
@@ -422,3 +425,48 @@ Details: `04-UI-UX/GUI.md`, `04-UI-UX/DESIGNSYSTEM.md`.
   GitHub-API erhoben, Claude nicht selbst abgerufen.
 - Einzelheiten: `PROJEKT_WISSEN.md`, Abschnitt „AP15-2 — quellentreue operative
   Dokumentkonsolidierung".
+
+## AP15-3 – Runtime- und CI-Wahrheit konsolidiert (2026-08-03, ergänzt 2026-08-08, nicht committet)
+
+- **Umfang:** `deploy/README.md`, `app/.env.example`, `.github/workflows/ci.yml` und der
+  Kopfkommentar von `deploy/scripts/rollback.sh` plus die Abschlussnotizen in `PROJEKT_WISSEN.md`
+  und `PROJEKTSTATUS.md`. Keine Produktänderung, kein SQL, keine Migration, kein Test, kein
+  Compose; in `rollback.sh` ist ausschließlich Kommentartext geändert, alle ausführbaren Zeilen
+  bleiben bytegleich zu `HEAD`. Nichts archiviert, umbenannt, verschoben oder gelöscht.
+- `deploy/README.md` führt die Migrationen jetzt als 17 versionierte Dateien `0001`–`0017` in
+  fester Anwendungsreihenfolge — ohne Pauschalaussage zu Additivität oder Idempotenz — und trennt
+  widerspruchsfrei: der CI-Job `database` wendet gegen eine leere, temporäre Testdatenbank zuerst
+  die drei versionierten Bootstrap-Dateien aus `app/supabase/bootstrap/` und danach die Migrationen
+  `0001`–`0017` in der vom Runner festgelegten, mit den Smokes verschränkten Reihenfolge an —
+  Bootstrap getrennt von der nummerierten Migrationskette —, während Containerstart und produktives
+  Deployment **keine** Migration automatisch ausführen. CI-Prüfungen sind ausdrücklich **kein**
+  Nachweis einer produktiven Umgebung und **kein** Nachweis der echten Reverse-Proxy-Route.
+- `deploy/scripts/rollback.sh` behauptete im Kopfkommentar, die Migrationen des Projekts seien
+  additiv. Der Kommentar sagt jetzt quellentreu: das Rollback betrifft ausschließlich das
+  Anwendungs-Image, das Datenbankschema wird nicht zurückgesetzt, Rückwärtsmigrationen sind nicht
+  vorgesehen und die Kette ist nicht rückspielbar; bei Schema-Inkompatibilität ist ein Forward-Fix
+  erforderlich.
+- `app/.env.example` führt genau eine auskommentierte Zeile `# AUTH_URL=http://localhost:3000`:
+  im Containerbetrieb Pflicht (Startabbruch mit Exit-Code 78), lokal optional; ist sie gesetzt,
+  muss `S3_PUBLIC_BASE_URL` denselben Origin haben. Keine echte interne Adresse.
+- `.github/workflows/ci.yml` führt `npm run test:unit` als hartes Gate im Job `verify` aus — ohne
+  `continue-on-error`, ohne Testabschaltung. Die vorhandenen Unit-Tests **würden** damit erstmals in
+  der CI laufen; belegt ist das erst nach Push und tatsächlichem Lauf.
+- **Laufverlauf:** Der erste Orchestratorlauf `kb-ap15-3-runtime-ci-truth` endete nach den
+  Änderungen technisch mit Exit-Code 1, weil der Claude-API-Endpunkt nicht mehr aufgelöst werden
+  konnte (`ENOTFOUND`). Ein begrenzter Korrekturlauf hat anschließend die Migrationsaussage
+  richtiggestellt und die Abschlussnotizen gekürzt. Ein zweiter, ebenso begrenzter Korrekturlauf
+  (2026-08-08) hat die Bootstrap- und Rollback-Wahrheit nachgezogen: den falschen Kopfkommentar in
+  `rollback.sh`, die im CI-Absatz von `deploy/README.md` fehlenden drei Bootstrap-Dateien und die
+  Einordnung von `0013` gegenüber der Testdatei `19a` in `PROJEKT_WISSEN.md`.
+- **Nachweise, von Claude selbst lokal erhoben:** Unit-Tests Exit 0 (97/97, `skipped 0`),
+  TypeScript Exit 0, ESLint Exit 0, Produktions-Build Exit 0, `git diff --check` Exit 0 — die vier
+  App-Gates aus dem vorherigen Korrekturlauf, der Dokumentation und Kommentartext nicht berührt.
+  Im Lauf vom 2026-08-08 zusätzlich: `bash -n deploy/scripts/rollback.sh` Exit 0 und der
+  mechanische Vergleich der ausführbaren Zeilen von `rollback.sh` gegen `HEAD` ohne Unterschied.
+  Kein Datenbank-, Docker-, MinIO- oder Playwright-Lauf ausgeführt und keiner behauptet.
+- **Offen:** produktive MinIO-Provisionierung, Sicherung und Recovery der Objektdaten, Healthcheck
+  des Compose-Dienstes `minio`, echte IT-Endpunkte und Reverse-Proxy-Route, Browser-/Offline-
+  Abnahme, CSP-Auswertung, V1. **Kein GitHub-CI-Ergebnis für AP15-3** — das ergänzt Codex nach Push
+  und tatsächlichem Lauf. Kein Commit, kein Push, kein Merge, kein Tag, kein Release.
+- Einzelheiten: `PROJEKT_WISSEN.md`, Abschnitt „AP15-3 — Runtime- und CI-Wahrheit konsolidiert".

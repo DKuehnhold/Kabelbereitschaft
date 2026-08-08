@@ -7,9 +7,12 @@
 # Ohne Angabe einer Referenz wird die zuletzt von deploy.sh protokollierte
 # Vorgaengerversion aus deploy/state/previous-image.<umgebung> verwendet.
 #
-# Wichtig: Ein Rollback betrifft ausschliesslich die ANWENDUNG. Die Datenbank
-# wird nicht zurueckgesetzt. Die Migrationen des Projekts sind additiv, ein
-# Rueckwaertsschritt des Schemas ist nicht vorgesehen (Forward-Fix bevorzugt).
+# Wichtig: Ein Rollback betrifft ausschliesslich das ANWENDUNGS-IMAGE. Das
+# Datenbankschema wird nicht zurueckgesetzt. Rueckwaertsmigrationen sind nicht
+# vorgesehen, und die Migrationskette ist nicht rueckspielbar:
+# 0013_ap14b_drop_supabase_compat.sql entfernt den Supabase-Altpfad
+# endgueltig. Ist eine aeltere Anwendungsversion mit dem aktuellen Schema
+# nicht vertraeglich, ist ein Forward-Fix erforderlich.
 
 set -euo pipefail
 

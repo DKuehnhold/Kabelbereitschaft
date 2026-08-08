@@ -1,7 +1,7 @@
 # Projektwissen – Kabelbereitschaft
-> Stand: 2026-08-03 · Nur bestätigte Ergebnisse. Nicht ausgeführte Prüfungen sind als offen markiert.
+> Stand: 2026-08-08 · Nur bestätigte Ergebnisse. Nicht ausgeführte Prüfungen sind als offen markiert.
 
-> **Aktueller Stand (2026-08-03).** Zielplattform bleibt ADR-011: PostgreSQL 18, Auth.js v5, MinIO
+> **Aktueller Stand (2026-08-08).** Zielplattform bleibt ADR-011: PostgreSQL 18, Auth.js v5, MinIO
 > und Containerbetrieb hinter dem internen Reverse-Proxy; Supabase ist kein Ziel. Bestätigter
 > technischer Referenzstand ist `40606eeea98baccf6192ad99d3ccac81fc7f0258`
 > (`docs: consolidate operational platform guidance`) auf `main`. AP15-1 berechnet die fünf
@@ -34,9 +34,18 @@
 > Abnahme sowie die CSP-Auswertung sind **nicht** erbracht. AP15-2 hat die operative
 > Dokumentation quellentreu konsolidiert; CI `30814390705` mit `verify`, `database`, `container`
 > und `objectstore` sowie Container-Image `30814390702` sind jeweils `completed/success`.
-> Nächster nicht-visueller Arbeitsblock ist die verbleibende AP15-Konfigurations- und
-> CI-Wahrheit. Die sichtbare GUI der Benutzerverwaltung wartet
-> weiterhin auf die gemeinsame Designentscheidung mit Dennis.
+> AP15-3 hat die Runtime- und CI-Wahrheit nachgezogen (2026-08-03, ergänzt 2026-08-08, noch nicht
+> committet): `deploy/README.md` nennt die Migrationskette `0001`–`0017`, trennt den CI-Prüflauf aus
+> Bootstrap und Kette vom Containerstart und produktiven Deployment, `app/.env.example` führt
+> `AUTH_URL` sichtbar, `.github/workflows/ci.yml` setzt die Unit-Tests als hartes Gate im Job
+> `verify`, und der Kopfkommentar von `deploy/scripts/rollback.sh` bezeichnet die Migrationen nicht
+> mehr als additiv. Ein GitHub-CI-Lauf für AP15-3 ist noch **nicht** erfolgt und wird hier nicht
+> behauptet. Nächster nicht-visueller
+> Arbeitsblock sind die verbliebenen AP15-Fachbefunde (`fehlalarm`-Semantik, Datumsherkunft der
+> Tageskennzahlen, Filteroptionen in drei Transaktionen, Vollmengen-Reads der Listen) sowie die
+> Einordnung der nur lokal laufenden Integrationssuiten und der sechs historischen Smokes. Die
+> sichtbare GUI der Benutzerverwaltung wartet weiterhin auf die gemeinsame Designentscheidung mit
+> Dennis.
 > V1 bleibt Produktionssperre, Branding bleibt separat, GUI-/Designarbeit wartet auf Dennis.
 
 ## Projektziel
@@ -67,8 +76,9 @@ CSV-Export, Offlinebetrieb mit Synchronisation und Konfliktbehandlung.
 - **HEIC:** nicht akzeptiert (keine zuverlässige Browser-Vorschau/Verarbeitung).
 - **Sicherheitsheader (AP7):** harte Header durchsetzend; CSP zunächst Report-Only.
 - **Release:** Semantic Versioning; erster RC `v1.0.0-rc.1`; **Tag/Release nur mit Nutzerfreigabe**.
-- **Migrationen:** additiv/idempotent; aktuell `0001`–`0017` (Stand 2026-08-03). Sie liegen
-  vollständig auf `main`.
+- **Migrationen:** 17 versionierte Dateien `0001`–`0017` (Stand 2026-08-03), strikt in der
+  vorgesehenen Reihenfolge anzuwenden; die Kette ist nicht durchgehend additiv (`0013` baut den
+  Supabase-Altpfad ab) und als Ganzes nicht idempotent. Sie liegen vollständig auf `main`.
 - **Zielplattform (ADR-011):** keine Supabase-Cloud und kein selbst gehostetes Supabase.
   Ziel sind interne PostgreSQL-18-Dienste, Auth.js v5 mit serverseitigem Sitzungswiderruf,
   MinIO für Bildobjekte sowie Containerbetrieb hinter dem Unternehmens-Reverse-Proxy.
@@ -767,8 +777,10 @@ Claude am jetzigen Endstand selbst erhoben.
   Datenbanklauf ausgeführt — dieser Schritt ändert keinen Code.
 - **In der Prüfung korrigierte Sachfehler:** die Runner wenden Migrationen und Smokes
   **verschränkt** und nicht sequenziell an (die Verschränkung ist zwingend, sonst scheitern die
-  Negativfälle aus `20_ap14b_data.sql`); die Kette ist wegen `0013` und `19a` **nicht durchgehend
-  additiv**; `0002_storage.sql` trägt keine AP-Nummer (AP2 ist `0003`); `0017` enthält **vier**
+  Negativfälle aus `20_ap14b_data.sql`); die **Migrationskette** ist wegen `0013` **nicht durchgehend
+  additiv**, während `19a` (`app/supabase/test/19a_ap14b_grant_reset.sql`) eine **Testdatei** und
+  keine Migration ist und die zwingende Reihenfolge beziehungsweise Verschränkung des Testlaufs
+  belegt, nicht die Additivität einer Migration; `0002_storage.sql` trägt keine AP-Nummer (AP2 ist `0003`); `0017` enthält **vier**
   Audittrigger; der JWT trägt an Nutzdaten nur `sub` und `sid`, Auth.js ergänzt `iat`, `exp`
   und `jti`.
 - **Provenienz der AP14B-CI-Kennungen (geklärt, kein Widerspruch):** es gibt zwei aufeinanderfolgende
@@ -781,8 +793,53 @@ Claude am jetzigen Endstand selbst erhoben.
   Codex über die GitHub-API erhoben; Claude hat sie nicht selbst abgerufen.
 - **Weiterhin offen und ausdrücklich nicht behauptet:** produktives Deployment, Restore, DNS,
   Reverse-Proxy-Route, MinIO-Provisionierung, Browser-/Offline-Abnahme, Aufbewahrungsfristen,
-  RC1, Tag, Release und die V1-Entscheidung. `deploy/README.md:344` nennt weiterhin
-  „0001…0016" und ist damit überholt — die Datei stand nicht auf der Positivliste.
+  RC1, Tag, Release und die V1-Entscheidung. `deploy/README.md` nannte zum Stand von AP15-2
+  weiterhin „0001…0016" und war damit überholt — **mit AP15-3 behoben** (siehe Abschnitt „AP15-3").
+
+## AP15-3 — Runtime- und CI-Wahrheit konsolidiert (2026-08-03, ergänzt 2026-08-08, nicht committet)
+
+- **Umfang:** vier versionierte Dateien — `deploy/README.md`, `app/.env.example`,
+  `.github/workflows/ci.yml` und `deploy/scripts/rollback.sh` (dort nur der Kopfkommentar) — plus
+  die Abschlussnotizen in `PROJEKT_WISSEN.md` und `PROJEKTSTATUS.md`. Keine Änderung an Produktcode,
+  SQL, Migrationen, RLS, Compose, `Dockerfile` oder Tests; in `rollback.sh` ist ausschließlich
+  Kommentartext geändert, alle ausführbaren Zeilen bleiben bytegleich. Nichts archiviert,
+  umbenannt, verschoben oder gelöscht.
+- **`deploy/README.md`:** Die Migrationen stehen jetzt als 17 versionierte Dateien `0001`–`0017` in
+  fester Anwendungsreihenfolge, ohne Pauschalaussage zu Additivität oder Idempotenz. Die überholte
+  Aussage „die CI führt keine Migrationen aus" ist richtiggestellt: der CI-Job `database` wendet
+  gegen eine leere, temporäre Testdatenbank zuerst die drei versionierten Bootstrap-Dateien aus
+  `app/supabase/bootstrap/` und danach die Migrationen `0001`–`0017` in der vom Runner
+  festgelegten, mit den Smokes verschränkten Reihenfolge an — Bootstrap getrennt von der
+  nummerierten Migrationskette —, während Containerstart und produktives Deployment keine Migration
+  ausführen. Ebenso richtiggestellt: die Startprüfung erzwingt nur Anwesenheit und Nichtleere der
+  Pflichtvariablen, nicht ihr Format — ein Platzhalter in `DATABASE_URL`, `AUTH_SECRET` oder
+  `AUTH_URL` fällt beim Start nicht auf.
+- **`deploy/scripts/rollback.sh`:** Der Kopfkommentar behauptete, die Migrationen des Projekts seien
+  additiv. Er sagt jetzt quellentreu: das Rollback betrifft ausschließlich das Anwendungs-Image, das
+  Datenbankschema wird nicht zurückgesetzt, Rückwärtsmigrationen sind nicht vorgesehen und die Kette
+  ist nicht rückspielbar; bei Schema-Inkompatibilität ist ein Forward-Fix erforderlich. Nur
+  Kommentartext, keine ausführbare Zeile.
+- **`app/.env.example`:** eine auskommentierte Zeile `# AUTH_URL=http://localhost:3000` mit wahrer
+  Einordnung — im Containerbetrieb Pflicht (Startabbruch mit Exit-Code 78), lokal optional; ist sie
+  gesetzt, muss `S3_PUBLIC_BASE_URL` denselben Origin haben. Keine echte interne Adresse.
+- **`.github/workflows/ci.yml`:** ein neuer Schritt „Unit-Tests (hartes Gate)" mit
+  `npm run test:unit` im Job `verify`, ohne `continue-on-error`. Die vorhandenen Unit-Tests **würden**
+  damit erstmals in der CI laufen; belegt ist das erst nach Push und tatsächlichem Lauf. Kein Test,
+  kein Job und kein npm-Skript geändert.
+- **Betriebsgrenzen, unverändert offen:** CI-Prüfungen sind kein Nachweis einer produktiven
+  Umgebung und kein Nachweis der echten Reverse-Proxy-Route. Offen bleiben die produktive
+  MinIO-Provisionierung, Sicherung und Recovery der Objektdaten, der Healthcheck des
+  Compose-Dienstes `minio`, die Endpunkte der internen IT und die signierte GET-URL im Browser.
+- **Nachweise, von Claude selbst lokal erhoben:** Unit-Tests 97/97 Exit 0 (`fail 0`, `skipped 0`),
+  TypeScript Exit 0, ESLint Exit 0, Produktions-Build Exit 0, `git diff --check` Exit 0 — diese vier
+  App-Gates stammen aus dem Korrekturlauf vom 2026-08-03; die Ergänzung vom 2026-08-08 ändert nur
+  Dokumentation und einen Kommentar. Im Lauf vom 2026-08-08 zusätzlich erhoben:
+  `bash -n deploy/scripts/rollback.sh` Exit 0 und der mechanische Vergleich der ausführbaren Zeilen
+  von `rollback.sh` gegen `HEAD` ohne Unterschied (Kommentare und Leerzeilen ausgeschlossen). Kein
+  Datenbank-, Docker-, Compose-, MinIO- oder Playwright-Lauf ausgeführt und keiner behauptet.
+- **Kein GitHub-CI-Ergebnis für AP15-3.** Ob das neue Unit-Test-Gate auf dem Runner grün läuft, ist
+  erst nach Push und tatsächlichem Lauf belegt; das ergänzt Codex. Kein Commit, kein Push, kein
+  Merge, kein Tag, kein Release.
 
 ## Definitionen und Begriffe
 - **AP1–AP7:** Arbeitspakete (Grundgerüst → Vorgänge → Material → Bilder → Offline/PWA → E2E/Härtung → Release Readiness).

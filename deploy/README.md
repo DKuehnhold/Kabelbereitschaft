@@ -1,7 +1,8 @@
 # Containerbetrieb – Kabelbereitschaft
 
-> Stand: 2026-08-01 · AP14 / Arbeitspaket A, fortgeschrieben nach Arbeitspaket B
-> (Objektspeicher) · **Entwurf, nicht freigegeben**
+> Stand: 2026-08-03 · AP14 / Arbeitspaket A, fortgeschrieben nach Arbeitspaket B
+> (Objektspeicher) und nach AP15-3 (Runtime- und CI-Wahrheit) · **Entwurf, nicht
+> freigegeben**
 
 ## 0. Statuswarnung — bitte zuerst lesen
 
@@ -15,13 +16,21 @@
 2. **V1 (Aufbewahrungsfristen für Personen-, EXIF-/GPS- und Auditdaten) ist offen und wirkt als
    Produktionssperre.** Bis zur Entscheidung durch Dennis führen Stage und Test ausschließlich
    synthetische Daten; produktiver Datenanfall ist gesperrt.
-3. Es hat **kein Containerlauf** stattgefunden. Alle Angaben in diesem Dokument sind aus den
-   Konfigurationsdateien abgeleitet, nicht aus einem Betriebsnachweis. Die offenen Nachweise stehen
-   in Abschnitt 12.
-4. Der `minio`-Dienst ist **neu und ungeprüft**. Auf dem Arbeitsplatz, an dem er geschrieben wurde,
-   ist **keine Containerlaufzeit** vorhanden: er konnte weder gestartet noch mit
-   `docker compose config` validiert werden. Auch das Healthcheck-Kommando ist damit eine
-   **unbestätigte Annahme**. Das ist ein offener Nachweis (Abschnitt 12) und kein Erfolg.
+3. Es hat **kein produktiver Containerlauf** stattgefunden, und **auf dem Arbeitsplatz** hat
+   überhaupt kein Containerlauf stattgefunden — dort ist keine Containerlaufzeit vorhanden. In der
+   GitHub-CI laufen dagegen Containerprüfungen: der Job `container` baut das Image, startet es und
+   erzwingt den Konfigurationsabbruch, der Job `objectstore` startet einen echten MinIO-Container
+   (`.github/workflows/ci.yml`). Diese CI-Prüfungen sind **kein Nachweis einer produktiven
+   Umgebung** und **kein Nachweis der echten Reverse-Proxy-Route**. Die offenen Nachweise stehen in
+   Abschnitt 12.
+4. Der `minio`-Dienst des Compose-Stacks ist **im Betrieb ungeprüft**. Auf dem Arbeitsplatz, an dem
+   er geschrieben wurde, ist **keine Containerlaufzeit** vorhanden: er konnte dort weder gestartet
+   noch mit `docker compose config` validiert werden. Beides leistet inzwischen die CI:
+   `docker compose config` prüft das Stackmodell für **Stage und Produktion** einschließlich
+   `minio`, und der Job `objectstore` startet einen echten, digest-fest referenzierten
+   MinIO-Container und führt den Produktivcode dagegen aus (`.github/workflows/ci.yml`). **Weiter
+   unbestätigt** bleibt das Healthcheck-Kommando des Compose-Dienstes `minio`, weil die CI den
+   Server per `docker run` startet und nicht über den Compose-Stack (Abschnitt 12).
 5. Eine **automatische Provisionierung des Objektspeichers gibt es nicht mehr**. Bucket, Policy und
    Anwendungsidentität legt die interne IT vor dem ersten Start an (Abschnitt 4,
    „MinIO-Provisionierung durch die interne IT"). Ohne diesen Schritt startet die Anwendung
@@ -163,6 +172,12 @@ Zugangsdaten geheimnisfrei über eine Umgebungsvariable (`MC_HOST_<alias>`) bezi
 Containerlaufzeit noch das Werkzeug selbst. Statt eine unbewiesene Absicherung zu behaupten, wurde
 der automatische Bootstrap **entfernt**.
 
+**Inzwischen belegt, ohne diesen Beschluss zu ändern:** der CI-Job `objectstore` zeigt, dass die
+Root-Zugangsdaten über die Umgebungsvariable `MC_HOST_<alias>` und die Zugangsdaten der
+Anwendungsidentität über `stdin` übergeben werden können, ohne in einer Kommandozeile zu erscheinen
+(`.github/workflows/ci.yml`). Der produktive Stack provisioniert **weiterhin nicht** automatisch;
+eine Wiedereinführung wäre eine eigene, freizugebende Entscheidung.
+
 **Anforderung an das eingesetzte Werkzeug:** gleichgültig, ob Kommandozeilenwerkzeug, Weboberfläche
 oder Automatisierung der IT — **Zugangsdaten dürfen nicht als Kommandozeilenargument übergeben
 werden**. Zulässig sind Umgebungsvariablen, eine Eingabe auf `stdin` oder eine Konfigurationsdatei
@@ -206,7 +221,12 @@ zeigt sich erst zur Laufzeit — **jeder Bildupload scheitert**. Vor der Umstell
 auf, weil die Anwendung auf den erfolgreichen Bootstrap wartete; dieser Rückschritt wird bewusst in
 Kauf genommen und ist durch diesen Checklistenschritt zu kompensieren.
 
-**Ungeprüft:** dieser Ablauf wurde nie ausgeführt (Abschnitt 0, Punkt 4).
+**Ungeprüft:** dieser **manuelle** Ablauf wurde in Stage oder Produktion nie ausgeführt
+(Abschnitt 0, Punkt 3). Die gleichwertige Schrittfolge — Bucket anlegen, anonyme Freigabe entfernen,
+Policy anlegen, Anwendungsidentität anlegen und ihr die Policy zuordnen, Zuordnung fail-closed
+verifizieren — läuft dagegen im CI-Job `objectstore` gegen einen echten MinIO-Container
+(`.github/workflows/ci.yml`). Das belegt die **Durchführbarkeit** der Schritte, **nicht** ihre
+Durchführung in einer echten Umgebung.
 
 ## 5. Konfiguration
 
@@ -225,7 +245,11 @@ Verschlechterung.
 
 Fehlt eine Pflichtvariable, bricht der Container beim Start mit **Exit-Code 78** und einer klaren
 Meldung ab, die ausschließlich Variablennamen nennt (`app/docker/verify-runtime-config.mjs`). Ein
-stiller Start mit Platzhaltern ist nicht mehr möglich.
+stiller Start **ohne** Pflichtvariablen ist damit nicht mehr möglich. Die Startprüfung prüft
+allerdings ausschließlich **Anwesenheit und Nichtleere** der Namen — kein Format und keinen
+Platzhalterwert. Erkennbare Platzhalter weist erst die Laufzeitprüfung der fünf `S3_*`-Werte ab
+(`app/src/lib/minio-config.ts`); ein Platzhalter in `DATABASE_URL`, `AUTH_SECRET` oder `AUTH_URL`
+fällt beim Start **nicht** auf.
 
 ### Pflichtvariablen der Anwendung (`env/app.env`)
 
@@ -339,13 +363,38 @@ wird abgewiesen. Es wird **nie auf dem Server gebaut**.
 
 ## 9. Datenbank und Migrationen
 
-- **Die CI führt keine Migrationen aus. Der Containerstart führt keine Migrationen aus.**
+- **Der Containerstart führt keine Migrationen aus, und das produktive Deployment führt keine
+  Migration automatisch aus.** Der Einsprung des Images (`app/docker/entrypoint.sh`) ruft
+  ausschließlich die Konfigurationsprüfung `verify-runtime-config.mjs` auf und ersetzt sich danach
+  durch den Node-Server; für den Dienst `app` kennt `deploy/compose.yml` kein eigenes `command`,
+  und es gibt weder einen Migrations- noch einen Bootstrap-**Compose-Dienst**.
   Produktionsmigrationen erfolgen ausschließlich nach manueller Freigabe durch Dennis.
-- Bestand: `app/supabase/migrations/0001…0016`, additiv und idempotent. Der Verzeichnisname
-  `supabase/` ist ein historischer **Pfadname** und bedeutet nicht, dass Supabase noch benutzt wird.
-- Für neue PostgreSQL-Instanzen ist ein getrenntes Bootstrap-Verfahren vorgesehen; eine nachträglich
-  vor `0001` eingefügte Migration `0000` ist ausdrücklich **verworfen**. Details in ADR-011,
-  Abschnitt 2.10.
+- **Die CI führt Bootstrap und Migrationskette dagegen aus.** Die frühere Aussage „die CI führt
+  keine Migrationen aus" ist damit **überholt und hiermit richtiggestellt**. Der Job `database` in
+  `.github/workflows/ci.yml` startet einen Service-Container `postgres:18-bookworm` und ruft
+  `app/supabase/test/run_db_tests.sh` auf. Dieses Skript legt in diesem frisch gestarteten,
+  ansonsten leeren Cluster eine eigene, danach wieder entfernte Testdatenbank an und wendet gegen
+  sie **zuerst** die drei versionierten Bootstrap-Dateien `bootstrap/01_roles.sql`,
+  `bootstrap/02_compat_auth.sql` und `bootstrap/03_compat_storage.sql` an, **danach** die
+  Migrationen `0001`–`0017` in der **durch den Runner festgelegten Reihenfolge** — **verschränkt mit
+  den SQL-Smokes**: jeder Smoke setzt den zuvor erteilten Rechtestand voraus, und umgekehrt darf
+  eine später erteilte Berechtigung eine bestehende Negativprobe nicht still entwerten. Die
+  Migrationen laufen also nicht als geschlossener Block. **Bootstrap ist von der nummerierten
+  Migrationskette getrennt:** eigenes Verzeichnis `app/supabase/bootstrap/` mit eigenem
+  Nummernschema `01`–`03`. Das ist ein
+  **Prüfnachweis der Kette** und **kein** produktiver Migrationslauf; ein produktives Deployment
+  ist damit ausdrücklich **nicht** nachgewiesen.
+- Bestand: **17 versionierte Migrationen** `0001`–`0017` in `app/supabase/migrations/`, anzuwenden
+  **strikt in der vorgesehenen Reihenfolge**. Eine allgemeine Additivität oder Idempotenz der Kette
+  wird ausdrücklich **nicht** behauptet: `0013_ap14b_drop_supabase_compat.sql` baut den
+  Supabase-Altpfad bewusst ab. Der Verzeichnisname `supabase/` ist ein historischer **Pfadname**
+  und bedeutet nicht, dass Supabase noch benutzt wird.
+- Für neue PostgreSQL-Instanzen liegt das getrennte Bootstrap-Verfahren als **drei versionierte
+  Dateien** in `app/supabase/bootstrap/` vor (`01_roles.sql`, `02_compat_auth.sql`,
+  `03_compat_storage.sql`); es bleibt bewusst **außerhalb** der nummerierten Migrationskette. Eine
+  nachträglich vor `0001` eingefügte Migration `0000` ist ausdrücklich **verworfen**. Details in
+  ADR-011, Abschnitt 2.10. Ausgeführt sind diese Dateien belegt **nur im CI-Prüflauf**; ein
+  produktiver Bootstrap-Lauf hat **nicht** stattgefunden.
 - Stage und Produktion verwenden **getrennte Datenbanken beziehungsweise Instanzen** mit eigenen
   Zugangsdaten.
 - Die Anwendung verbindet sich mit einer eingeschränkten Rolle, die die Gruppenrolle `app_user`
@@ -389,8 +438,9 @@ Der Datenbestand liegt seit der Supabase-Ablösung an **zwei** Orten:
 
 - Anwendung: `scripts/rollback.sh stage` (ohne Argument: die von `deploy.sh` protokollierte
   Vorgängerversion) oder mit explizitem Digest.
-- Datenbank: **kein Schema-Rollback.** Die Migrationen sind additiv; Fehler werden per Forward-Fix
-  behoben. Datenrückstellung nur über `db-restore.sh` aus einer Sicherung.
+- Datenbank: **kein Schema-Rollback.** Die Migrationskette ist nicht rückspielbar —
+  `0013_ap14b_drop_supabase_compat.sql` entfernt den Supabase-Altpfad endgültig. Fehler werden per
+  Forward-Fix behoben. Datenrückstellung nur über `db-restore.sh` aus einer Sicherung.
 - Grenzfall: schlägt auch der Rollback fehl, bricht `deploy.sh` mit Protokoll ab und verlangt
   manuellen Eingriff — es wird nichts stillschweigend „repariert".
 
@@ -423,11 +473,11 @@ Der Datenbestand liegt seit der Supabase-Ablösung an **zwei** Orten:
 | Healthcheck erkennt defekten App-Prozess | **offen** |
 | Rollback auf vorherigen Tag | **offen** |
 | Keine Secrets in `docker history` | **GitHub-CI erfolgreich** |
-| `docker compose config` gültig | **erneut offen** — der frühere CI-Erfolg (Stage und Produktion) galt für den Stack **ohne** `minio`. Der erweiterte Stack wurde lokal **nicht** geprüft: auf dem Arbeitsplatz gibt es keine Containerlaufzeit. Der CI-Schritt wurde um `minio.env` ergänzt und muss den Nachweis neu erbringen |
-| `minio` startet und wird `healthy` | **offen** — Healthcheck-Kommando (`curl` gegen `/minio/health/live`) ist eine unbestätigte Annahme, u. a. ob die gewählte Image-Variante `curl` enthält |
+| `docker compose config` gültig (Stage **und** Produktion) | **in CI geprüft** — der Schritt „Compose-Modell validieren" im Job `container` legt `app.env`, `postgres.env` und `minio.env` aus den Vorlagen an, setzt `APP_IMAGE_REF` und `MINIO_IMAGE_REF` und ruft `docker compose config` für **beide** Overlays auf (`.github/workflows/ci.yml`). Ein grüner Lauf des Jobs `container` ist für Commit `a86d7a6` (CI-Lauf `30791223313`) **durch Codex berichtet und von Claude nicht selbst abgerufen**. Auf dem Arbeitsplatz weiterhin ungeprüft: dort gibt es keine Containerlaufzeit |
+| `minio` startet und wird `healthy` (Healthcheck des **Compose-Dienstes**) | **offen** — der Job `objectstore` startet MinIO per `docker run` und wartet mit `curl` **vom Runner aus** auf `/minio/health/live`. Das Healthcheck-Kommando **innerhalb** des Compose-Dienstes bleibt eine unbestätigte Annahme, u. a. ob die gewählte Image-Variante `curl` enthält |
 | Bucket, Policy und Identität existieren (IT-Provisionierung) | **offen** — manueller Schritt der internen IT (Abschnitt 4); der Stack legt nichts an und prüft nichts |
-| Policy-Syntax vom Server akzeptiert | **offen, Nachweis vorbereitet** — der Job `objectstore` in `.github/workflows/ci.yml` startet einen echten, digest-fest referenzierten MinIO-Container und wendet auf ihn die versionierte Datei `deploy/minio/incident-images-app.policy.json` an (nur gemountet, nicht neu erzeugt). Dieser Job ist im Vault **nie gelaufen** — hier gibt es keine Containerlaufzeit. Erbracht ist der Nachweis erst durch einen grünen CI-Lauf |
-| Anwendungsidentität kann genau die drei Operationen und sonst nichts | **offen, Nachweis vorbereitet** — derselbe Job `objectstore` legt eine von der Root-Identität getrennte Anwendungsidentität an, ordnet ihr genau diese eine Policy zu, prüft die Zuordnung fail-closed und führt den Produktivcode gegen den Container aus; ein zweiter Bucket dient als Gegenprobe der Rechtebegrenzung. Auch das ist hier **nie gelaufen** und erst mit einem grünen CI-Lauf erbracht. Die Verifikationspflicht bei der Provisionierung (Abschnitt 4) bleibt davon unberührt |
+| Policy-Syntax vom Server akzeptiert | **in CI geprüft** — der Job `objectstore` in `.github/workflows/ci.yml` startet einen echten, digest-fest referenzierten MinIO-Container und wendet auf ihn die versionierte Datei `deploy/minio/incident-images-app.policy.json` an (nur gemountet, nicht neu erzeugt). Ein grüner Lauf ist für Commit `a86d7a6` (CI-Lauf `30791223313`) **durch Codex berichtet und von Claude nicht selbst abgerufen**. Im **Vault** ist dieser Job **nie gelaufen** — hier gibt es keine Containerlaufzeit. Kein Nachweis einer produktiven Umgebung |
+| Anwendungsidentität kann genau die drei Operationen und sonst nichts | **in CI geprüft** — derselbe Job `objectstore` legt eine von der Root-Identität getrennte Anwendungsidentität an, ordnet ihr genau diese eine Policy zu, prüft die Zuordnung fail-closed und führt den Produktivcode (`app/src/lib/minio-storage.ts` über das echte AWS SDK v3) gegen den Container aus; ein zweiter Bucket dient als Gegenprobe der Rechtebegrenzung. Grüner Lauf wie in der Zeile darüber — **durch Codex berichtet, von Claude nicht selbst abgerufen**. Der Nachweis läuft gegen einen CI-eigenen MinIO auf Loopback mit synthetischen Zugangsdaten und **ohne** gesetzte `AUTH_URL`; er belegt Policy und Rechtebegrenzung, **nicht** die Same-Origin-Route unter einem echten Origin. Die Verifikationspflicht bei der Provisionierung (Abschnitt 4) bleibt unberührt |
 | Signierte GET-URL im Browser erreichbar (Proxy-Route, Same-Origin) | **offen** — hängt an der Proxyfreigabe der internen IT |
 | ESLint, TypeScript, normaler Build und Standalone-Build | **lokal erfolgreich** (2026-07-28) |
 | Öffentliche Browser-/Accessibility-Tests | **lokal 11/11 erfolgreich** (2026-07-28) |
@@ -459,10 +509,15 @@ Der Datenbestand liegt seit der Supabase-Ablösung an **zwei** Orten:
 Solange diese Punkte offen sind, enthalten die Vorlagen ausschließlich dokumentierte Platzhalter. Es
 wurde keine Verbindung zu einer realen Umgebung hergestellt.
 
-**Zusätzlich offen — Nachweis statt Erfolg:** `minio` wurde **nie gestartet**, und auch
-`docker compose config` konnte für den erweiterten Stack **nicht** ausgeführt werden, weil auf dem
-Arbeitsplatz keine Containerlaufzeit vorhanden ist. Healthcheck-Kommando und Policy-Text sind damit
-begründete, aber **unbestätigte** Annahmen und beim ersten echten Lauf zu prüfen (Abschnitt 12).
+**Zusätzlich offen — Nachweis statt Erfolg:** **auf dem Arbeitsplatz** wurde `minio` nie gestartet
+und `docker compose config` nie ausgeführt, weil dort keine Containerlaufzeit vorhanden ist. In der
+CI ist beides abgedeckt: `docker compose config` für Stage und Produktion im Job `container`, ein
+echter MinIO-Container samt versioniertem Policy-Text im Job `objectstore` (Abschnitt 12).
+**Unbestätigt bleibt das Healthcheck-Kommando des Compose-Dienstes `minio`**, weil die CI den
+Server per `docker run` startet und nicht über den Compose-Stack. Ebenfalls offen bleiben die
+produktive MinIO-Provisionierung, das Sicherungs- und Wiederherstellungsverfahren für die
+Objektdaten und die Endpunkte der internen IT; der erste echte Lauf in Stage oder Produktion hat
+das zu prüfen.
 
 ## 14. Hinweis zum Arbeitsstand des Repositories
 
