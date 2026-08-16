@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "node ./node_modules/eslint/bin/eslint.js",
     "typecheck": "node ./node_modules/typescript/bin/tsc --noEmit --incremental false",
-    "test:unit": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test --test-isolation=none test/*.test.mjs",
+    "test:unit": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test test/*.test.mjs",
     "test": "npm run typecheck && npm run lint && npm run test:unit",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
