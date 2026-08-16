@@ -7,7 +7,7 @@ test.describe("@public PWA & Auth-Guard", () => {
     const res = await request.get(`${baseURL}/manifest.webmanifest`);
     expect(res.ok()).toBeTruthy();
     const m = await res.json();
-    expect(m.name).toBe("Kabelbereitschaft");
+    expect(m.name).toBe("Bereitschaftsapp HLK");
     expect(m.display).toBe("standalone");
     expect(m.theme_color).toBe("#1e3a8a");
     const sizes = (m.icons ?? []).map((i: { sizes: string }) => i.sizes);
