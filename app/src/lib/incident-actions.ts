@@ -12,7 +12,7 @@ import {
   type ConditionRating,
 } from "@/lib/status";
 import { PRIORITIES, type Priority } from "@/lib/priority";
-import { assignIncidentMonteur } from "@/lib/incidents";
+import { assignIncidentMonteur, setIncidentFalseAlarm } from "@/lib/incidents";
 import type { FormState } from "@/lib/incidents";
 
 // AP14/B: Schreibaktionen der Vorgänge auf PostgreSQL (ADR-011 / 2.5).
@@ -463,6 +463,25 @@ export async function updateCondition(fd: FormData): Promise<void> {
   } catch (error) {
     logActionFailure("Zustandsbewertung", error);
   }
+  revalidateAll(id);
+}
+
+// ---------- Fehlalarm kennzeichnen/aufheben (nur Disponent) ----------
+// Vorgelagerte Prüfung, keine neue Regel und kein Ersatz: maßgeblich bleibt
+// der Datenbank-Wächter tg_incident_guard_false_alarm (Migration 0018,
+// SQLSTATE 42501) – Administratoren sind dort ausdrücklich NICHT berechtigt.
+export async function setFalseAlarm(fd: FormData): Promise<void> {
+  const session = await getSessionProfile();
+  if (!session || session.role !== "disponent") return;
+  const id = str(fd, "id");
+  const value = str(fd, "value");
+  if (!id || (value !== "1" && value !== "0")) return;
+
+  // setIncidentFalseAlarm() fängt ihre Fehler selbst ab und protokolliert
+  // serverseitig; ihr FormState wird hier bewusst nicht weitergegeben, weil
+  // diese void-Aktion – wie changeStatus – kein Ergebnis an das Formular
+  // zurückgeben kann.
+  await setIncidentFalseAlarm(id, value === "1");
   revalidateAll(id);
 }
 

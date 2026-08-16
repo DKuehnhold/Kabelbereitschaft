@@ -33,6 +33,9 @@ export function parseIncidentListQuery(get: ParamGetter): IncidentListQuery {
   const dateTo = clean(get("to"));
   // AP13: „hat offene Aufgabe" (offen = 'open' oder 'in_progress').
   const openTask = clean(get("offen"));
+  // AP15-b: Fehlalarm-Statusfilter. "1" = nur Fehlalarme, "0" = nur echte
+  // Vorgaenge, fehlend/anderer Wert = kein Filter (beide Werte, wie bisher).
+  const falseAlarm = clean(get("fehlalarm"));
 
   const filters: IncidentListFilters = {
     q: clean(get("q")),
@@ -49,6 +52,7 @@ export function parseIncidentListQuery(get: ParamGetter): IncidentListQuery {
     images: images === "with" || images === "without" ? (images as IncidentImagesFilter) : undefined,
     activity: activity === "active" || activity === "closed" ? (activity as IncidentActivity) : undefined,
     hasOpenTask: openTask === "1" ? true : undefined,
+    falseAlarm: falseAlarm === "1" ? true : falseAlarm === "0" ? false : undefined,
   };
 
   const sort: IncidentListSort = [];
@@ -89,6 +93,7 @@ export function buildIncidentListParams(query: IncidentListQuery): URLSearchPara
   set("images", f.images && f.images !== "all" ? f.images : undefined);
   set("activity", f.activity && f.activity !== "all" ? f.activity : undefined);
   set("offen", f.hasOpenTask ? "1" : undefined);
+  set("fehlalarm", f.falseAlarm === true ? "1" : f.falseAlarm === false ? "0" : undefined);
   if (query.sort.length) p.set("sort", query.sort.map((s) => `${s.field}:${s.dir}`).join(","));
   if (query.page > 1) p.set("page", String(query.page));
   if (query.pageSize !== 50) p.set("size", String(query.pageSize));

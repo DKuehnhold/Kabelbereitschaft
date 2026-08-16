@@ -5,6 +5,7 @@ import { getLowStockMaterials, type LowStockRow } from "@/lib/inventory";
 import { getTodaysImageCount } from "@/lib/images-server";
 import { getIncidentStatusMetrics } from "@/lib/incident-metrics";
 import { isOpenStatus } from "@/lib/status";
+import { startOfTodayBerlin } from "@/lib/date-local";
 import { StatCard } from "@/components/incidents/StatCard";
 import { IncidentsTable } from "@/components/incidents/IncidentsTable";
 import { EinsatzListe } from "@/components/incidents/EinsatzListe";
@@ -12,16 +13,12 @@ import { OfflineDashboardCards } from "@/components/offline/OfflineDashboardCard
 
 export const dynamic = "force-dynamic";
 
-function startOfToday(): Date {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
 export default async function DashboardPage() {
   const session = await requireSession();
   const rows = await listIncidents();
-  const today = startOfToday();
+  // AP15-b: Tagesgrenze fachlich verbindlich Europe/Berlin (nicht die
+  // Zeitzone des Node-Prozesses) - siehe src/lib/date-local.ts.
+  const today = startOfTodayBerlin();
 
   if (session.role === "monteur") {
     const metrics = await getIncidentStatusMetrics();

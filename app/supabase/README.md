@@ -41,7 +41,7 @@ ihrem Smoke, und die späteren Matrizen stehen bewusst **hinter** `20_ap14b_data
 Negativfälle belegen, dass bestimmte Rechte zu diesem Zeitpunkt noch fehlen. Würde man erst
 alle Migrationen und dann alle Smokes anwenden, entwerteten die später erteilten Rechte diese
 Negativproben und der Lauf schlüge fehl (Begründungen im Quelltext:
-`test/run_db_tests.sh:76-131`, `test/run_ap14b_local.ps1:161-217`).
+`test/run_db_tests.sh:113-185`, `test/run_ap14b_local.ps1:190-263`).
 
 - `test/run_db_tests.sh` – POSIX-Weg; dies ist auch der CI-Weg im Job `database`.
   Startet zwei Node-Suiten.

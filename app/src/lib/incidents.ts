@@ -7,6 +7,7 @@ import type { AssignMonteurAp13Code } from "@/lib/database.types";
 import {
   INCIDENT_PAGE_SIZES,
   INCIDENT_EXPORT_CAP,
+  INCIDENT_FULL_EXPORT_CAP,
   type IncidentListFilters,
   type IncidentListSort,
   type IncidentListSortField,
@@ -97,6 +98,10 @@ export type IncidentRow = {
   closed_by: string | null;
   created_at: string;
   updated_at: string;
+  // AP15B/RC1: aktueller Wert der Fehlalarm-Kennzeichnung; die Detailansicht
+  // braucht ihn, um sie anzuzeigen und umzuschalten. Seit Migration 0018 NOT
+  // NULL DEFAULT false - ein Nullwert ist hier nicht moeglich.
+  is_false_alarm: boolean;
   // Frühester Wechsel nach „technisch_abgeschlossen" (für CSV-Export); aus Chronik.
   technisch_abgeschlossen_at: string | null;
   stage: StageRef;
@@ -199,7 +204,7 @@ const INCIDENT_ROW_COLUMNS = `
   i.contact_name_snapshot, i.contact_function_snapshot, i.contact_phone_snapshot,
   i.title, i.description, i.internal_note, i.closing_note,
   i.on_call_number_id, i.call_received_at, i.construction_stage_id,
-  i.closed_at, i.closed_by, i.created_at, i.updated_at,
+  i.closed_at, i.closed_by, i.created_at, i.updated_at, i.is_false_alarm,
   (
     select min(h.changed_at)
     from public.incident_status_history h
@@ -569,7 +574,7 @@ const LIST_SELECT =
   "id, incident_no, status, priority, customer_id, customer_name, construction_stage_id, stage_code, stage_name, " +
   "vzg_line_id, vzg_line_number, vzg_line_ref, on_call_number_id, on_call_number, on_call_label, operating_point, " +
   "km_from, km_to, created_at, created_by, updated_at, image_count, cable_arts, monteur_names, monteur_ids, " +
-  "no_monteur, no_images, no_cable, historic_vzg, has_open_task";
+  "no_monteur, no_images, no_cable, historic_vzg, has_open_task, is_false_alarm";
 
 const SORT_COLUMN: Record<IncidentListSortField, string> = {
   incident_no: "incident_no",
@@ -641,9 +646,21 @@ function isIsoDate(value: string | undefined): boolean {
  */
 function orderBy(sort: IncidentListSort): string {
   const parts: string[] = [];
-  for (const entry of sort) {
-    if (!Object.prototype.hasOwnProperty.call(SORT_COLUMN, entry.field)) continue;
-    const column = SORT_COLUMN[entry.field];
+  // AP15B/RC1: `sort` kommt wie die Filter unveraendert vom Client und ist
+  // dort nicht gegen den Typ geprueft. Anders als bei den Filtern oben wird
+  // hier NICHT fail-closed verworfen: ungueltige Sortierangaben werden schon
+  // heute von parseIncidentListQuery() (incident-list-url.ts) auf eine leere
+  // Sortierliste reduziert, und die stabilen Tiebreaker unten liefern ohnehin
+  // eine wohldefinierte Reihenfolge. Ein `sort`, das kein Array ist, wirkt
+  // deshalb wie eine leere Sortierliste; ein Eintrag, der kein Objekt ist
+  // (null, Zahl, Zeichenkette), wird uebersprungen.
+  const rawSort: unknown = sort;
+  const entries = Array.isArray(rawSort) ? rawSort : [];
+  for (const rawEntry of entries) {
+    if (typeof rawEntry !== "object" || rawEntry === null) continue;
+    const entry = rawEntry as Record<string, unknown>;
+    if (typeof entry.field !== "string" || !Object.prototype.hasOwnProperty.call(SORT_COLUMN, entry.field)) continue;
+    const column = SORT_COLUMN[entry.field as IncidentListSortField];
     parts.push(`r.${column} ${SORT_DIRECTION[entry.dir === "asc" ? "asc" : "desc"]}`);
   }
   // Stabile Standard-/Tiebreaker-Sortierung
@@ -675,6 +692,13 @@ async function fetchList(
 ): Promise<IncidentListPage> {
   const f = filters;
 
+  // AP15B/RC1: `filters` kommt unveraendert vom Client (IncidentListQuery,
+  // insbesondere ueber die beiden Exportpfade) und ist dort nicht gegen den
+  // TypeScript-Vertrag geprueft. Ein Wert, der kein Objekt ist, wuerde jeden
+  // folgenden Feldzugriff auf `f` mit einer Ausnahme abbrechen; die Pruefung
+  // steht deshalb vor jedem Feldzugriff.
+  if (!f || typeof f !== "object") return { rows: [], total: 0 };
+
   // Aufzählungsfilter gegen die bestehenden Allow-Lists prüfen, BEVOR SQL läuft.
   //
   // `status` und `priority` werden unten als Aufzählungstyp gebunden; ein Wert
@@ -694,6 +718,18 @@ async function fetchList(
   // Liste. Dieses sichtbare Verhalten bleibt damit unveraendert.
   if (f.date_from && !isIsoDate(f.date_from)) return { rows: [], total: 0 };
   if (f.date_to && !isIsoDate(f.date_to)) return { rows: [], total: 0 };
+  // AP15B/RC1: Freitextsuche - derselbe Ursprung (Adresszeile bzw. das vom
+  // Client uebergebene IncidentListQuery) und dort nicht gegen den Typ
+  // geprueft. Ein Wert, der kein Text ist, wuerde unten `.trim()` mit einer
+  // TypeError abbrechen; die leere Treffermenge bleibt das sichtbare
+  // Verhalten statt einer Ausnahme.
+  if (f.q !== undefined && typeof f.q !== "string") return { rows: [], total: 0 };
+  // AP15B/RC1: Fehlalarm-Statusfilter - derselbe Ursprung. Ein Wert, der kein
+  // boolescher Wert ist, wuerde unten mit ::boolean gebunden und eine
+  // Umwandlungsausnahme (22P02) ausloesen; `null` speziell wuerde als
+  // SQL-NULL binden und den Vergleich `is_false_alarm = NULL` unbemerkt
+  // dauerhaft unwahr machen. Beides gilt hier ausdruecklich als unbrauchbar.
+  if (f.falseAlarm !== undefined && typeof f.falseAlarm !== "boolean") return { rows: [], total: 0 };
 
   const values: unknown[] = [];
   const conditions: string[] = [];
@@ -715,6 +751,9 @@ async function fetchList(
   else if (f.images === "without") conditions.push("image_count = 0");
   // AP13: „hat offene Aufgabe" wird serverseitig auf der View gefiltert.
   if (f.hasOpenTask) conditions.push("has_open_task = true");
+  // AP15-b: Fehlalarm-Statusfilter. undefined = kein Filter (beide Werte).
+  if (f.falseAlarm !== undefined)
+    conditions.push(`is_false_alarm = ${bind(values, f.falseAlarm)}::boolean`);
   if (f.date_from) conditions.push(`created_date_local >= ${bind(values, f.date_from)}::date`);
   if (f.date_to) conditions.push(`created_date_local <= ${bind(values, f.date_to)}::date`);
   const term = (f.q ?? "").trim();
@@ -794,6 +833,26 @@ export async function listIncidentsForExport(
   return withUserTransaction(session.userId, async (client) => {
     const res = await fetchList(client, query.filters, query.sort, 0, INCIDENT_EXPORT_CAP);
     return { rows: res.rows, total: res.total, capped: res.total > INCIDENT_EXPORT_CAP };
+  });
+}
+
+// AP15-b: Vollmengen-Export-Pfad. Dieselbe gefilterte/sortierte Treffermenge
+// wie listIncidentsForExport, aber mit der hoeheren Obergrenze
+// INCIDENT_FULL_EXPORT_CAP (20000) statt INCIDENT_EXPORT_CAP (5000). Die
+// interaktive UI (exportIncidentList/listIncidentsForExport) bleibt
+// UNVERAENDERT bei 5000 - dieser Pfad ist additiv fuer den separaten
+// Vollmengen-Export (siehe exportIncidentListFull in incident-list-actions.ts).
+// Rollenpruefung erfolgt wie beim bestehenden Export ausschliesslich in der
+// Server-Action, nicht hier - RLS greift ohnehin ueber die security_invoker-
+// View.
+export async function listIncidentsForFullExport(
+  query: IncidentListQuery,
+): Promise<{ rows: IncidentListRow[]; total: number; capped: boolean }> {
+  const session = await getSessionProfile();
+  if (!session) return { rows: [], total: 0, capped: false };
+  return withUserTransaction(session.userId, async (client) => {
+    const res = await fetchList(client, query.filters, query.sort, 0, INCIDENT_FULL_EXPORT_CAP);
+    return { rows: res.rows, total: res.total, capped: res.total > INCIDENT_FULL_EXPORT_CAP };
   });
 }
 
@@ -908,5 +967,47 @@ export async function assignIncidentMonteur(incidentId: string, monteurId: strin
       error instanceof Error ? error.message : "unbekannter Fehler",
     );
     return { ok: false, error: "Die Zuweisung ist fehlgeschlagen. Bitte erneut versuchen." };
+  }
+}
+
+// =====================================================================
+// AP15-b: Fehlalarm-Kennzeichnung setzen/aendern.
+//
+// Die eigentliche Durchsetzung "nur Disponent" liegt datenbankseitig im BEFORE
+// INSERT OR UPDATE-Waechter tg_incident_guard_false_alarm (Migration 0018, SQLSTATE
+// 42501); sie gilt damit auch fuer die Anlage. RLS selbst ist nicht spaltengranular
+// (incidents_update erlaubt is_staff() ODER dem zugewiesenen Monteur das UPDATE der
+// Zeile als Ganzes). Diese Funktion bindet den neuen Wert ausschliesslich als
+// Parameter; kein Eingabewert gelangt in den SQL-Text.
+// =====================================================================
+type FalseAlarmUpdateRow = { id: string };
+
+export async function setIncidentFalseAlarm(incidentId: string, value: boolean): Promise<FormState> {
+  const session = await getSessionProfile();
+  if (!session || !isUuid(incidentId)) return { ok: false, error: "Der Vorgang wurde nicht gefunden." };
+
+  try {
+    const updated = await withUserTransaction(session.userId, async (client) => {
+      const result = await client.query<FalseAlarmUpdateRow>(
+        `update public.incidents set is_false_alarm = $2::boolean where id = $1::uuid returning id`,
+        [incidentId, value],
+      );
+      return result.rows[0] ?? null;
+    });
+
+    if (!updated) return { ok: false, error: "Der Vorgang wurde nicht gefunden." };
+    return { ok: true, error: null };
+  } catch (error) {
+    // 42501 deckt sowohl eine RLS-Verweigerung (kein Zugriff auf die Zeile)
+    // als auch den Waechter tg_incident_guard_false_alarm ab (Zugriff auf die
+    // Zeile vorhanden, aber Rolle ungleich Disponent). Die Datenbankmeldung
+    // bleibt serverseitig.
+    if (isPgError(error, PG_INSUFFICIENT_PRIVILEGE))
+      return { ok: false, error: "Die Fehlalarm-Kennzeichnung darf nur die Disposition ändern." };
+    console.error(
+      "Fehlalarm-Kennzeichnung konnte nicht geändert werden",
+      error instanceof Error ? error.message : "unbekannter Fehler",
+    );
+    return { ok: false, error: "Die Änderung ist fehlgeschlagen. Bitte erneut versuchen." };
   }
 }

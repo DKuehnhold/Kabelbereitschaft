@@ -5,16 +5,32 @@
 #   ->  migrations/0012, 0013, 0014  ->  Smokes 19, 20
 #   ->  migrations/0015, 0016, 0017  ->  Smokes 21, 22, 23
 #   ->  Smoke 24 (AP15-1, Statuskennzahlen des Dashboards, Fallkennung K)
+#   ->  migrations/0018  ->  Smoke 25 (AP15-b, Fehlalarm-Kennzeichnung,
+#       Fallkennung W)
 #   ->  Integrationstests des Anwendungscodes (test/integration)
 #
-# Smoke 24 steht bewusst als LETZTER Eintrag der SQL-Kette und braucht keine
-# eigene Migration: seine fuenf Kennzahlen zaehlen ABSOLUT ueber die gesamte
-# public.incident_list_view, duerfen die Fixtures der Vorgaengerdateien also
-# nicht voraussetzen. Er nimmt seine eigene Wirkung am Ende vollstaendig per
-# rollback zurueck. Dazu gehoert ein FUENFTER Node-Lauf
+# Smoke 24 braucht keine eigene Migration und bleibt der LETZTE ABSOLUT
+# ZAEHLENDE Eintrag der SQL-Kette: seine fuenf Kennzahlen zaehlen ABSOLUT ueber
+# die gesamte public.incident_list_view, duerfen die Fixtures der
+# Vorgaengerdateien also nicht voraussetzen. Er nimmt seine eigene Wirkung am
+# Ende vollstaendig per rollback zurueck. Dazu gehoert ein FUENFTER Node-Lauf
 # (test/integration/ap15-dashboard-metrics.int.mjs): er belegt mit dem echten
 # Anwendungscode aus src/lib/incident-metrics.ts, dass Anwendungsabfrage und
 # Terminalstatusliste zusammenpassen - das kann der SQL-Smoke nicht leisten.
+#
+# Aus AP15-b kommen HINTER 24 die Migration 0018 (Fehlalarm-Kennzeichnung
+# public.incidents.is_false_alarm) und ihr Smoke 25_ap15b_incident_metrics.sql
+# hinzu. Diese Position haelt beide Zusagen ein: 24 bleibt der letzte absolut
+# zaehlende Eintrag, und 25 zaehlt ausschliesslich relativ ueber eigene
+# Kennungen und nimmt seine eigene Wirkungsphase - Fixtures und den per \ir
+# erneut eingebundenen Lauf von 0018 eingeschlossen - ebenfalls vollstaendig per
+# rollback zurueck. Die Migration steht unmittelbar vor ihrem Smoke, dieselbe
+# Konvention wie bei 0015/21, 0016/22 und 0017/23. Dazu gehoert ein SECHSTER
+# Node-Lauf (test/integration/ap15b-incident-list.int.mjs): er belegt den
+# ANWENDUNGSPFAD der Fehlalarm-Semantik (src/lib/incidents.ts) und den
+# Vollmengen-Export (src/lib/incident-list-actions.ts). Er steht als LETZTER
+# Node-Lauf, weil seine Vollmengenfixtures den Lauf ueberdauern (Begruendung an
+# der Aufrufstelle).
 #
 # Die bash-Fassung run_db_tests.sh bleibt der Weg fuer die CI; diese Datei ist
 # das Windows-Gegenstueck und ergaenzt run_ap12_local.ps1 (das bewusst bei 0011
@@ -105,6 +121,19 @@ param(
   # (Statuskennzahlen des Dashboards, AP15-1) ist ein weiterer Node-Prozess
   # hinzugekommen, und die SQL-Kette hat zusaetzlich Smoke 24 erhalten. Alle
   # uebrigen Zeitgrenzen bleiben unveraendert.
+  # Seit AP15-b kommt ein SECHSTER Node-Lauf hinzu (Fehlalarm-Semantik und
+  # Vollmengen-Export), der zum Nachweis der Vollmengengrenze
+  # INCIDENT_FULL_EXPORT_CAP + 1 Vorgaenge anlegt. Gemessen, nicht geschaetzt:
+  # der Orchestrator hat den vollstaendigen bash-Laeufer run_db_tests.sh mit
+  # AP14B_INTEGRATION=require auf einem frischen postgres:18-Container gefahren
+  # und Exit 0 nach 32 Sekunden fuer die gesamte Kette einschliesslich aller
+  # sechs Suiten erhalten; auf die sechste Suite entfielen dabei rund 15
+  # Sekunden, davon etwa 10 Sekunden fuer den Bulk-INSERT der 20001 Vorgaenge.
+  # Eine unabhaengige Messung eines Pruefagenten in einem eigenen Container
+  # ergab Exit 0 nach 34 Sekunden. Das Budget von 1200 Sekunden bleibt deshalb
+  # BEWUSST UNVERAENDERT; es ist gegenueber der gemessenen Laufzeit reichlich
+  # bemessen. Sollte der lokale Lauf dennoch am Budget scheitern, ist das ein
+  # sichtbarer, fail-closed Abbruch und kein Sachfehler.
   [int]$MaxTotalSeconds = 1200
 )
 
@@ -198,22 +227,39 @@ $files = @(
   # bestehende Negativprobe still entwerten.
   (Join-Path $migrationRoot "0016_ap14b_image_grants.sql"),
   (Join-Path $testRoot "22_ap14b_images.sql"),
-  # 0017 und 23 schliessen die Kette ab. Die Reihenfolge ist zwingend: die
-  # Migration erteilt das spaltenbezogene update auf public.profiles.role, und
-  # erst danach kann ihr Smoke es unter app_user nachweisen. Beide stehen
+  # 0017 und 23 schliessen den AP14/B-Teil der Kette ab. Die Reihenfolge ist
+  # zwingend: die Migration erteilt das spaltenbezogene update auf
+  # public.profiles.role, und erst danach kann ihr Smoke es unter app_user
+  # nachweisen. Beide stehen
   # ausserdem HINTER 19a_ap14b_grant_reset.sql: dessen pauschales
   # `revoke all on all tables in schema public` soll den Spaltengrant aus 0017
   # gar nicht erst erreichen koennen.
   (Join-Path $migrationRoot "0017_ap14b_admin_user_management.sql"),
   (Join-Path $testRoot "23_ap14b_admin_users.sql"),
-  # 24 steht GANZ AM ENDE der Kette und braucht keine eigene Migration: seine
-  # fuenf Kennzahlen zaehlen ABSOLUT ueber die gesamte
+  # 24 ist der LETZTE ABSOLUT ZAEHLENDE Eintrag der Kette und braucht keine
+  # eigene Migration: seine fuenf Kennzahlen zaehlen ABSOLUT ueber die gesamte
   # public.incident_list_view und nicht relativ ueber eigene Kennungen. Er darf
   # deshalb weder die Fixtures der Vorgaengerdateien voraussetzen noch ihre
   # Zaehlungen stoeren; seine gesamte Wirkungsphase wird am Ende per rollback
   # zurueckgenommen. Ein Aufraeumen per DELETE ist wegen der unbedingten
   # Loeschsperre trg_incident_tasks_no_delete (0011:113-123) nicht moeglich.
-  (Join-Path $testRoot "24_ap15_dashboard_metrics.sql")
+  (Join-Path $testRoot "24_ap15_dashboard_metrics.sql"),
+  # 0018 und 25 (AP15-b, Fehlalarm-Kennzeichnung) stehen HINTER 24, und genau
+  # diese Position haelt die Zusage von 24 ein: 24 bleibt der letzte ABSOLUT
+  # zaehlende Eintrag der Kette. 25 zaehlt ausschliesslich relativ ueber eigene
+  # Kennungen (Praefix 25c00000-) und nimmt seine eigene Wirkungsphase -
+  # Fixtures und den per \ir erneut eingebundenen Lauf von 0018 eingeschlossen -
+  # am Ende vollstaendig per rollback zurueck; auch fuer ihn ist ein Aufraeumen
+  # per DELETE wegen trg_incident_tasks_no_delete (0011:113-123) nicht moeglich.
+  # Die Migration steht unmittelbar VOR ihrem Smoke - dieselbe Konvention wie bei
+  # 0015/21, 0016/22 und 0017/23 - und sie muss es auch: Fall W1 von 25 prueft
+  # den Zielzustand der Spalte public.incidents.is_false_alarm und scheitert
+  # ausdruecklich mit "Migration 0018 ist nicht gelaufen", wenn sie fehlt. Der
+  # dauerhafte Spaltenzustand aus diesem Lauf von 0018 bleibt bestehen; nur die
+  # Wirkung INNERHALB von 25 wird zurueckgenommen. Genau darauf beruht der
+  # sechste Integrationslauf, der danach in derselben Datenbank laeuft.
+  (Join-Path $migrationRoot "0018_ap15b_incident_metrics.sql"),
+  (Join-Path $testRoot "25_ap15b_incident_metrics.sql")
 )
 foreach ($file in $files) {
   if (-not (Test-Path -LiteralPath $file)) { throw "Testdatei fehlt: $file" }
@@ -240,10 +286,17 @@ $adminUsersIntegrationTest = Join-Path $appRoot "test\integration\ap14b-admin-us
 # Anwendungsmodule laedt und ausserhalb von Next Ersatz fuer `next/cache` und
 # `@/lib/auth` braucht. Eine eigene Hooks-Datei entsteht dafuer nicht.
 $metricsIntegrationTest = Join-Path $appRoot "test\integration\ap15-dashboard-metrics.int.mjs"
+# Sechster Integrationslauf (AP15-b): der Anwendungspfad der Fehlalarm-Semantik
+# und der Vollmengen-Export. Er benutzt ebenfalls die bereits vorhandene
+# Hooks-Datei $moduleHooksApp, weil er Anwendungsmodule laedt (src/lib/incidents,
+# src/lib/incident-list-actions) und ausserhalb von Next Ersatz fuer
+# `next/cache` und `@/lib/auth` braucht. Eine eigene Hooks-Datei entsteht dafuer
+# nicht.
+$ap15bIntegrationTest = Join-Path $appRoot "test\integration\ap15b-incident-list.int.mjs"
 if (-not $SkipIntegrationTests) {
   foreach ($file in @($integrationTest, $moduleHooks, $masterdataIntegrationTest, $moduleHooksApp,
       $imagesIntegrationTest, $s3TestEndpoint, $adminUsersIntegrationTest,
-      $metricsIntegrationTest)) {
+      $metricsIntegrationTest, $ap15bIntegrationTest)) {
     if (-not (Test-Path -LiteralPath $file)) { throw "Testdatei fehlt: $file" }
   }
   if (-not (Test-Path -LiteralPath $NodeExe)) {
@@ -853,7 +906,7 @@ try {
   }
 
   Write-Host ""
-  Write-Host "--- AP14/B- und AP15-Pruefungen aus 19_ap14b_platform.sql, 19a_ap14b_grant_reset.sql, 20_ap14b_data.sql, 21_ap14b_masterdata_inventory.sql, 22_ap14b_images.sql, 23_ap14b_admin_users.sql und 24_ap15_dashboard_metrics.sql ---"
+  Write-Host "--- AP14/B-, AP15- und AP15-b-Pruefungen aus 19_ap14b_platform.sql, 19a_ap14b_grant_reset.sql, 20_ap14b_data.sql, 21_ap14b_masterdata_inventory.sql, 22_ap14b_images.sql, 23_ap14b_admin_users.sql, 24_ap15_dashboard_metrics.sql und 25_ap15b_incident_metrics.sql ---"
   # Die Ueberschrift nennt Smoke 21 ausdruecklich mit. Er benutzt aber eigene
   # Fallpraefixe (M fuer Stammdaten, N fuer Inventar) und wuerde vom bisherigen
   # Muster "SMOKE [PRD]\d+" nicht erfasst - der Auszug waere irrefuehrend, weil
@@ -889,7 +942,16 @@ try {
       # "SMOKE K\S+" erfasst deshalb von Anfang an jede Fallkennung dieses
       # Smokes; die Einschraenkung auf die Datei steht in der ersten Bedingung
       # dieser Alternative.
-      ($_ -match "24_ap15_dashboard_metrics" -and $_ -match "SMOKE K\S+")
+      ($_ -match "24_ap15_dashboard_metrics" -and $_ -match "SMOKE K\S+") -or
+      # Smoke 25 (AP15-b) benutzt die Fallkennung W und kennt zusaetzlich
+      # "SMOKE W-FIXTURES" und "SMOKE W-ENDE". Ohne diese sechste Alternative
+      # waere der gesamte Nachweis der Fehlalarm-Kennzeichnung im Konsolenauszug
+      # unsichtbar, obwohl die Datei laeuft und ausgewertet wird - genau der
+      # stille Nachweisverlust, der in den Zeilen darueber schon dreimal
+      # festgehalten ist. "SMOKE W\S+" erfasst jede Fallkennung dieses Smokes;
+      # die Einschraenkung auf die Datei steht in der ersten Bedingung dieser
+      # Alternative.
+      ($_ -match "25_ap15b_incident_metrics" -and $_ -match "SMOKE W\S+")
     } |
     ForEach-Object { Write-Host (($_ -split "NOTICE:\s+")[-1]) }
 
@@ -1009,7 +1071,7 @@ grant connect on database "$database" to "$appRole";
     # module-hooks-app.mjs: geprueft werden die echten Modulfunktionen aus
     # src/lib/admin-users.ts ZUSAMMEN mit der echten Sitzungsauswertung aus
     # src/lib/auth-service.ts; ein Sitzungsstub wuerde genau den Nachweis
-    # entwerten. Er steht bewusst als LETZTER Lauf: seine Administratorkonten
+    # entwerten. Er steht bewusst NACH dem ersten Lauf: seine Administratorkonten
     # tragen einen echten Argon2id-Hash und wuerden die Bootstrap-Ausgangslage
     # des ersten Laufs (usableAdminCount) mitzaehlen. Der Test raeumt sie
     # vollstaendig ab.
@@ -1076,10 +1138,55 @@ grant connect on database "$database" to "$appRole";
       throw ("Integrationstests der Dashboard-Statuskennzahlen fehlgeschlagen (Exit {0})." -f
         $metricsRun.ExitCode)
     }
+
+    Write-Host ""
+    Write-Host "Fuehre Integrationstests des Fehlalarmpfades und des Vollmengen-Exports aus (AP15-b) ..."
+    # SECHSTER und LETZTER, gleichartiger Aufruf mit derselben Auswertung -
+    # ebenfalls ueber Invoke-HandleSafeProcess und ausdruecklich NICHT ueber eine
+    # Pipeline (Begruendung im Kopf dieser Datei und in
+    # Invoke-HandleSafeProcess selbst). Er benutzt module-hooks-app.mjs wie der
+    # Stammdaten-, der Bild- und der Kennzahllauf: geprueft werden die Module
+    # src/lib/incidents.ts (Fehlalarmpfad) und src/lib/incident-list-actions.ts
+    # (Vollmengen-Export), die ausserhalb von Next Ersatz fuer `next/cache` und
+    # `@/lib/auth` brauchen.
+    #
+    # WARUM AN LETZTER STELLE - der echte Grund: die Suite legt zum Nachweis der
+    # Vollmengengrenze INCIDENT_FULL_EXPORT_CAP + 1 Vorgaenge an (Faelle
+    # L10/L11). Diese Zeilen und die daraus abgeleiteten Aufgabenzeilen
+    # UEBERDAUERN den Lauf, weil public.incidents wegen der unbedingten
+    # Loeschsperre trg_incident_tasks_no_delete (0011_ap13_tasks_bulk.sql:113-123)
+    # nicht per DELETE aufgeraeumt werden kann - die Sperre greift auch im
+    # Eigentuemerkontext und auch bei der Kaskade. Laeufe, die ueber die GESAMTE
+    # sichtbare Menge zaehlen - namentlich der Kennzahllauf darueber -, wuerden
+    # dadurch deutlich langsamer. Sachlich falsch wuerden sie nicht, aber sie
+    # muessen diese Last nicht tragen. Aufgeraeumt wird die Menge mit der
+    # temporaeren Testdatenbank am Laufende (siehe finally).
+    try {
+      $env:AP14B_APP_DATABASE_URL = $appUrl
+      $env:AP14B_ADMIN_DATABASE_URL = $adminUrl
+      # Pflichtmodus wie beim vierten und fuenften Lauf: fehlt eine der beiden
+      # Verbindungsvariablen, bricht der Test ab, statt still zu ueberspringen.
+      $env:AP14B_REQUIRE_INTEGRATION = "1"
+      $ap15bRun = Invoke-HandleSafeProcess -FilePath $NodeExe -Label "integration_ap15b_incident_list" `
+        -TimeoutSeconds 900 -WorkingDirectory $appRoot `
+        -Arguments @("--disable-warning=MODULE_TYPELESS_PACKAGE_JSON",
+          "--import", "./test/integration/module-hooks-app.mjs",
+          "./test/integration/ap15b-incident-list.int.mjs")
+    }
+    finally {
+      Remove-Item Env:\AP14B_APP_DATABASE_URL -ErrorAction SilentlyContinue
+      Remove-Item Env:\AP14B_ADMIN_DATABASE_URL -ErrorAction SilentlyContinue
+      Remove-Item Env:\AP14B_REQUIRE_INTEGRATION -ErrorAction SilentlyContinue
+    }
+    $ap15bRun.Output | ForEach-Object { Write-Host $_ }
+    if ($ap15bRun.ExitCode -ne 0) {
+      throw ("Integrationstests des Fehlalarmpfades und des Vollmengen-Exports fehlgeschlagen (Exit {0})." -f
+        $ap15bRun.ExitCode)
+    }
   }
 
   Write-Host ""
-  Write-Host "ERGEBNIS: AP10/AP11/AP12/AP13/AP14B/AP15 DATENBANKTESTS ERFOLGREICH." -ForegroundColor Green
+  Write-Host "ERGEBNIS: AP10/AP11/AP12/AP13/AP14B/AP15/AP15-b DATENBANKTESTS ERFOLGREICH." -ForegroundColor Green
 }
 finally {
   # Notbudget: ab hier gilt ausschliesslich die feste Aufraeumfrist, unabhaengig

@@ -108,8 +108,8 @@ jobs:
   # derselben Reihenfolge gegen einen PostgreSQL-18-Service.
   #
   # AP14/B: nach der SQL-Kette laufen zusaetzlich Node-Integrationssuiten mit
-  # echtem Anwendungscode gegen dieselbe temporaere Datenbank. Seit AP15-5 sind
-  # es FUENF Suiten, und sie laufen in dieser festen Reihenfolge:
+  # echtem Anwendungscode gegen dieselbe temporaere Datenbank. Seit AP15-b sind
+  # es SECHS Suiten, und sie laufen in dieser festen Reihenfolge:
   #   1. ap14b-platform.int.mjs              (app/src/lib/db, auth-service)
   #   2. ap14b-masterdata-inventory.int.mjs  (masterdata*, inventory*)
   #   3. ap14b-images.int.mjs                (Bildpfad gegen den prozessinternen
@@ -117,15 +117,24 @@ jobs:
   #      der getrennte Job "objectstore")
   #   4. ap14b-admin-users.int.mjs           (app/src/lib/admin-users.ts)
   #   5. ap15-dashboard-metrics.int.mjs      (app/src/lib/incident-metrics.ts)
+  #   6. ap15b-incident-list.int.mjs         (Fehlalarmpfad in
+  #      app/src/lib/incidents.ts und Vollmengen-Export ueber
+  #      app/src/lib/incident-list-actions.ts)
   # Die Reihenfolge 1 vor 4 ist ZWINGEND (Fall I13 der Plattformsuite setzt
   # `usableAdminCount() == 0` voraus, und die Konten der Suite 4 tragen echte
   # Argon2id-Hashes, die dort mitgezaehlt wuerden).
+  # Die Stellung von 6 AM ENDE ist ebenfalls begruendet: Suite 6 legt zum
+  # Nachweis der Vollmengengrenze INCIDENT_FULL_EXPORT_CAP + 1 Vorgaenge an, und
+  # diese Zeilen ueberdauern den Lauf, weil public.incidents wegen der
+  # unbedingten Loeschsperre trg_incident_tasks_no_delete nicht per DELETE
+  # aufgeraeumt werden kann. Suiten, die ueber die gesamte sichtbare Menge
+  # zaehlen - namentlich Suite 5 -, wuerden dadurch deutlich langsamer.
   #
-  # Alle fuenf laufen FAIL-CLOSED und doppelt gesichert:
+  # Alle sechs laufen FAIL-CLOSED und doppelt gesichert:
   #   1. AP14B_INTEGRATION: require - run_db_tests.sh bricht mit einem Exitcode
   #      ungleich 0 ab, sobald eine Voraussetzung fehlt (node, node_modules/pg,
   #      Testdateien, Zufallsquelle, Rollenanlage).
-  #   2. Das Skript setzt fuer JEDEN der fuenf Node-Laeufe zusaetzlich
+  #   2. Das Skript setzt fuer JEDEN der sechs Node-Laeufe zusaetzlich
   #      AP14B_REQUIRE_INTEGRATION=1; ein leerer oder falscher Verbindungswert
   #      fuehrt dort zum Abbruch beim Laden des Moduls statt zu einem Skip.
   # Ein fehlender Verbindungswert kann damit keinen gruenen Lauf ohne Nachweis
@@ -162,7 +171,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y postgresql-client
 
-      - name: Datenbankpruefungen (Migrationen 0001-0017, Smokes 15-24, fuenf Integrationssuiten)
+      - name: Datenbankpruefungen (Migrationen 0001-0018, Smokes 15-25, sechs Integrationssuiten)
         run: |
           chmod +x supabase/test/run_db_tests.sh
           supabase/test/run_db_tests.sh
@@ -171,7 +180,7 @@ jobs:
           PGPORT: "5432"
           PGUSER: postgres
           PGPASSWORD: ci_only_not_a_secret
-          # Pflichtmodus: ALLE FUENF Integrationssuiten MUESSEN laufen und
+          # Pflichtmodus: ALLE SECHS Integrationssuiten MUESSEN laufen und
           # MUESSEN gelingen (Reihenfolge und Begruendung im Kommentar oben).
           AP14B_INTEGRATION: require
 

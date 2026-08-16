@@ -291,8 +291,11 @@ try {
 
   $claudeArgs = @(
     "--print",
-    "--model", "opus",
-    "--effort", "high",
+    # Kostensparender Standardlauf: Claude Haiku (Mini-Modell) genügt für die
+    # begrenzten Implementierungs-/Prüfaufträge. Architekturgrenzen und
+    # unabhängige Codex-Prüfung bleiben unverändert.
+    "--model", "haiku",
+    "--effort", "low",
     "--output-format", "json"
   )
   if ($DryRun) {

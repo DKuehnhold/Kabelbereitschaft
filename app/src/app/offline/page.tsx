@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 
-export const metadata: Metadata = { title: "Offline – Kabelbereitschaft" };
+export const metadata: Metadata = { title: "Offline – Bereitschaftsapp HLK" };
 export const dynamic = "force-static";
 
 // Öffentliche Offline-Fallback-Seite (vom Service Worker bei fehlender Verbindung

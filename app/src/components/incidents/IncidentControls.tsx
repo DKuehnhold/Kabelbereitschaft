@@ -3,6 +3,7 @@ import {
   updateCondition,
   deactivateAssignment,
   addNote,
+  setFalseAlarm,
 } from "@/lib/incident-actions";
 import { AssignMonteurForm } from "@/components/incidents/AssignMonteurForm";
 import {
@@ -55,6 +56,18 @@ export function IncidentControls({
           <p className="mt-2 text-xs text-slate-400">
             Administrative Status ({TERMINAL_STATUS.map((s) => STATUS_LABELS[s]).join(", ")}, „Durch Disposition geprüft“) sind der Disposition vorbehalten.
           </p>
+        ) : null}
+        {role === "disponent" ? (
+          <form action={setFalseAlarm} className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
+            <input type="hidden" name="id" value={incident.id} />
+            <input type="hidden" name="value" value={incident.is_false_alarm ? "0" : "1"} />
+            <span className="text-sm text-slate-700">
+              Fehlalarm: {incident.is_false_alarm ? "Ja" : "Nein"}
+            </span>
+            <button type="submit" className={btn}>
+              {incident.is_false_alarm ? "Fehlalarm-Kennzeichnung aufheben" : "Als Fehlalarm kennzeichnen"}
+            </button>
+          </form>
         ) : null}
       </div>
 

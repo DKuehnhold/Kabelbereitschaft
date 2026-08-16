@@ -9,24 +9,32 @@
 # negativ, dass app_user kein select auf public.inventory_movements und kein
 # insert auf public.customers besitzt - genau diese Rechte erteilt 0015. Liefe
 # 0015 vorher, wuerde D18 scheitern. Es folgen die Bildrechte (0016) mit Smoke
-# 22 und die administrative Benutzerverwaltung (0017) mit Smoke 23; die Kette
-# reicht damit von 0001 bis 0017. run_ap12_local.ps1 bleibt als historischer
-# lokaler AP12/AP13-Nachweis unveraendert; run_ap14b_local.ps1 ist das Windows-
+# 22 und die administrative Benutzerverwaltung (0017) mit Smoke 23, danach die
+# Fehlalarm-Kennzeichnung (0018) mit Smoke 25; die Kette reicht damit von 0001
+# bis 0018. run_ap12_local.ps1 bleibt als historischer lokaler
+# AP12/AP13-Nachweis unveraendert; run_ap14b_local.ps1 ist das Windows-
 # Gegenstueck zu dieser Datei.
 #
-# Neu aus AP15-1: als LETZTER Eintrag der SQL-Kette laeuft
-# 24_ap15_dashboard_metrics.sql (Statuskennzahlen des Dashboards, Fallkennung K).
-# Er steht bewusst ganz am Ende, weil seine fuenf Kennzahlen ABSOLUT ueber die
-# gesamte public.incident_list_view zaehlen: er darf die Fixtures der
+# Aus AP15-1 stammt 24_ap15_dashboard_metrics.sql (Statuskennzahlen des
+# Dashboards, Fallkennung K). Er braucht keine eigene Migration und ist der
+# LETZTE ABSOLUT ZAEHLENDE Eintrag der SQL-Kette: seine fuenf Kennzahlen zaehlen
+# ABSOLUT ueber die gesamte public.incident_list_view, er darf die Fixtures der
 # Vorgaengerdateien nicht voraussetzen und nimmt seine eigene Wirkung am Ende
-# vollstaendig per rollback zurueck. Eine neue Migration braucht er nicht - die
-# Migrationskette endet unveraendert bei 0017.
+# vollstaendig per rollback zurueck.
+#
+# Neu aus AP15-b: HINTER 24 stehen die Migration 0018 (Fehlalarm-Kennzeichnung
+# public.incidents.is_false_alarm) und ihr Smoke 25_ap15b_incident_metrics.sql
+# (Fallkennung W). Diese Position haelt beide Zusagen ein: 24 bleibt der letzte
+# absolut zaehlende Eintrag, und 25 nimmt seine eigene Wirkungsphase - Fixtures
+# und den per \ir erneut eingebundenen Migrationslauf eingeschlossen - ebenfalls
+# vollstaendig per rollback zurueck. Die Migration steht unmittelbar vor ihrem
+# Smoke; das ist dieselbe Konvention wie bei 0015/21, 0016/22 und 0017/23.
 #
 # Seit AP14/B laufen hier NICHT mehr ausschliesslich SQL-Dateien: nach der
 # SQL-Kette koennen optional Node-Suiten mit echtem Anwendungscode gegen
 # dieselbe temporaere Datenbank ausgefuehrt werden.
 #
-# Seit AP15-5 sind es FUENF Node-Suiten. Sie laufen in genau dieser Reihenfolge:
+# Seit AP15-b sind es SECHS Node-Suiten. Sie laufen in genau dieser Reihenfolge:
 #   1. test/integration/ap14b-platform.int.mjs               (src/lib/db,
 #      src/lib/auth-service, scripts/bootstrap-admin.mjs)
 #   2. test/integration/ap14b-masterdata-inventory.int.mjs   (src/lib/masterdata*,
@@ -36,6 +44,8 @@
 #      synthetischen S3-Testendpunkt - ausdruecklich KEIN MinIO)
 #   4. test/integration/ap14b-admin-users.int.mjs            (src/lib/admin-users)
 #   5. test/integration/ap15-dashboard-metrics.int.mjs       (src/lib/incident-metrics)
+#   6. test/integration/ap15b-incident-list.int.mjs          (src/lib/incidents
+#      Fehlalarmpfad, src/lib/incident-list-actions Vollmengen-Export)
 #
 # Die Reihenfolge 1 vor 4 ist ZWINGEND: Fall I13 der Plattformsuite sichert
 # `usableAdminCount() == 0` als Ausgangslage zu; gezaehlt werden dort
@@ -45,20 +55,30 @@
 # dort mitgezaehlt. Die Benutzerverwaltung raeumt ihre Konten selbst ab; die
 # Reihenfolge ist trotzdem einzuhalten.
 #
-# Alle fuenf Suiten haengen an derselben Steuerung AP14B_INTEGRATION und laufen
+# Die Reihenfolge 6 ALS LETZTE ist ebenfalls begruendet, und zwar aus ihren
+# Fixtures: die Suite legt zum Nachweis der Vollmengengrenze
+# INCIDENT_FULL_EXPORT_CAP + 1 Vorgaenge an. Diese Zeilen und die daraus
+# abgeleiteten Aufgabenzeilen UEBERDAUERN den Lauf, weil public.incidents wegen
+# der unbedingten Loeschsperre trg_incident_tasks_no_delete
+# (0011_ap13_tasks_bulk.sql:113-123) nicht per DELETE aufgeraeumt werden kann.
+# Jede Suite, die ueber die GESAMTE sichtbare Menge zaehlt - namentlich
+# ap15-dashboard-metrics.int.mjs -, wuerde dadurch deutlich langsamer. Deshalb
+# laeuft sie hinter allen anderen.
+#
+# Alle sechs Suiten haengen an derselben Steuerung AP14B_INTEGRATION und laufen
 # gegen dieselbe temporaere Datenbank.
 #
 # Aufruf:
 #   PGHOST=localhost PGPORT=5432 PGUSER=postgres PGPASSWORD=... ./run_db_tests.sh
 #
 # Steuerung der Integrationsphase:
-#   AP14B_INTEGRATION=require   Alle fuenf Integrationssuiten MUESSEN laufen und
+#   AP14B_INTEGRATION=require   Alle sechs Integrationssuiten MUESSEN laufen und
 #                               MUESSEN gelingen. Jede fehlende Voraussetzung
 #                               (node, app/node_modules, Testdateien,
 #                               Zufallsquelle fuer das Rollenkennwort) beendet
 #                               den Lauf fail-closed mit einem Exitcode ungleich
 #                               0.
-#   sonst / nicht gesetzt       Keine der fuenf Integrationssuiten laeuft. Der
+#   sonst / nicht gesetzt       Keine der sechs Integrationssuiten laeuft. Der
 #                               Verzicht wird ausdruecklich gemeldet - es gibt
 #                               keinen stillen Verzicht.
 #
@@ -69,7 +89,7 @@
 #     kein Fehler (gleiche Begruendung wie in der PowerShell-Fassung)
 #   - jede Zeile der Form "SMOKE ... FAIL" laesst den Lauf fehlschlagen
 #   - im Modus "require" laesst zusaetzlich jeder Exitcode ungleich 0 einer der
-#     fuenf Node-Suiten den gesamten Lauf fehlschlagen; die jeweils folgenden
+#     sechs Node-Suiten den gesamten Lauf fehlschlagen; die jeweils folgenden
 #     Suiten laufen dann nicht mehr
 
 set -euo pipefail
@@ -126,25 +146,42 @@ FILES=(
   # bestehende Negativprobe still entwerten.
   "${MIGRATIONS}/0016_ap14b_image_grants.sql"
   "${TEST_ROOT}/22_ap14b_images.sql"
-  # 0017 und 23 schliessen die Kette ab. Die Reihenfolge ist zwingend: die
-  # Migration erteilt das spaltenbezogene update auf public.profiles.role, und
-  # erst danach kann ihr Smoke es unter app_user nachweisen. Beide stehen
-  # ausserdem HINTER 19a_ap14b_grant_reset.sql: dessen pauschales
-  # `revoke all on all tables in schema public` soll den Spaltengrant aus 0017
-  # gar nicht erst erreichen koennen.
+  # 0017 und 23 schliessen den AP14/B-Teil der Kette ab. Die Reihenfolge ist
+  # zwingend: die Migration erteilt das spaltenbezogene update auf
+  # public.profiles.role, und erst danach kann ihr Smoke es unter app_user
+  # nachweisen. Beide stehen ausserdem HINTER 19a_ap14b_grant_reset.sql: dessen
+  # pauschales `revoke all on all tables in schema public` soll den Spaltengrant
+  # aus 0017 gar nicht erst erreichen koennen.
   "${MIGRATIONS}/0017_ap14b_admin_user_management.sql"
   "${TEST_ROOT}/23_ap14b_admin_users.sql"
-  # 24 steht GANZ AM ENDE der Kette und braucht keine eigene Migration. Grund:
-  # seine fuenf Kennzahlen zaehlen ABSOLUT ueber die gesamte
-  # public.incident_list_view und nicht relativ ueber eigene Kennungen. Er darf
-  # deshalb weder die Fixtures der Vorgaengerdateien voraussetzen noch ihre
-  # Zaehlungen stoeren: seine Sollwerte sind Differenzen (Staffsicht)
+  # 24 ist der LETZTE ABSOLUT ZAEHLENDE Eintrag der Kette und braucht keine
+  # eigene Migration. Grund: seine fuenf Kennzahlen zaehlen ABSOLUT ueber die
+  # gesamte public.incident_list_view und nicht relativ ueber eigene Kennungen.
+  # Er darf deshalb weder die Fixtures der Vorgaengerdateien voraussetzen noch
+  # ihre Zaehlungen stoeren: seine Sollwerte sind Differenzen (Staffsicht)
   # beziehungsweise Absolutwerte auf einer nachweislich leeren Ausgangslage
   # (neu angelegte Monteure), und die gesamte Wirkungsphase wird am Ende per
   # rollback zurueckgenommen. Ein Aufraeumen per DELETE ist wegen der
   # unbedingten Loeschsperre trg_incident_tasks_no_delete (0011:113-123) nicht
   # moeglich; der Smoke begruendet das in seinem Kopf.
   "${TEST_ROOT}/24_ap15_dashboard_metrics.sql"
+  # 0018 und 25 (AP15-b, Fehlalarm-Kennzeichnung) stehen HINTER 24, und genau
+  # diese Position haelt die Zusage von 24 ein: 24 bleibt der letzte ABSOLUT
+  # zaehlende Eintrag der Kette. 25 zaehlt ausschliesslich relativ ueber eigene
+  # Kennungen (Praefix 25c00000-) und nimmt seine eigene Wirkungsphase -
+  # Fixtures und den per \ir erneut eingebundenen Lauf von 0018 eingeschlossen -
+  # am Ende vollstaendig per rollback zurueck; auch fuer ihn ist ein Aufraeumen
+  # per DELETE wegen trg_incident_tasks_no_delete (0011:113-123) nicht moeglich.
+  # Die Migration steht unmittelbar VOR ihrem Smoke - dieselbe Konvention wie
+  # bei 0015/21, 0016/22 und 0017/23 - und sie muss es auch: Fall W1 von 25
+  # prueft den Zielzustand der Spalte public.incidents.is_false_alarm und
+  # scheitert ausdruecklich mit "Migration 0018 ist nicht gelaufen", wenn sie
+  # fehlt. Der dauerhafte Spaltenzustand aus diesem Lauf von 0018 bleibt
+  # bestehen; nur die Wirkung INNERHALB von 25 wird zurueckgenommen. Genau
+  # darauf beruht die sechste Integrationssuite, die danach in derselben
+  # Datenbank laeuft.
+  "${MIGRATIONS}/0018_ap15b_incident_metrics.sql"
+  "${TEST_ROOT}/25_ap15b_incident_metrics.sql"
 )
 
 for f in "${FILES[@]}"; do
@@ -263,11 +300,12 @@ grep -E 'SMOKE[[:space:]]+[^[:space:]]+[[:space:]]+OK' "${LOG}" | sed -E 's/^.*N
 echo "--- Ende des Sammelauszugs ---"
 
 # ---------------------------------------------------------------------------
-# Integrationsphase (AP14/B und AP15, fuenf Node-Suiten in fester Reihenfolge)
+# Integrationsphase (AP14/B, AP15 und AP15-b, sechs Node-Suiten in fester
+# Reihenfolge)
 #
 # Sie steht bewusst HINTER der FAIL-Auswertung der SQL-Kette: erst wenn die
 # Datenbankseite nachweislich in Ordnung ist, hat ein Lauf des Anwendungscodes
-# gegen dieselbe Datenbank Aussagekraft. Die Ausgabe JEDES der fuenf Node-Laeufe
+# gegen dieselbe Datenbank Aussagekraft. Die Ausgabe JEDES der sechs Node-Laeufe
 # geht ausdruecklich direkt auf die Konsole und NICHT in ${LOG}; ${LOG} bleibt
 # damit die reine Sammeldatei der SQL-Kette und die obige FAIL-Suche
 # unveraendert wirksam.
@@ -277,7 +315,7 @@ echo "--- Ende des Sammelauszugs ---"
 # ---------------------------------------------------------------------------
 if [[ "${AP14B_INTEGRATION}" == "require" ]]; then
   echo
-  echo "Integrationssuiten (fuenf, Modus: require) ..."
+  echo "Integrationssuiten (sechs, Modus: require) ..."
 
   # Fail-closed, Schritt fuer Schritt: jede fehlende Voraussetzung beendet den
   # Lauf mit einem Exitcode ungleich 0 und benennt die Ursache. Ein stilles
@@ -287,7 +325,7 @@ if [[ "${AP14B_INTEGRATION}" == "require" ]]; then
   # module-hooks.mjs geladenen .ts-Module). Eine aeltere Fassung faellt beim
   # Laden mit einem Exitcode ungleich 0 auf und wird unten erfasst.
   command -v node >/dev/null 2>&1 || {
-    echo "FEHLER: node nicht gefunden - die fuenf Integrationssuiten koennen nicht laufen." >&2
+    echo "FEHLER: node nicht gefunden - die sechs Integrationssuiten koennen nicht laufen." >&2
     exit 69
   }
   # Konkret das Paketverzeichnis von pg: fehlt es, ist "npm ci" nicht gelaufen.
@@ -312,6 +350,11 @@ if [[ "${AP14B_INTEGRATION}" == "require" ]]; then
   readonly INT_TEST_PLATFORM="${APP_ROOT}/test/integration/ap14b-platform.int.mjs"
   readonly INT_TEST_MASTERDATA="${APP_ROOT}/test/integration/ap14b-masterdata-inventory.int.mjs"
   readonly INT_TEST_IMAGES="${APP_ROOT}/test/integration/ap14b-images.int.mjs"
+  # Suite des Fehlalarmpfades und des Vollmengen-Exports (AP15-b); sie laeuft als
+  # SECHSTE und LETZTE. Auch sie traegt einen EIGENEN Namen - die Konstanten oben
+  # sind `readonly` und nicht wiederverwendbar. Sie benutzt dieselbe Hooks-Datei
+  # wie die Kennzahlsuite (${INT_HOOKS_APP}), weil sie Anwendungsmodule laedt.
+  readonly INT_TEST_AP15B="${APP_ROOT}/test/integration/ap15b-incident-list.int.mjs"
   # Keine Suite, sondern eine Voraussetzung der Bildsuite: ap14b-images.int.mjs
   # importiert diese Datei STATISCH (dort Zeile 68). Fehlt sie, waere die Ursache
   # ohne diese Pruefung nur eine "Cannot find module"-Meldung aus dem Ladevorgang
@@ -319,7 +362,7 @@ if [[ "${AP14B_INTEGRATION}" == "require" ]]; then
   readonly INT_S3_ENDPOINT="${APP_ROOT}/test/integration/s3-test-endpoint.mjs"
   for f in "${INT_HOOKS}" "${INT_TEST}" "${INT_HOOKS_APP}" "${INT_TEST_AP15}" \
     "${INT_TEST_PLATFORM}" "${INT_TEST_MASTERDATA}" "${INT_TEST_IMAGES}" \
-    "${INT_S3_ENDPOINT}"; do
+    "${INT_TEST_AP15B}" "${INT_S3_ENDPOINT}"; do
     [[ -f "${f}" ]] || { echo "FEHLER: Testdatei fehlt: ${f}" >&2; exit 66; }
   done
 
@@ -371,7 +414,7 @@ SQL
 
   echo
   echo "Fuehre Integrationstest der Plattform aus ..."
-  # ERSTER der fuenf Aufrufe, und diese Stellung ist ZWINGEND: sein Fall I13
+  # ERSTER der sechs Aufrufe, und diese Stellung ist ZWINGEND: sein Fall I13
   # sichert `usableAdminCount() == 0` als Ausgangslage zu; die Zaehlfunktion
   # `usableAdminCount()` steht in derselben Suite und zaehlt anmeldefaehige
   # Administratoren mit Argon2id-Hash. Die Konten der Suite der administrativen
@@ -379,7 +422,7 @@ SQL
   # beiden aktiven, nicht gesperrten Admin-Fixtures wuerden dort mitgezaehlt.
   # Er muss deshalb VOR ap14b-admin-users laufen.
   #
-  # Wie bei allen fuenf Aufrufen: alle Werte gehen als Umgebungsvariablen
+  # Wie bei allen sechs Aufrufen: alle Werte gehen als Umgebungsvariablen
   # (Zuweisungspraefix) an node und NICHT als Argumente - in der Prozessliste
   # steht damit kein Kennwort. Die Verbindungszeichenfolge der EIGENTUEMERROLLE
   # traegt bewusst KEIN eingebettetes Kennwort (Begruendung beim Aufruf der
@@ -471,11 +514,15 @@ SQL
 
   echo
   echo "Fuehre Integrationstest der Dashboard-Statuskennzahlen aus (AP15-1) ..."
-  # Fuenfter und letzter, gleich gebauter Aufruf: dieselben beiden
+  # Fuenfter, gleich gebauter Aufruf: dieselben beiden
   # Verbindungszeichenfolgen, derselbe Zuweisungspraefix (kein Kennwort in der
   # Prozessliste), derselbe Pflichtmodus AP14B_REQUIRE_INTEGRATION=1. Einziger
   # Unterschied zum Aufruf der Benutzerverwaltung ist die Hooks-Datei: diese
   # Suite laedt die Anwendungsmodule und braucht deshalb module-hooks-app.mjs.
+  #
+  # Er steht VOR dem Aufruf des Fehlalarmpfades, und das ist beabsichtigt: diese
+  # Suite zaehlt ueber die GESAMTE sichtbare Menge, und die Vollmengenfixtures
+  # der sechsten Suite ueberdauern deren Lauf (Begruendung unten).
   if ! (
     cd "${APP_ROOT}" &&
       AP14B_REQUIRE_INTEGRATION=1 \
@@ -489,19 +536,55 @@ SQL
     exit 1
   fi
 
-  # Alle fuenf Suiten sind gelaufen und alle fuenf haben mit 0 geendet - genau
+  echo
+  echo "Fuehre Integrationstest des Fehlalarmpfades und des Vollmengen-Exports aus (AP15-b) ..."
+  # SECHSTER und LETZTER, gleich gebauter Aufruf: dieselben beiden
+  # Verbindungszeichenfolgen als Zuweisungspraefix (kein Kennwort in der
+  # Prozessliste), derselbe Pflichtmodus AP14B_REQUIRE_INTEGRATION=1, dieselbe
+  # Hooks-Datei module-hooks-app.mjs wie beim Stammdaten-, Bild- und
+  # Kennzahllauf - diese Suite laedt Anwendungsmodule (src/lib/incidents.ts,
+  # src/lib/incident-list-actions.ts) und braucht ausserhalb von Next den Ersatz
+  # fuer `next/cache` und `@/lib/auth`.
+  #
+  # WARUM AN LETZTER STELLE - der echte Grund: die Suite legt zum Nachweis der
+  # Vollmengengrenze INCIDENT_FULL_EXPORT_CAP + 1 Vorgaenge an (Faelle L10/L11).
+  # Diese Zeilen und die daraus abgeleiteten Aufgabenzeilen UEBERDAUERN den Lauf,
+  # weil public.incidents wegen der unbedingten Loeschsperre
+  # trg_incident_tasks_no_delete (0011_ap13_tasks_bulk.sql:113-123) nicht per
+  # DELETE aufgeraeumt werden kann - die Sperre greift auch im
+  # Eigentuemerkontext und auch bei der Kaskade. Suiten, die ueber die gesamte
+  # sichtbare Menge zaehlen - namentlich ap15-dashboard-metrics.int.mjs -,
+  # wuerden dadurch deutlich langsamer. Sachlich falsch wuerden sie nicht, aber
+  # sie muessen diese Last nicht tragen. Deshalb laeuft dieser Aufruf hinter
+  # allen anderen; aufgeraeumt wird die Menge mit der temporaeren Datenbank am
+  # Laufende (siehe cleanup).
+  if ! (
+    cd "${APP_ROOT}" &&
+      AP14B_REQUIRE_INTEGRATION=1 \
+      AP14B_APP_DATABASE_URL="postgresql://${APP_ROLE}:${APP_ROLE_PASSWORD}@${PGHOST}:${PGPORT}/${DB}" \
+      AP14B_ADMIN_DATABASE_URL="postgresql://${PGUSER}@${PGHOST}:${PGPORT}/${DB}" \
+      node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON \
+      --import ./test/integration/module-hooks-app.mjs \
+      test/integration/ap15b-incident-list.int.mjs
+  ); then
+    echo "FEHLER: der Integrationstest des Fehlalarmpfades und des Vollmengen-Exports ist fehlgeschlagen." >&2
+    exit 1
+  fi
+
+  # Alle sechs Suiten sind gelaufen und alle sechs haben mit 0 geendet - genau
   # das, und nichts darueber hinaus, sagt diese Zeile aus.
-  INTEGRATION_RESULT="alle fuenf Suiten ausgefuehrt (Plattform, Stammdaten und Inventar, Bildpfad, administrative Benutzerverwaltung, Dashboard-Statuskennzahlen; AP14B_INTEGRATION=require)"
+  INTEGRATION_RESULT="alle sechs Suiten ausgefuehrt (Plattform, Stammdaten und Inventar, Bildpfad, administrative Benutzerverwaltung, Dashboard-Statuskennzahlen, Fehlalarmpfad und Vollmengen-Export; AP14B_INTEGRATION=require)"
 else
   echo
   echo "=================================================================="
-  echo "HINWEIS: Keine der fuenf Integrationssuiten wurde ausgefuehrt"
+  echo "HINWEIS: Keine der sechs Integrationssuiten wurde ausgefuehrt"
   echo "         (AP14B_INTEGRATION=\"${AP14B_INTEGRATION}\"). Ausgelassen sind:"
   echo "         1. Plattform (ap14b-platform.int.mjs)"
   echo "         2. Stammdaten und Inventar (ap14b-masterdata-inventory.int.mjs)"
   echo "         3. Bildpfad (ap14b-images.int.mjs)"
   echo "         4. administrative Benutzerverwaltung (ap14b-admin-users.int.mjs)"
   echo "         5. Dashboard-Statuskennzahlen (ap15-dashboard-metrics.int.mjs)"
+  echo "         6. Fehlalarmpfad und Vollmengen-Export (ap15b-incident-list.int.mjs)"
   echo "         Dieser Lauf belegt ausschliesslich die SQL-Kette. Fuer den"
   echo "         vollstaendigen Nachweis ist AP14B_INTEGRATION=require noetig."
   echo "=================================================================="
@@ -509,5 +592,5 @@ else
 fi
 
 echo
-echo "ERGEBNIS: AP10/AP11/AP12/AP13/AP14B/AP15 DATENBANKTESTS ERFOLGREICH."
-echo "ERGEBNIS: Integrationsphase (Plattform, Stammdaten und Inventar, Bildpfad, administrative Benutzerverwaltung, Dashboard-Statuskennzahlen): ${INTEGRATION_RESULT}"
+echo "ERGEBNIS: AP10/AP11/AP12/AP13/AP14B/AP15/AP15-b DATENBANKTESTS ERFOLGREICH."
+echo "ERGEBNIS: Integrationsphase (Plattform, Stammdaten und Inventar, Bildpfad, administrative Benutzerverwaltung, Dashboard-Statuskennzahlen, Fehlalarmpfad und Vollmengen-Export): ${INTEGRATION_RESULT}"

@@ -1,5 +1,6 @@
 import { getSessionProfile } from "@/lib/auth";
 import { isUuid, withUserTransaction } from "@/lib/db";
+import { startOfTodayBerlinIso } from "@/lib/date-local";
 import type { GalleryImage } from "@/lib/images";
 import { createImageSignedUrl, logStorageFailure } from "@/lib/minio-storage";
 import type { ImageCategory } from "@/lib/status";
@@ -192,22 +193,23 @@ export async function getTodaysImageCount(): Promise<number> {
   const session = await getSessionProfile();
   if (!session) return 0;
 
-  // Die fachliche Zeitzone bleibt UNVERÄNDERT: Mitternacht in der Zeitzone des
-  // Node-Prozesses, genau wie bisher. Der Grenzwert wird deshalb weiterhin in
-  // der Anwendung berechnet und als Parameter übergeben.
+  // AP15-b (Entscheidung getroffen, siehe date-local.ts und PROJEKT_WISSEN.md):
+  // die fachliche Zeitzone ist Europe/Berlin, nicht die Zeitzone des
+  // Node-Prozesses. Der frühere Kommentar hier hielt diese Entscheidung
+  // ausdrücklich offen ("ist eine eigene Entscheidung und nicht Gegenstand
+  // dieser Migration") - sie ist mit AP15-b getroffen und folgt derselben
+  // Festlegung wie bereits `incident_list_view.created_date_local`.
   //
-  // Bewusst NICHT auf eine datenbankseitige Grenze (etwa
-  // `date_trunc('day', now())`) verlegt: die Datenbank kann in einer anderen
-  // Zeitzone stehen als der Anwendungsprozess, und die Kennzahl würde sich
-  // dadurch still verschieben. Welche Zeitzone fachlich gelten soll, ist eine
-  // eigene Entscheidung und nicht Gegenstand dieser Migration.
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
+  // Bewusst weiterhin in der Anwendung berechnet und als Parameter übergeben
+  // (nicht datenbankseitig über `now()`/`date_trunc`): die Datenbank kann in
+  // einer anderen Zeitzone stehen als der Anwendungsprozess, und eine
+  // serverseitige Grenze würde sich dadurch still verschieben.
+  const startIso = startOfTodayBerlinIso();
 
   try {
     return await withUserTransaction(session.userId, async (client) => {
       const result = await client.query<CountResult>(TODAYS_IMAGE_COUNT_SQL, [
-        start.toISOString(),
+        startIso,
       ]);
       return result.rows[0]?.n ?? 0;
     });

@@ -35,6 +35,18 @@
 //      behandelt `mustChangePassword = true` genau wie der Produktionscode
 //      (dann liefert `getSessionProfile()` NULL), damit der fail-closed Pfad
 //      auch im Test nachweisbar bleibt.
+//   5. `next/navigation` (`redirect`) existiert ebenfalls nur innerhalb einer
+//      Next-Laufzeit. Der Ersatz ist der bereits vorhandene
+//      `app/test/stubs/next-navigation.mjs` (bisher nur von den
+//      Einheitentests der Sitzungssperre genutzt). Grund für die Regel: die
+//      AP15B-Suite (ap15b-incident-list.int.mjs) prüft `setFalseAlarm()` aus
+//      `src/lib/incident-actions.ts` jetzt als ECHTE Server-Action, und diese
+//      Datei importiert `redirect` aus `next/navigation` (für die anderen
+//      Aktionen `createIncident`/`updateIncident`) - ohne Umleitung schlüge
+//      schon der Modulimport mit ERR_MODULE_NOT_FOUND fehl. Für die übrigen
+//      drei Suiten (ap14b-masterdata-inventory, ap14b-images,
+//      ap15-dashboard-metrics) bleibt die Regel wirkungslos: keine von ihnen
+//      importiert ein Modul, das `next/navigation` nachzieht.
 //
 // Geprüft werden die Fachmodule selbst: die jeweilige Suite importiert den
 // echten Anwendungscode, über den auch die echte DB-Schicht `src/lib/db`
@@ -52,6 +64,7 @@ const SOURCE_ROOT = new URL("../../src/", import.meta.url);
 const EMPTY_MODULE = new URL("./empty-module.mjs", import.meta.url).href;
 const NEXT_CACHE_STUB = new URL("./stubs/next-cache.mjs", import.meta.url).href;
 const SESSION_STUB = new URL("./stubs/session.mjs", import.meta.url).href;
+const NEXT_NAVIGATION_STUB = new URL("../stubs/next-navigation.mjs", import.meta.url).href;
 
 function isFile(url) {
   try {
@@ -76,6 +89,9 @@ registerHooks({
     }
     if (specifier === "next/cache") {
       return { url: NEXT_CACHE_STUB, shortCircuit: true };
+    }
+    if (specifier === "next/navigation") {
+      return { url: NEXT_NAVIGATION_STUB, shortCircuit: true };
     }
     // Ausdrücklich Gleichheit und kein Präfixvergleich: `@/lib/auth-paths`,
     // `@/lib/auth-password` und `@/lib/auth-service` beginnen ebenso und müssen

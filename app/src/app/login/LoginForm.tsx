@@ -27,7 +27,7 @@ export function LoginForm({
         <div className="mb-6 flex flex-col items-center gap-3 text-center">
           <Logo height={40} />
           <h1 className="text-lg font-semibold text-slate-900">
-            Kabelbereitschaft
+            Bereitschaftsapp HLK
           </h1>
           <p className="text-sm text-slate-500">Bitte anmelden</p>
         </div>

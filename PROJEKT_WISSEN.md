@@ -1,5 +1,13 @@
 # Projektwissen – Kabelbereitschaft
-> Stand: 2026-08-09 · Nur bestätigte Ergebnisse. Nicht ausgeführte Prüfungen sind als offen markiert.
+> Stand: 2026-08-12 · Nur bestätigte Ergebnisse. Nicht ausgeführte Prüfungen sind als offen markiert.
+
+> **AP15B-Arbeitsbaum (2026-08-12).** Fehlalarm-Markierung, Fehlalarm-Filter,
+> Berlin-Datumslogik und Vollmengen-Export sind technisch verdrahtet. Codex hat
+> `npm test` unabhängig mit TypeScript, ESLint und **114/114 Unit-Tests** (Exit 0)
+> geprüft. Der PostgreSQL-18-/Docker-Nachweis ist in der aktuellen Codex-Umgebung
+> offen, weil die Docker-CLI dort nicht verfügbar ist; daher keine RC1-Freigabe
+> und keine Behauptung eines neuen grünen DB-/CI-Laufs. Der Arbeitsbaum bleibt
+> uncommitted und ungepusht.
 
 > **Aktueller Stand (2026-08-09).** Zielplattform bleibt ADR-011: PostgreSQL 18, Auth.js v5, MinIO
 > und Containerbetrieb hinter dem internen Reverse-Proxy; Supabase ist kein Ziel. Bestätigter
@@ -950,6 +958,336 @@ Claude am jetzigen Endstand selbst erhoben.
   Reverse-Proxy-Route, Browser-/Offline-Abnahme, CSP-Auswertung, RC1, V1, Tag und Release. Commit
   und Push erfolgten außerhalb dieses Claude-Laufs; kein Merge, kein Tag, kein Release, keine RC1-
   oder V1-Freigabe.
+
+## AP15-b — Fehlalarm-Semantik, Datumsgrenze, Filteroptionen, Vollmengen-Export (2026-08-11, Korrekturlauf F1/F2/F5 am 2026-08-12, uncommitted)
+
+- **Auftrag (wörtlich, 2026-08-11):** „Bearbeite ausschließlich AP15-b: Fehlalarm-Semantik,
+  Datumsherkunft/Tagesgrenze, Filteroptionen und Vollmengen-Export-Pfad. Keine Änderungen an
+  Auth-/Deployment-Grundarchitektur, Repository-Sichtbarkeit, Release-Status oder fremden
+  uncommitteten Dateien. Vorhandene Änderungen unter `.claude/agents` und `run-*.ps1` nicht
+  anfassen. Tests und Evidence je Teilaufgabe dokumentieren. Stoppen, sobald DoD erfüllt oder
+  eine fachliche Entscheidung fehlt; nicht committen, pushen oder orchestrieren.“ Damit sind
+  genau die vier in AP15-1/AP15-5 als offen benannten Fachbefunde bearbeitet
+  (`fehlalarm`-Semantik, Datumsherkunft/Tagesgrenze der Tageskennzahlen, Filteroptionen in den
+  drei Transaktionen, Vollmengen-Reads der Listen).
+- **Status:** Ausschließlich lokale, uncommittete Änderungen im Arbeitsbaum. Kein `git commit`,
+  kein `git push`, kein Aufruf von `.claude/agents`/Orchestrierung. `.claude/agents/kb-*.md` und
+  `run-*.ps1` unverändert gelassen.
+
+**a) Fehlalarm-Semantik**
+- Neue Spalte `public.incidents.is_false_alarm boolean not null default false`
+  (`app/supabase/migrations/0018_ap15b_incident_metrics.sql`, additiv zu 0001–0017). Die
+  Spaltenanlage ist **idempotent**: Abschnitt 1 der Migration stellt `NOT NULL DEFAULT false` über
+  die Folge 1a–1e her (`drop trigger if exists`, `add column if not exists`, `set default`,
+  Backfill der verbliebenen NULL-Werte, `set not null`) und führt damit auch auf einem
+  vorveränderten Schema zum Zielzustand. Grund: `add column if not exists` wird vollständig
+  übersprungen, sobald die Spalte aus einem Vorlauf bereits existiert — lag sie dort nullable und
+  ohne Default vor, wurden `NOT NULL` und Default gerade nicht nachgezogen.
+- Waechter `tg_incident_guard_false_alarm` als **BEFORE INSERT OR UPDATE** (SQLSTATE `42501`), da
+  RLS selbst nicht spaltengranular ist (`incidents_update` erlaubt weiterhin `is_staff()` ODER dem
+  zugewiesenen Monteur das UPDATE der Zeile als Ganzes) — gleiches Muster wie
+  `tg_protect_profile_active_admin` (0017). Nur `before update` ließ einen `admin` die
+  Kennzeichnung bei der ANLAGE setzen und die Disponent-Regel damit über den Anlageweg umgehen;
+  der INSERT-Zweig lässt eine Anlage ohne bzw. mit `false` für jede Rolle durch, damit die
+  Vorgangsanlage nicht bricht.
+- `public.incident_list_view` um `is_false_alarm` ergänzt (vollständige Neudefinition, keine
+  bestehende Spalte entfernt/verschoben).
+- Neue Funktion `setIncidentFalseAlarm(incidentId, value)` in `app/src/lib/incidents.ts`
+  (parametrisiertes UPDATE, `42501` → freundliche Meldung). In der operativen Liste ist der neue
+  Fehlalarm-Filter jetzt auch sichtbar verdrahtet; der Wert reist über `fehlalarm=1|0` in die
+  bestehende Query-/Export-Kette.
+- **Offene fachliche Entscheidung (nicht geraten, wörtlich umgesetzt):** der Auftrag sagt „nur
+  die Disponent-Rolle“ — das schließt `admin` aus und weicht von der sonst durchgängigen
+  `is_staff()`-Konvention (admin+disponent) ab. Der Waechter prüft exakt
+  `current_user_role() = 'disponent'`, nicht `is_staff()`. Falls `admin` ebenfalls berechtigt sein
+  soll, ist das eine gesonderte Entscheidung und erfordert eine Anpassung der Migration.
+
+**b) Datumsherkunft & Tagesgrenze**
+- Neu: `app/src/lib/date-local.ts` (`startOfTodayBerlin()`/`startOfTodayBerlinIso()`),
+  zeitzonenfeste Berechnung der Europe/Berlin-Mitternacht ohne externe tz-Bibliothek
+  (`Intl.DateTimeFormat`, Selbstkorrektur bei Sommer-/Winterzeit-Wechsel am Referenztag).
+- Verdrahtet in `app/src/app/(app)/dashboard/page.tsx` (ersetzt die lokale
+  `startOfToday()`/`setHours(0,0,0,0)`, betrifft „Heute übernommen“ und „Heute erstellt“) und in
+  `app/src/lib/images-server.ts` (`getTodaysImageCount()`, „Heute hochgeladene Bilder“) — beide
+  liefen bisher auf Mitternacht in der Zeitzone des Node-Prozesses statt Europe/Berlin.
+  `incident_list_view.created_date_local` war bereits korrekt (0009) und blieb unverändert.
+- `app/test/ap15b-date-local.test.mjs`: 7 auf 8 Fälle erweitert. Zwei ursprüngliche
+  Testerwartungen waren fehlerhaft (verwechselten „Start des laufenden Kalendertags“ mit „Start
+  des folgenden Tages“) und wurden korrigiert; die Implementierung war in beiden Fällen bereits
+  richtig. Ein zusätzlicher Fall deckt jetzt den tatsächlichen Sommerzeit-Wechsel ab (Referenz
+  NACH der Umstellung am 2026-03-29, Mitternacht des Tages lag davor) — genau der Zweig, den die
+  Selbstkorrektur in `startOfTodayBerlin()` behandelt und den die ursprünglichen 7 Fälle nicht
+  auslösten.
+- Neu ergänzt: `app/test/ap15b-incident-list-url.test.mjs` mit reinem URL-Mapping für
+  `fehlalarm=1|0` sowie Roundtrip gegen `buildIncidentListQueryString()`.
+
+**c) Filteroptionen**
+- Datumsfilter (`date_from`/`date_to`) bestanden bereits korrekt gegen `created_date_local` — keine
+  Änderung nötig.
+- Neu: Fehlalarm-Statusfilter `falseAlarm?: boolean` in `IncidentListFilters`
+  (`app/src/lib/incident-list.ts`), URL-Parameter `fehlalarm=1|0`
+  (`app/src/lib/incident-list-url.ts`), SQL-Bedingung in `fetchList()`
+  (`app/src/lib/incidents.ts`) — wirkt dadurch automatisch in allen drei Transaktionen
+  (`listIncidentsPaged`, `listIncidentsForExport`, neu `listIncidentsForFullExport`).
+
+**d) Vollmengen-Export-Pfad**
+- Neue Konstante `INCIDENT_FULL_EXPORT_CAP = 20000` (`incident-list.ts`); die interaktive
+  UI (`exportIncidentList`/`listIncidentsForExport`) bleibt unverändert bei `INCIDENT_EXPORT_CAP`
+  (5000).
+- Neue Funktion `listIncidentsForFullExport()` (`incidents.ts`) und Server-Action
+  `exportIncidentListFull()` (`incident-list-actions.ts`), Rollenprüfung (kein Monteur) wie beim
+  bestehenden Export. CSV-Spalten beider Exporte um „Fehlalarm“ ergänzt (additiv am Ende), damit
+  der neue Filter im Export auch sichtbar ist.
+
+**Nachweise des ursprünglichen Laufs vom 2026-08-11 (von Claude selbst im Device-Bridge-Sandbox
+erhoben, kein Netz, kein lokaler Postgres-Client):**
+- `node --test` auf `app/test/ap15b-date-local.test.mjs` ist in dieser Sandbox aktuell
+  umgebungsbedingt blockiert (`spawn EPERM`), obwohl die zugrundeliegende Funktion direkt per
+  Modulaufruf verifiziert werden konnte. Der Blocker liegt also im Test-Harness bzw. der Sandbox,
+  nicht in der Logik selbst.
+- `npm run typecheck` läuft jetzt in der lokalen PowerShell sauber, weil `app/package.json`
+  auf explizite `node ./node_modules/typescript/bin/tsc --noEmit --incremental false` umgestellt
+  wurde; dieselbe Umstellung gilt fuer `npm run lint` mit `node ./node_modules/eslint/bin/eslint.js`.
+- `node --input-type=module` mit direkter Funktionsprüfung der `date-local`-Fälle: `AP15B_DATE_LOCAL_OK`.
+- `node --input-type=module` zur URL-Kette (`parseIncidentListQuery`/`buildIncidentListQueryString`)
+  konnte wegen `@/lib`-Aliasauflösung ohne Test-Harness in dieser Sandbox nicht direkt verwendet
+  werden; dafür liegt jetzt ein dedizierter Unit-Test vor (`ap15b-incident-list-url.test.mjs`).
+- `node ./node_modules/eslint/bin/eslint.js` lief auf den geänderten Dateien grün; auch
+  `npm run lint` ist nach der Script-Umstellung wieder grün.
+- `npm run test` laeuft in dieser lokalen PowerShell jetzt ebenfalls gruen (Typecheck + Lint +
+  108/108 Unit-Tests, ohne DB-Runner).
+- `node --test` auf `app/test/ap15b-date-local.test.mjs` bleibt in dieser Sandbox umgebungsbedingt
+  blockiert (`spawn EPERM`).
+- **Am 2026-08-11 nicht verifizierbar (kein Netz, kein psql):** tatsächliches DB-Verhalten der
+  neuen Migration 0018 (Spalte, Waechter-Trigger, View-Neudefinition), Korrektheit des neuen
+  Fehlalarm-Filters gegen echte Daten, vollständiger Lauf des Vollmengen-Exports gegen eine echte
+  Treffermenge > 5000 Zeilen. Diese Lücke ist mit dem Korrekturlauf geschlossen (nächster Block);
+  die damalige Empfehlung, die Datenbanksuite vor einem Merge laufen zu lassen, ist damit erledigt.
+
+**Korrekturlauf AP15-b (2026-08-12, weiterhin uncommitted) — Aufnahme in die Prüfketten**
+- Migration `0018` und der neue SQL-Smoke `app/supabase/test/25_ap15b_incident_metrics.sql`
+  (Fallkennung `W`) stehen jetzt in der Kette **beider** Läufer (`app/supabase/test/run_db_tests.sh`
+  und das Windows-Gegenstück `run_ap14b_local.ps1`) — und zwar HINTER
+  `24_ap15_dashboard_metrics.sql`, damit 24 der letzte absolut zählende Eintrag der Kette bleibt,
+  sowie die Migration unmittelbar VOR ihrem Smoke (dieselbe Konvention wie 0015/21, 0016/22,
+  0017/23). Der CI-Schrittname nennt beide: „Datenbankpruefungen (Migrationen 0001-0018, Smokes
+  15-25, sechs Integrationssuiten)“ (`.github/workflows/ci.yml`).
+- Neu ist die **sechste** Integrationssuite `app/test/integration/ap15b-incident-list.int.mjs`
+  (Fehlalarmpfad in `src/lib/incidents.ts`, Vollmengen-Export in
+  `src/lib/incident-list-actions.ts`), an derselben Steuerung `AP14B_INTEGRATION` wie die fünf
+  bisherigen. Sie läuft ausdrücklich als LETZTE, und der Grund liegt in ihren Fixtures: sie legt
+  zum Nachweis der Vollmengengrenze `INCIDENT_FULL_EXPORT_CAP + 1` Vorgänge an, und diese Zeilen
+  samt abgeleiteten Aufgabenzeilen überdauern den Lauf, weil `public.incidents` wegen der
+  unbedingten Löschsperre `trg_incident_tasks_no_delete` (0011) nicht per DELETE aufgeräumt werden
+  kann. Jede Suite, die über die GESAMTE sichtbare Menge zählt — namentlich
+  `ap15-dashboard-metrics.int.mjs` —, würde dadurch deutlich langsamer.
+
+**Messwerte des Korrekturlaufs (von Claude selbst erhoben, in temporären
+`postgres:18`-Wegwerfcontainern gegen PostgreSQL 18.4 (Debian 18.4-1.pgdg13+1)):**
+- Vollständiger Lauf des echten Läufers `run_db_tests.sh` mit `AP14B_INTEGRATION=require` auf einem
+  FRISCHEN Container: **Exit 0**, Gesamtdauer **32 Sekunden**, **33 Kettendateien**, **391** Zeilen
+  `SMOKE … OK`, **0** Zeilen `SMOKE … FAIL`, **alle sechs** Integrationssuiten ausgeführt.
+- Der neue SQL-Smoke `25_ap15b_incident_metrics.sql` liefert **16 Fälle** (`W-FIXTURES`, `W1`–`W14`,
+  `W-ENDE`), alle OK.
+- Die neue Integrationssuite `ap15b-incident-list.int.mjs` liefert **11 von 11** Fällen (`L1`–`L11`),
+  `fail 0`, `skipped 0`.
+- Vollmengenfixture: **20001** Vorgänge in EINEM Bulk-INSERT in **10,3 Sekunden**; Aufräumbilanz
+  danach 20006 Vorgänge und 60018 Aufgabenzeilen mit dem Präfix `26a00000-`, die mit der
+  Testdatenbank entfallen.
+- **F1 gegengeprüft:** gegen die Migration im Stand VOR der Korrektur schlägt Fall `W2` fehl
+  (Exit 3, Meldung „attnotnull=false, atthasdef=false, default=NULL - erwartet true/true/false“).
+  Der Regressionstest bemerkt eine Rückkehr des Befunds also tatsächlich.
+- **F2 gegengeprüft:** gegen einen Waechter, der INSERTs durchlässt, schlägt Fall `W5` fehl
+  (Exit 3, Meldung „der Administrator hat einen Vorgang MIT Fehlalarm-Kennzeichnung angelegt
+  (Befund F2) statt 42501“).
+- **Ursache von F1 erstinstanzlich gemessen:** bei vorhandenem Waechter bricht der Backfill
+  `update public.incidents set is_false_alarm = false where is_false_alarm is null` mit SQLSTATE
+  `42501` ab und die NULL-Zeile bleibt stehen; nach `drop trigger if exists` läuft derselbe
+  Backfill mit Exit 0 und 0 verbleibenden NULL-Zeilen. `public.current_user_role()` liefert im
+  Eigentümerkontext ohne gesetzte Anwendungsidentität **NULL**.
+- Baseline vor dem Lauf und Statik: TypeScript **Exit 0**, ESLint **Exit 0**, Unit-Tests **108 von
+  108**, `fail 0`, **Exit 0**.
+
+**Offener fachlicher Blocker: Befund F7 ist NICHT behoben (Entscheidung bei Dennis)**
+- `setIncidentFalseAlarm` und `exportIncidentListFull` haben weiterhin **keinen produktiven
+  Aufrufer**. Neu ist ausschließlich ein **Testaufrufer** in
+  `app/test/integration/ap15b-incident-list.int.mjs` — Testabdeckung ist keine Verdrahtung.
+- Eine produktive Verdrahtung ist nicht ohne **sichtbare GUI-Entscheidung** und nicht ohne
+  **Rollenentscheidung** möglich und deshalb Dennis vorbehalten (`CLAUDE.md`: keine
+  GUI-/Designentscheidung eigenständig treffen).
+- **Vollmengen-Export.** `04-UI-UX/LISTENKONZEPT.md` legt für den CSV-Export ausdrücklich
+  „Obergrenze 5.000 mit Hinweis“ fest. Die einzige typkompatible Anbindestelle ist die vorhandene
+  Schaltfläche „CSV-Export (gefiltert)“ in
+  `app/src/components/incidents/list/OperationalList.tsx`; sie auf 20000 umzuhängen wäre eine
+  stille Verhaltensänderung gegen diese Festlegung, und jede andere Variante fügt sichtbare
+  Bedienfläche hinzu. Offen sind außerdem Beschriftung, Position, die Meldung oberhalb der
+  Obergrenze und die Frage, welche Rollen auslösen dürfen — `01-Anforderungen/ROLLEN_UND_RECHTE.md`
+  führt „CSV-Export“ nur für den Administrator, der Code erlaubt heute `admin` und `disponent`.
+- **Fehlalarm-Kennzeichnung.** Der Zustand ist heute nur im CSV sichtbar, nicht in Liste oder
+  Detail; `is_false_alarm` ist nicht Teil des Detail-Datentyps und müsste erst projiziert werden.
+  Zusätzlich kollidiert der Begriff mit dem bereits vorhandenen Vorgangsstatus `fehlalarm`
+  (`app/src/lib/status.ts`, Label „Fehlalarm“); das fachliche Verhältnis von Flag und Status ist
+  nirgends festgelegt. Und die Regel „nur Disponent“ bricht erstmals das im UI durchgängige
+  `isStaff`-Muster (ein `admin` ist Staff, darf aber nicht setzen).
+- Diese Fragen sind als **Entscheidungsvorlage für Dennis offen**. Dieser Abschnitt nennt bewusst
+  keine Empfehlung für eine der Varianten.
+
+**Erster echter Lauf auf Dennis' eigenem Rechner (2026-08-16, native PostgreSQL 18, kein Container)**
+- Ausgeführt von Dennis selbst: `app\supabase\test\run_ap14b_local.ps1 -TemporaryCluster` gegen die
+  native lokale PostgreSQL-18-Installation (`C:\Program Files\PostgreSQL\18\bin`), NICHT gegen
+  Docker — das Skript baut sich ein eigenes, temporäres Cluster per `initdb`/`pg_ctl` auf einem
+  separaten Port (55432) und entfernt es rückstandslos wieder; der vorhandene Windows-Dienst
+  `postgresql-x64-18` bleibt unberührt. Damit ist die bisher offene Lücke „PostgreSQL-Verifikation
+  ausschließlich in Wegwerfcontainern, nie auf Dennis' eigener Umgebung“ geschlossen.
+- **Ergebnis: `ERGEBNIS: AP10/AP11/AP12/AP13/AP14B/AP15/AP15-b DATENBANKTESTS ERFOLGREICH.`** Alle
+  SQL-Smokes grün, einschließlich `W1`–`W14` (Fehlalarm-Kernnachweise F1/F2 erneut bestätigt).
+- **Alle sechs Node-Integrationssuiten grün, 154 von 154 Fällen, 0 Fehler:** Plattform 32/32,
+  Stammdaten/Inventar 31/31, Bilder 37/37, Benutzerverwaltung 31/31, Dashboard-Kennzahlen 10/10,
+  AP15-b Fehlalarm/Vollmengen-Export **L1–L13, 13/13** (gegenüber `L1`–`L11` im vorherigen
+  Container-Lauf sind `L12`/`L13` neu hinzugekommen: fail-closed Typprüfung des Filters und ein
+  Test der Server-Action `setFalseAlarm`). Vollmengenfixture (20001 Vorgänge) erneut bestätigt,
+  Vollmengengrenze (`CAP`/`CAP+1`) erneut belegt. Aufräumbilanz: Port frei, Clusterverzeichnis und
+  Arbeitsverzeichnis restlos entfernt.
+- Vereinzelte Konsolenzeilen wie „Stammdaten speichern fehlgeschlagen …“ oder „Objektspeicher:
+  Operation fehlgeschlagen …“ innerhalb der Bild-/Inventarsuiten sind KEINE Fehlschläge, sondern
+  von der Anwendung selbst protokollierte, bewusst provozierte Negativfälle (u. a. `IB22`–`IB24`,
+  `IB28`); die jeweilige Suite schließt direkt danach mit `fail 0`.
+- **Möglicher Widerspruch zum Abschnitt „Offener fachlicher Blocker: Befund F7“ unten:** Test `L13`
+  prüft explizit die Server-Action `setFalseAlarm` (Disponent setzt/nimmt zurück, Administrator und
+  unbrauchbarer Wert bleiben ohne Wirkung) — laut eigener Durchsicht von
+  `app/src/lib/incident-actions.ts` und `app/src/components/incidents/IncidentControls.tsx` in
+  einer früheren Sitzung existiert dort bereits ein produktiver Aufrufer (Fehlalarm-Umschalter,
+  nur für `role === "disponent"` sichtbar) sowie ein Filter/Export-Button in `OperationalList.tsx`.
+  Der Blocker-Abschnitt „F7 ist NICHT behoben“ stammt aus dem Korrekturlauf vom 2026-08-12 und
+  wurde nach der UI-Verdrahtung offenbar nicht mehr aktualisiert. **Das ist hier bewusst nicht
+  stillschweigend korrigiert** — der Review-Chat sollte den F7-Abschnitt gegen den aktuellen
+  Code-/Testbestand abgleichen und den Status richtigstellen, statt dass zwei widersprüchliche
+  Aussagen im selben Dokument stehen bleiben.
+
+**Bewusst außerhalb des Korrekturlaufs offen geblieben**
+- `filters.falseAlarm` hat keine Vorabtypprüfung wie `status`/`priority`/`date_*` in `fetchList()`;
+  über den Server-Action-Weg kann ein unbrauchbarer Wert daher zu einer ungefangenen Ausnahme statt
+  zur bisherigen leeren Liste führen. Ausdrücklich nicht Gegenstand des Korrekturauftrags
+  (Negativliste), unverändert offen.
+- Die Exportberechtigung ist als Negativliste formuliert (`session.role === "monteur"`), nicht als
+  Positivliste — unverändert offen.
+- Die Befunde F4 und F8 bis F13 des Architektur-Gates bleiben unverändert offen.
+- Der Stand bleibt insgesamt uncommitteter Arbeitsbaumstand zur Prüfung durch ChatGPT/Codex: keine
+  Abnahme, keine Freigabe, kein Merge, kein Tag.
+
+**Richtigstellung durch den Review-Chat (2026-08-16, gegen den Codebestand abgeglichen)**
+- Seit 2026-08-16 nimmt Claude (Cowork-Chat „Orchestrator/Review", Fable 5) die bisherige
+  Codex-Rolle wahr (Entscheidung Dennis); die Umsetzung erfolgt durch einen getrennten
+  Worker-Cowork-Chat, Koordination über `00-Projektsteuerung/AUFTRAG_<n>.md` /
+  `MELDUNG_<n>.md` / `REVIEW_<n>.md`.
+- **F7 ist im Arbeitsbaum behoben:** produktive Aufrufer existieren — Fehlalarm-Umschalter in
+  `IncidentControls.tsx` (sichtbar nur bei `role === "disponent"`, Server-Action `setFalseAlarm()`
+  in `incident-actions.ts`) sowie Fehlalarm-Filter und Vollmengen-Export-Button in
+  `OperationalList.tsx`; belegt zusätzlich durch Test `L13`. Der Abschnitt „Offener fachlicher
+  Blocker: Befund F7 ist NICHT behoben" oben beschreibt den Stand vom 2026-08-12 **vor** der
+  UI-Verdrahtung und ist überholt. **Die fachliche Abnahme bleibt offen:** die Verdrahtung nimmt
+  sichtbare GUI-/Rollenentscheidungen vorweg (Vollmengen-Export-Button vs. LISTENKONZEPT-Obergrenze
+  5.000; „nur Disponent" vs. `isStaff`-Muster; Verhältnis Flag ↔ Status `fehlalarm`) — diese
+  Entscheidungen liegen weiterhin bei Dennis.
+- **Die Vorabtypprüfung von `filters.falseAlarm` existiert inzwischen** (`incidents.ts:732`,
+  fail-closed leere Menge statt Wurf; Test `L12`). Der erste Punkt unter „Bewusst außerhalb …
+  offen geblieben" ist damit überholt.
+- **Dokumentationslücke Architektur-Gate:** die Befundliste F4/F8–F13 ist im Vault nirgends
+  inhaltlich dokumentiert; aus den Laufprotokollen rekonstruierbar ist nur **F10 (mittel):
+  Exportberechtigung als Negativliste** (`incident-list-actions.ts`) — eine künftige vierte Rolle
+  wäre ohne Codeänderung exportberechtigt. F4/F8/F9/F11–F13 sind ohne den ursprünglichen
+  Codex-Gate-Bericht nicht nachvollziehbar; der Review-Chat behandelt sie als unbelegt und wird
+  bei der RC1-Vorbereitung ein eigenes, vollständiges Review-Gate über den AP15-b-Gesamtdiff
+  laufen lassen, statt sich auf die verlorene Liste zu stützen.
+- **AUFTRAG_1 umgesetzt und freigegeben** (`REVIEW_1.md`): `ap15b-incident-list-url.test.mjs`
+  läuft mit eigenem `registerHooks()`-Resolve-Hook; vom Review-Chat selbst nachgemessen:
+  Einzeltest 3/3, Exit 0; Gesamtlauf `node --test test/*.test.mjs` 64 Einträge, 63 pass, einziger
+  roter Eintrag die umgebungsbedingte Altlast `ap14b-auth.test.mjs` (fehlendes natives
+  argon2-Binding in der Prüf-Sandbox). Kein Commit, kein Push.
+
+**AUFTRAG_2 umgesetzt und freigegeben (2026-08-16, `REVIEW_2.md`):** Rollenprüfungen in
+`incident-list-actions.ts` vollständig als Allowlist `STAFF_ALLOWED_ROLES = ["admin","disponent"]`
+(beide Exporte und beide Massenaktionen; Meldungstexte und Verhalten für die drei existierenden
+Rollen unverändert; statischer Wächtertest in `ap15b-callers.test.mjs`). **Befund F10 damit
+vollständig erledigt**; der Punkt „Exportberechtigung als Negativliste" unter „Bewusst außerhalb …
+offen geblieben" ist überholt. Vom Review-Chat selbst nachgemessen: 4 Allowlist-Verwendungen,
+Wächtertest 5/5, Gesamtlauf 65/64/1 (nur Altlast `ap14b-auth`), `tsc` Exit 0.
+
+**AUFTRAG_3 umgesetzt und freigegeben mit Auflage (2026-08-16, `REVIEW_3.md`):** shadcn/ui-Fundament
+in `app/` (components.json, `src/lib/utils.ts`, 9 Copy-in-Komponenten unter
+`src/components/ui/shadcn/`, 9 neue Dependencies inkl. `radix-ui`-Meta-Paket, `vaul`, `sonner`,
+`react-day-picker`, `tw-animate-css`), Token-Anbindung in `globals.css` nachweislich rein additiv
+(81 Zeilen hinzu, 0 gelöscht) auf bestehende AP8-Tokens gemappt; keine bestehende Seite/Komponente
+verändert, nichts importiert die neuen Komponenten (toter Code beabsichtigt). Vom Review-Chat
+selbst nachgemessen: `tsc` Exit 0, ESLint Exit 0, `npm audit --omit=dev` 0 Schwachstellen.
+**Neue Test-Baseline: `node --test test/*.test.mjs` = 115/115/0, Exit 0** — das native
+argon2-Binding lädt jetzt in der Sandbox (Nebeneffekt der npm-Installationen); die Altlast
+`ap14b-auth` (vorher 1 roter Ladefehler-Eintrag, jetzt 51 grüne Einzelfälle: 65−1+51=115) ist
+erledigt. **Auflage/offen:** `npm run build` und `npm ci --ignore-scripts` sind in beiden
+Cowork-Sandboxes umgebungsbedingt blockiert (EPERM auf `.fuse_hidden`-Artefakte fremder
+Session-UID im OneDrive-Mount, in der Review-Sandbox reproduziert — kein Code-Defekt);
+**lokale Gegenprüfung durch Dennis vor einem Commit erforderlich.** Anmerkung: das vorbestehende,
+undokumentierte `--test-isolation=none` im `test:unit`-Script sollte dokumentiert oder
+zurückgenommen werden. Nächste Scheibe: `AUFTRAG_4.md` (Branding „Bereitschaftsapp HLK",
+entscheidungsfrei lt. Entscheidung Dennis).
+
+**Entscheidungen Dennis vom 2026-08-16 (GUI-Phase, verbindlich):**
+- **UI-Basis:** shadcn/ui als Copy-in-Grundlage (Radix-basiert), ergänzt nach Bedarf um `vaul`
+  (Bottom-Sheets mobil), `sonner` (Toasts) und `react-day-picker` (Datumsfilter); Tremor nur als
+  Kopiervorlage fürs Dashboard. Begründung: Code bleibt vollständig im Vault reviewbar, a11y über
+  Radix, kompatibel mit dem bestehenden Designsystem (AP8-Tokens, Dark Mode).
+- **Erfassung: Variante A** — eine Seite auf beiden Geräten; Desktop zweispaltig (Zuordnung |
+  Störung), Mobil untereinander mit **eingeklappten optionalen Abschnitten**, Priorität als große
+  Tippflächen statt Dropdown, Hauptknopf unten in der Daumenzone (Desktop oben rechts). Kein
+  Schritt-Assistent.
+- **Erfassung ergänzen:** `Kabeltyp` als **optionales** Feld (Auswahl aus den bestehenden
+  Stammdaten `cable_types`); die Objektangaben müssen auch **LST-Elemente** abdecken (Objekt ist
+  nicht zwingend ein Kabel).
+- **Begriff:** In der sichtbaren Oberfläche heißt ein Vorgang künftig **„Meldung"**
+  (Erfassung = „Neue Meldung", Liste = „Meldungen" usw.). **Nur UI-Labels und sichtbare Texte** —
+  Datenbank-, Code- und API-Bezeichner (`incidents`, `incident_no`, Routen) bleiben unverändert;
+  eine Umbenennung der technischen Schicht wäre ein eigenes, risikoreiches Arbeitspaket und ist
+  nicht beauftragt.
+- **App-Name (Branding):** „Bereitschaftsapp HLK" (Objektumfang umfasst neben Kabeln auch
+  LST-Elemente). Umsetzung im Rahmen der GUI-Phase (sichtbarer Titel/AppShell/PWA-Manifest);
+  Branding bleibt ansonsten separat wie bisher festgelegt.
+- **GUI-Reihenfolge:** 1. Erfassung, 2. Liste der Meldungen, 3. Disponentenansicht,
+  4. Dashboard (zuletzt, niedrige Priorität).
+- **Nachtrag (Entscheidungen Dennis, 2026-08-16, zweiter Block — zu
+  `01-Anforderungen/ANFORDERUNG_DISPO_METADATEN.md`):**
+  (a) **Gewerk- und Funktions-Katalog beide pflegbar** als Stammdaten-Seiten (wie Kabelarten),
+  Startwerte aus der Excel (Gewerke: 50 Hz, LST, TK, OSE, LWL-LST, LWL-TK, Unbekannt;
+  Funktionen: BÜW, LBÜW, örtl. LST).
+  (b) **Anlage/Objektart: katalog­gestützter Freitext** — Eingabefeld mit Vorschlägen aus dem
+  pflegbaren Objektarten-Katalog; ein neuer, nicht im Katalog vorhandener Begriff ist nur
+  zulässig, wenn er dabei ausdrücklich in den Katalog **eingepflegt** wird (kein stilles
+  Vorbeischreiben am Katalog).
+  (c) **„In Klärung" als Kennzeichen an der Meldung** (Ja/Nein wie in der Excel), kein neuer
+  Statuswert.
+  (d) **Bereitschaftsplan** (Einsatzplanungs-Matrix) wird **nach Erfassung + Liste** und vor
+  der Disponentenansicht eingereiht, damit diese anzeigen kann, wer Bereitschaft hat.
+- **Nachtrag (Entscheidungen Dennis, 2026-08-16, dritter Block — löst die offenen
+  AP15-b-/Architektur-Fragen):**
+  (a) **Bildspeicher: Dateisystem statt MinIO** — der IT-Rückmeldung vom 2026-08-03 wird
+  gefolgt; ADR-011 wird in der MinIO-Passage geändert (formaler ADR-Nachtrag folgt als eigene
+  Doku-Scheibe). Umbaupaket gemäß `CODEX_ANFRAGE_BILDSPEICHER_DATEISYSTEM.md`: Storage-Schicht
+  (`IMAGE_STORAGE_DIR`, atomares rename, Sharding), sitzungsgeprüfte Bildauslieferungsroute
+  statt signierter URLs, Dockerfile/Compose/Portainer-Anpassung, CI-Job `objectstore` durch
+  Dateisystem-Äquivalent ersetzen. Datenbank-/RLS-Stand aus AP14B bleibt erhalten.
+  (b) **Fehlalarm-Kennzeichnung: Admin + Disponent** (isStaff-Muster) — Migration 0018
+  (Wächter `tg_incident_guard_false_alarm`) und UI-Sichtbarkeit werden von „nur Disponent"
+  auf admin+disponent angepasst.
+  (c) **Fehlalarm: Kennzeichen löst den Statuswert ab** — der Statuswert `fehlalarm` wird
+  ausgemustert (Bestandsdaten migrieren; abgeschlossene Fehlalarm-Meldungen künftig
+  Status „erledigt" o. ä. + Kennzeichen). Eigenes Arbeitspaket mit Migration und Anpassung
+  von Statusmodell, Zählungen und Filtern.
+  (d) **CSV-Export: beide Exporte bleiben, Rollen Admin + Disponent** — gefilterter Export
+  Obergrenze 5.000, Vollmengen-Export 20.000; `04-UI-UX/LISTENKONZEPT.md` und
+  `01-Anforderungen/ROLLEN_UND_RECHTE.md` werden entsprechend aktualisiert (Doku-Scheibe).
+- **Neues Anforderungsthema:** Pflegeformular für die Disposition zur **Metadaten-Pflege**.
+  Fachliche Grundlage ist eine Excel-Datei von Dennis, die **noch nicht im Vault liegt**
+  (Stand 2026-08-16 keine xlsx/csv im Vault gefunden); Anforderungsaufnahme startet, sobald die
+  Datei vorliegt (Ablage vorgesehen unter `99-Anlagen/` oder `01-Anforderungen/`).
 
 ## Definitionen und Begriffe
 - **AP1–AP7:** Arbeitspakete (Grundgerüst → Vorgänge → Material → Bilder → Offline/PWA → E2E/Härtung → Release Readiness).

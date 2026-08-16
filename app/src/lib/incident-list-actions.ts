@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { withUserTransaction } from "@/lib/db";
 import { getSessionProfile } from "@/lib/auth";
-import { listIncidentsForExport } from "@/lib/incidents";
+import type { UserRole } from "@/lib/roles";
+import { listIncidentsForExport, listIncidentsForFullExport } from "@/lib/incidents";
 import {
   INCIDENT_BULK_LIMIT,
   mergeCableArts,
@@ -11,6 +12,7 @@ import {
   type IncidentBulkItem,
   type IncidentBulkResult,
   type IncidentListQuery,
+  type IncidentListRow,
 } from "@/lib/incident-list";
 import { INCIDENT_STATUS, STATUS_LABELS, type IncidentStatus } from "@/lib/status";
 import { PRIORITY_LABELS } from "@/lib/priority";
@@ -29,25 +31,34 @@ function fmtDate(dt: string | null): string {
 }
 
 const STAFF_ONLY_BULK = "Massenaktionen sind der Disposition/Administration vorbehalten.";
+const EXPORT_STAFF_ONLY_ERROR = "Export ist der Disposition/Administration vorbehalten.";
 
-// Vollständige gefilterte Treffermenge (aktuelle Filter + Sortierung, ohne Pagination).
-// RLS greift über die security_invoker-View; keine Service-Role, kein Audit.
-export async function exportIncidentList(
-  query: IncidentListQuery,
-): Promise<{ csv: string; count: number; capped: boolean; error: string | null }> {
-  const session = await getSessionProfile();
-  if (!session || session.role === "monteur") {
-    return { csv: "", count: 0, capped: false, error: "Export ist der Disposition/Administration vorbehalten." };
-  }
+// AP15-b/F10: positive Allow-Liste statt der bisherigen Negativliste
+// (`!session || session.role === "monteur"`). Erlaubt bleiben genau die heute
+// erlaubten Rollen (`admin`, `disponent`); das Verhalten fuer alle heute
+// existierenden Rollen (siehe UserRole in roles.ts, aktuell genau drei:
+// admin/disponent/monteur) bleibt damit identisch, kuenftige neue Rollen sind
+// aber nicht mehr automatisch berechtigt. Gleiches Vorbild wie requireStaff()
+// in inventory-actions.ts (F1-Korrektur). Von beiden Exportfunktionen UND den
+// beiden Massenaktionen (bulkUpdateIncidentStatus, bulkAssignIncidentMonteur)
+// gemeinsam genutzt.
+const STAFF_ALLOWED_ROLES: readonly UserRole[] = ["admin", "disponent"];
 
-  const { rows, capped } = await listIncidentsForExport(query);
+/** Serverseitige Protokollierung ohne Weitergabe der Datenbankmeldung. */
+function logExportFailure(error: unknown): void {
+  console.error("Export fehlgeschlagen", error instanceof Error ? error.message : "unbekannter Fehler");
+}
 
-  const headers = [
-    "Vorgangsnummer", "Status", "Priorität", "Kunde", "Bauabschnitt", "VzG", "Betriebsstelle",
-    "Kilometer", "Bereitschaftsnummer", "Kabelarten", "Erstellt am", "Zuletzt geändert",
-    "Monteure", "Bildanzahl", "Offene Aufgabe",
-  ];
-  const data = rows.map((r) => [
+// Gemeinsame CSV-Spalten für den interaktiven und den Vollmengen-Export
+// (AP15-b: "Fehlalarm" ergänzt die bisherigen Spalten additiv am Ende).
+const EXPORT_HEADERS = [
+  "Vorgangsnummer", "Status", "Priorität", "Kunde", "Bauabschnitt", "VzG", "Betriebsstelle",
+  "Kilometer", "Bereitschaftsnummer", "Kabelarten", "Erstellt am", "Zuletzt geändert",
+  "Monteure", "Bildanzahl", "Offene Aufgabe", "Fehlalarm",
+];
+
+function exportRow(r: IncidentListRow): unknown[] {
+  return [
     r.incident_no,
     STATUS_LABELS[r.status],
     PRIORITY_LABELS[r.priority],
@@ -63,9 +74,54 @@ export async function exportIncidentList(
     r.monteur_names.length ? r.monteur_names.join(", ") : "Nicht zugewiesen",
     r.image_count,
     r.has_open_task ? "Ja" : "Nein",
-  ]);
+    r.is_false_alarm ? "Ja" : "Nein",
+  ];
+}
 
-  return { csv: CSV_BOM + buildCsv(headers, data), count: rows.length, capped, error: null };
+// Vollständige gefilterte Treffermenge (aktuelle Filter + Sortierung, ohne Pagination).
+// RLS greift über die security_invoker-View; keine Service-Role, kein Audit.
+// Obergrenze INCIDENT_EXPORT_CAP (5000, siehe listIncidentsForExport) - für
+// größere Treffermengen siehe exportIncidentListFull.
+export async function exportIncidentList(
+  query: IncidentListQuery,
+): Promise<{ csv: string; count: number; capped: boolean; error: string | null }> {
+  const session = await getSessionProfile();
+  if (!session || !STAFF_ALLOWED_ROLES.includes(session.role)) {
+    return { csv: "", count: 0, capped: false, error: EXPORT_STAFF_ONLY_ERROR };
+  }
+
+  try {
+    const { rows, capped } = await listIncidentsForExport(query);
+    const data = rows.map(exportRow);
+    return { csv: CSV_BOM + buildCsv(EXPORT_HEADERS, data), count: rows.length, capped, error: null };
+  } catch (error) {
+    logExportFailure(error);
+    return { csv: "", count: 0, capped: false, error: "Der Export ist fehlgeschlagen. Bitte erneut versuchen." };
+  }
+}
+
+// AP15-b: Vollmengen-Export-Pfad. Dieselben Spalten und dieselbe
+// Rollenprüfung wie exportIncidentList, aber mit der höheren Obergrenze
+// INCIDENT_FULL_EXPORT_CAP (20000, siehe listIncidentsForFullExport). Die
+// interaktive UI (exportIncidentList) bleibt bei 5000 unverändert - dieser
+// Pfad ist additiv für Fälle, in denen die volle Treffermenge (z. B.
+// Monats-/Quartalsauszug) benötigt wird.
+export async function exportIncidentListFull(
+  query: IncidentListQuery,
+): Promise<{ csv: string; count: number; capped: boolean; error: string | null }> {
+  const session = await getSessionProfile();
+  if (!session || !STAFF_ALLOWED_ROLES.includes(session.role)) {
+    return { csv: "", count: 0, capped: false, error: EXPORT_STAFF_ONLY_ERROR };
+  }
+
+  try {
+    const { rows, capped } = await listIncidentsForFullExport(query);
+    const data = rows.map(exportRow);
+    return { csv: CSV_BOM + buildCsv(EXPORT_HEADERS, data), count: rows.length, capped, error: null };
+  } catch (error) {
+    logExportFailure(error);
+    return { csv: "", count: 0, capped: false, error: "Der Export ist fehlgeschlagen. Bitte erneut versuchen." };
+  }
 }
 
 // =====================================================================
@@ -116,7 +172,8 @@ export async function bulkUpdateIncidentStatus(
   newStatus: IncidentStatus,
 ): Promise<IncidentBulkResult> {
   const session = await getSessionProfile();
-  if (!session || session.role === "monteur") return { ok: 0, failed: [], error: STAFF_ONLY_BULK };
+  if (!session || !STAFF_ALLOWED_ROLES.includes(session.role))
+    return { ok: 0, failed: [], error: STAFF_ONLY_BULK };
 
   const guard = guardItems(items);
   if (guard) return { ok: 0, failed: [], error: guard };
@@ -156,7 +213,8 @@ export async function bulkAssignIncidentMonteur(
   monteurId: string,
 ): Promise<IncidentBulkResult> {
   const session = await getSessionProfile();
-  if (!session || session.role === "monteur") return { ok: 0, failed: [], error: STAFF_ONLY_BULK };
+  if (!session || !STAFF_ALLOWED_ROLES.includes(session.role))
+    return { ok: 0, failed: [], error: STAFF_ONLY_BULK };
 
   const guard = guardItems(items);
   if (guard) return { ok: 0, failed: [], error: guard };

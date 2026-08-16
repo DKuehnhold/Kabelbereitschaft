@@ -311,6 +311,7 @@ export type IncidentListView = {
   search_text: string;
   // AP13 additiv: offen = Aufgabe im Status 'open' oder 'in_progress'.
   has_open_task: boolean;
+  is_false_alarm: boolean;
 };
 
 // =====================================================================

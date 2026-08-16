@@ -3,8 +3,8 @@ import type { MetadataRoute } from "next";
 // Web App Manifest (Next.js Metadata Route → /manifest.webmanifest).
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Kabelbereitschaft",
-    short_name: "Kabelber.",
+    name: "Bereitschaftsapp HLK",
+    short_name: "HLK",
     description:
       "Erfassung und Dokumentation von Bereitschaftsvorgängen – offlinefähig (PWA).",
     start_url: "/dashboard",

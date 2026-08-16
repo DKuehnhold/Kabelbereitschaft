@@ -1,4 +1,8 @@
 @import "tailwindcss";
+/* AUFTRAG_3: nötig für die `animate-in`/`animate-out`-Utilities, die die
+   shadcn/ui-Copy-in-Komponenten (dialog.tsx, select.tsx) verwenden. Rein
+   additiv, keine bestehende Regel geändert. */
+@import "tw-animate-css";
 
 /* Dark-Mode-Variante an data-theme koppeln (zusätzlich zu prefers-color-scheme).
    Damit funktionieren künftige `dark:`-Utilities auch bei explizitem Theme. */
@@ -32,6 +36,33 @@
   --radius: 0.5rem;
   --shadow-sm: 0 1px 2px 0 rgb(15 23 42 / 0.06);
   --shadow: 0 4px 12px -2px rgb(15 23 42 / 0.10);
+
+  /* AUFTRAG_3 (2026-08-16): zusätzliche Tokens ausschließlich für die
+     shadcn/ui-Copy-in-Komponenten (src/components/ui/shadcn/**). Rein additiv
+     und ausnahmslos auf bestehende AP8-Werte gemappt - keine neue Farbpalette,
+     keine Änderung der obigen Werte. `--muted`/`--muted-foreground`: shadcn
+     erwartet `muted` als dezenten HINTERGRUND und `muted-foreground` als
+     gedämpfte TEXTFARBE; unser bestehendes `--muted` ist bereits eine
+     gedämpfte Textfarbe (AP8) und wird hier 1:1 als `--muted-foreground`
+     wiederverwendet - `--muted` selbst bleibt unverändert und wird für die
+     Hintergrund-Rolle (z. B. `bg-muted`) weiterverwendet, auch wenn das
+     außerhalb seines bisherigen Verwendungszwecks liegt. Das ist eine
+     bewusste, dokumentierte Übergangslösung für unbenutzten Code (siehe
+     MELDUNG_3.md) und keine abschließende Gestaltungsentscheidung. */
+  --card: var(--surface);
+  --card-foreground: var(--foreground);
+  --popover: var(--surface);
+  --popover-foreground: var(--foreground);
+  --primary: var(--brand);
+  --primary-foreground: var(--brand-fg);
+  --secondary: var(--surface-2);
+  --secondary-foreground: var(--foreground);
+  --muted-foreground: var(--muted);
+  --accent: var(--surface-2);
+  --accent-foreground: var(--foreground);
+  --destructive: var(--danger);
+  --destructive-foreground: #ffffff;
+  --input: var(--border);
 }
 
 /* Explizit dunkles Theme (Toggle) */
@@ -50,6 +81,22 @@
   --success: #86efac;   --success-bg: #14532d;
   --warning: #fcd34d;   --warning-bg: #4d3908;
   --danger: #fca5a5;    --danger-bg: #4c1d1d;
+
+  /* AUFTRAG_3: siehe Erklärung im :root-Block oben. */
+  --card: var(--surface);
+  --card-foreground: var(--foreground);
+  --popover: var(--surface);
+  --popover-foreground: var(--foreground);
+  --primary: var(--brand);
+  --primary-foreground: var(--brand-fg);
+  --secondary: var(--surface-2);
+  --secondary-foreground: var(--foreground);
+  --muted-foreground: var(--muted);
+  --accent: var(--surface-2);
+  --accent-foreground: var(--foreground);
+  --destructive: var(--danger);
+  --destructive-foreground: #0b1220;
+  --input: var(--border);
 }
 
 /* Systempräferenz, solange KEIN explizites Theme gesetzt ist */
@@ -69,6 +116,22 @@
     --success: #86efac;   --success-bg: #14532d;
     --warning: #fcd34d;   --warning-bg: #4d3908;
     --danger: #fca5a5;    --danger-bg: #4c1d1d;
+
+    /* AUFTRAG_3: siehe Erklärung im :root-Block oben. */
+    --card: var(--surface);
+    --card-foreground: var(--foreground);
+    --popover: var(--surface);
+    --popover-foreground: var(--foreground);
+    --primary: var(--brand);
+    --primary-foreground: var(--brand-fg);
+    --secondary: var(--surface-2);
+    --secondary-foreground: var(--foreground);
+    --muted-foreground: var(--muted);
+    --accent: var(--surface-2);
+    --accent-foreground: var(--foreground);
+    --destructive: var(--danger);
+    --destructive-foreground: #0b1220;
+    --input: var(--border);
   }
 }
 
@@ -83,6 +146,24 @@
   --color-brand: var(--brand);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* AUFTRAG_3: Tailwind-Utilities ausschließlich für die neuen
+     shadcn/ui-Copy-in-Komponenten; alle Werte kommen aus den Tokens oben. */
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
 }
 
 body {

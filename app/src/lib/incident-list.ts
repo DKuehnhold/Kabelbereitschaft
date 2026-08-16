@@ -37,6 +37,9 @@ export type IncidentListRow = {
   historic_vzg: boolean;
   // AP13: offen = Aufgabe im Status 'open' oder 'in_progress'.
   has_open_task: boolean;
+  // AP15-b: Fehlalarm-Kennzeichnung. Aendern ist ausschliesslich der Rolle
+  // Disponent erlaubt (RLS-Waechter, Migration 0018).
+  is_false_alarm: boolean;
 };
 
 export type IncidentActivity = "all" | "active" | "closed";
@@ -58,6 +61,8 @@ export type IncidentListFilters = {
   activity?: IncidentActivity;
   // AP13: nur Vorgänge mit mindestens einer offenen Aufgabe.
   hasOpenTask?: boolean;
+  // AP15-b: Fehlalarm-Statusfilter. undefined = kein Filter (beide Werte).
+  falseAlarm?: boolean;
 };
 
 export type IncidentListSortField =
@@ -80,6 +85,10 @@ export type IncidentListResult = {
 
 export const INCIDENT_PAGE_SIZES = [50, 100, 250] as const;
 export const INCIDENT_EXPORT_CAP = 5000;
+// AP15-b: Vollmengen-Export-Pfad (separat von der interaktiven UI, die bei
+// INCIDENT_EXPORT_CAP bleibt). Deckt vollstaendige Monats-/Quartalsauszuege ab,
+// ohne die interaktive Exportgrenze zu veraendern.
+export const INCIDENT_FULL_EXPORT_CAP = 20000;
 
 export type IncidentFilterOption = { id: string; label: string };
 export type IncidentListFilterOptions = {

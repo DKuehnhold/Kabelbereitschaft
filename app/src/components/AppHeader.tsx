@@ -17,7 +17,7 @@ export function AppHeader({
         <div className="flex items-center gap-3">
           <Logo height={34} />
           <span className="hidden text-sm text-slate-400 sm:inline">
-            Kabelbereitschaft
+            Bereitschaftsapp HLK
           </span>
         </div>
 

@@ -7,11 +7,11 @@ const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Kabelbereitschaft",
-  description: "Kabelbereitschaft – Erfassung und Dokumentation von Bereitschaftsvorgängen",
+  title: "Bereitschaftsapp HLK",
+  description: "Bereitschaftsapp HLK – Erfassung und Dokumentation von Bereitschaftsvorgängen",
   manifest: "/manifest.webmanifest",
-  applicationName: "Kabelbereitschaft",
-  appleWebApp: { capable: true, statusBarStyle: "default", title: "Kabelbereitschaft" },
+  applicationName: "Bereitschaftsapp HLK",
+  appleWebApp: { capable: true, statusBarStyle: "default", title: "Bereitschaftsapp HLK" },
   icons: {
     icon: "/icons/icon-192.png",
     apple: "/icons/apple-touch-icon.png",

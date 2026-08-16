@@ -19,12 +19,14 @@ import {
   type IncidentListRow,
   type IncidentListSortField,
   type IncidentListFilterOptions,
+  INCIDENT_FULL_EXPORT_CAP,
 } from "@/lib/incident-list";
 import { buildIncidentListQueryString } from "@/lib/incident-list-url";
 import {
   bulkAssignIncidentMonteur,
   bulkUpdateIncidentStatus,
   exportIncidentList,
+  exportIncidentListFull,
 } from "@/lib/incident-list-actions";
 import { buildCsv, CSV_BOM, csvFilename } from "@/lib/csv";
 
@@ -84,6 +86,8 @@ export function OperationalList({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [exporting, setExporting] = useState(false);
   const [exportMsg, setExportMsg] = useState<string | null>(null);
+  const [fullExportOffer, setFullExportOffer] = useState(false);
+  const [fullExporting, setFullExporting] = useState(false);
   // AP13: Massenaktionen
   const [bulkStatus, setBulkStatus] = useState<string>("");
   const [bulkMonteur, setBulkMonteur] = useState<string>("");
@@ -98,6 +102,7 @@ export function OperationalList({
     setBulkMsg(null);
     setBulkError(null);
     setBulkFailed([]);
+    setFullExportOffer(false);
     const qs = buildIncidentListQueryString(q);
     startTransition(() => router.push(qs ? `${pathname}?${qs}` : pathname));
   };
@@ -157,6 +162,12 @@ export function OperationalList({
   if (f.activity && f.activity !== "all") chips.push({ key: "activity", label: `Aktivität: ${f.activity === "active" ? "Aktiv" : "Abgeschlossen"}`, clear: () => updateFilters({ activity: undefined }) });
   if (f.images && f.images !== "all") chips.push({ key: "images", label: f.images === "with" ? "Mit Bildern" : "Ohne Bilder", clear: () => updateFilters({ images: undefined }) });
   if (f.hasOpenTask) chips.push({ key: "task", label: "Hat offene Aufgabe", clear: () => updateFilters({ hasOpenTask: undefined }) });
+  if (f.falseAlarm !== undefined)
+    chips.push({
+      key: "false-alarm",
+      label: `Fehlalarm: ${f.falseAlarm ? "Ja" : "Nein"}`,
+      clear: () => updateFilters({ falseAlarm: undefined }),
+    });
   if (f.customer_id) chips.push({ key: "customer", label: `Kunde: ${nameOf(options.customers, f.customer_id)}`, clear: () => updateFilters({ customer_id: undefined }) });
   if (f.stage_id) chips.push({ key: "stage", label: `Bauabschnitt: ${nameOf(options.stages, f.stage_id)}`, clear: () => updateFilters({ stage_id: undefined, vzg_line_id: undefined }) });
   if (f.vzg_line_id) chips.push({ key: "vzg", label: `VzG: ${nameOf(options.vzgLines, f.vzg_line_id)}`, clear: () => updateFilters({ vzg_line_id: undefined }) });
@@ -173,13 +184,35 @@ export function OperationalList({
   const doExport = async () => {
     setExporting(true);
     setExportMsg(null);
+    setFullExportOffer(false);
     const res = await exportIncidentList(query);
     if (res.error) setExportMsg(res.error);
     else {
       downloadCsv(res.csv, "vorgaenge");
       setExportMsg(res.capped ? `Export auf ${res.count} Datensätze begrenzt.` : `${res.count} Datensätze exportiert.`);
+      setFullExportOffer(res.capped && isStaff);
     }
     setExporting(false);
+  };
+
+  // AP15B/RC1: expliziter Vollmengen-Export-Pfad, nur nach Angebot durch
+  // doExport (interaktiver Export an INCIDENT_EXPORT_CAP abgeschnitten). Die
+  // interaktive Grenze (5000) bleibt davon unberührt.
+  const doFullExport = async () => {
+    setFullExporting(true);
+    setExportMsg(null);
+    const res = await exportIncidentListFull(query);
+    if (res.error) setExportMsg(res.error);
+    else {
+      downloadCsv(res.csv, "vorgaenge_vollmenge");
+      setExportMsg(
+        res.capped
+          ? `Vollmengen-Export auf ${res.count} Datensätze begrenzt.`
+          : `${res.count} Datensätze exportiert (Vollmenge).`,
+      );
+      setFullExportOffer(false);
+    }
+    setFullExporting(false);
   };
   const exportSelection = () => {
     const sel = rows.filter((r) => selected.has(r.id));
@@ -280,6 +313,11 @@ export function OperationalList({
             options={[["all", "Alle"], ["open", "Nur mit offener Aufgabe"]]}
             onChange={(v) => updateFilters({ hasOpenTask: v === "open" ? true : undefined })}
           />
+          <Segmented
+            label="Fehlalarm" value={f.falseAlarm === undefined ? "all" : f.falseAlarm ? "yes" : "no"}
+            options={[["all", "Alle"], ["yes", "Ja"], ["no", "Nein"]]}
+            onChange={(v) => updateFilters({ falseAlarm: v === "all" ? undefined : v === "yes" })}
+          />
           <button type="button" className="btn btn-outline" onClick={() => setAdvanced((v) => !v)}>
             {advanced ? "Weitere Filter ausblenden" : "Weitere Filter"}
           </button>
@@ -345,6 +383,11 @@ export function OperationalList({
           </div>
         ) : null}
 
+        {fullExportOffer ? (
+          <button type="button" className="btn btn-outline" onClick={() => void doFullExport()} disabled={fullExporting}>
+            {fullExporting ? "Vollmengen-Export…" : `Vollmengen-Export starten (bis ${INCIDENT_FULL_EXPORT_CAP.toLocaleString("de-DE")} Datensätze)`}
+          </button>
+        ) : null}
         {exportMsg ? <p className="text-xs text-muted">{exportMsg}</p> : null}
       </div>
 
