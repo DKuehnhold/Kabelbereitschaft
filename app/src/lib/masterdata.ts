@@ -68,6 +68,8 @@ export type ContactRow = {
   customer_name: string;
   name: string;
   function: string | null;
+  function_id: string | null;
+  function_label: string | null;
   email: string | null;
   is_active: boolean;
   phones: PhoneRow[];
@@ -96,6 +98,28 @@ export type CableTypeRow = {
   code: string;
   name: string;
   sort_order: number;
+  is_active: boolean;
+};
+
+// AUFTRAG_6: die drei pflegbaren Kataloge Gewerk, Funktion (des
+// Anrufenden/Ansprechpartners) und Objektart. Tabellenform bewusst nur
+// id/label/is_active (0019_hlk_katalog_stammdaten.sql, Abschnitte 1-3) - kein
+// code, kein sort_order wie bei CableTypeRow.
+export type TradeRow = {
+  id: string;
+  label: string;
+  is_active: boolean;
+};
+
+export type ContactFunctionRow = {
+  id: string;
+  label: string;
+  is_active: boolean;
+};
+
+export type ObjectTypeRow = {
+  id: string;
+  label: string;
   is_active: boolean;
 };
 
@@ -245,12 +269,14 @@ export async function listVzgLines(): Promise<VzgLineRow[]> {
 // und der Spaltenname muss exakt `function` bleiben, weil der Mapper darauf
 // zugreift.
 const LIST_CONTACTS_SQL = `
-  select c.id, c.customer_id, c.name, c."function", c.email, c.is_active,
+  select c.id, c.customer_id, c.name, c."function", c.function_id, c.email, c.is_active,
          case when cu.id is null then null else json_build_object('name', cu.name) end as customer,
+         case when cf.id is null then null else json_build_object('label', cf.label) end as contact_function,
          ph.phones,
          cs.stages
     from public.contacts c
     left join public.customers cu on cu.id = c.customer_id
+    left join public.contact_functions cf on cf.id = c.function_id
     left join lateral (
       select coalesce(
                json_agg(
@@ -295,12 +321,15 @@ export async function listContacts(): Promise<ContactRow[]> {
       const stage_ids = ((c.stages as Record<string, unknown>[]) ?? []).map(
         (s) => s.construction_stage_id as string,
       );
+      const cfn = c.contact_function as { label?: string } | null;
       return {
         id: c.id as string,
         customer_id: c.customer_id as string,
         customer_name: cust?.name ?? "—",
         name: c.name as string,
         function: (c.function as string | null) ?? null,
+        function_id: (c.function_id as string | null) ?? null,
+        function_label: cfn?.label ?? null,
         email: (c.email as string | null) ?? null,
         is_active: c.is_active as boolean,
         phones,
@@ -414,6 +443,76 @@ export async function listCableTypes(): Promise<CableTypeRow[]> {
     const result = await client.query<CableTypeRow>(LIST_CABLE_TYPES_SQL);
     return result.rows;
   });
+}
+
+// ---------------------------------------------------------------------
+// AUFTRAG_6 – Gewerke (public.trades)
+// ---------------------------------------------------------------------
+const LIST_TRADES_SQL = `
+  select id, label, is_active
+    from public.trades
+   order by label asc`;
+
+export async function listTrades(): Promise<TradeRow[]> {
+  const session = await getSessionProfile();
+  if (!session) return [];
+  return withUserTransaction(session.userId, async (client) => {
+    const result = await client.query<TradeRow>(LIST_TRADES_SQL);
+    return result.rows;
+  });
+}
+
+export async function getActiveTradeOptions(): Promise<StageOption[]> {
+  return (await listTrades())
+    .filter((t) => t.is_active)
+    .map((t) => ({ id: t.id, label: t.label }));
+}
+
+// ---------------------------------------------------------------------
+// AUFTRAG_6 – Funktionen des Anrufenden/Ansprechpartners
+// (public.contact_functions)
+// ---------------------------------------------------------------------
+const LIST_CONTACT_FUNCTIONS_SQL = `
+  select id, label, is_active
+    from public.contact_functions
+   order by label asc`;
+
+export async function listContactFunctions(): Promise<ContactFunctionRow[]> {
+  const session = await getSessionProfile();
+  if (!session) return [];
+  return withUserTransaction(session.userId, async (client) => {
+    const result = await client.query<ContactFunctionRow>(LIST_CONTACT_FUNCTIONS_SQL);
+    return result.rows;
+  });
+}
+
+export async function getActiveContactFunctionOptions(): Promise<StageOption[]> {
+  return (await listContactFunctions())
+    .filter((f) => f.is_active)
+    .map((f) => ({ id: f.id, label: f.label }));
+}
+
+// ---------------------------------------------------------------------
+// AUFTRAG_6 – Objektarten (Anlagen, inkl. LST-Elemente) (public.object_types)
+// ---------------------------------------------------------------------
+const LIST_OBJECT_TYPES_SQL = `
+  select id, label, is_active
+    from public.object_types
+   order by label asc`;
+
+export async function listObjectTypes(): Promise<ObjectTypeRow[]> {
+  const session = await getSessionProfile();
+  if (!session) return [];
+  return withUserTransaction(session.userId, async (client) => {
+    const result = await client.query<ObjectTypeRow>(LIST_OBJECT_TYPES_SQL);
+    return result.rows;
+  });
+}
+
+export async function getActiveObjectTypeOptions(): Promise<StageOption[]> {
+  return (await listObjectTypes())
+    .filter((o) => o.is_active)
+    .map((o) => ({ id: o.id, label: o.label }));
 }
 
 // ---------------------------------------------------------------------

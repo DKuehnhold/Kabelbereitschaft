@@ -118,6 +118,9 @@ function revalidateMaster() {
     "/stammdaten/kabelarten",
     "/stammdaten/bereitschaftsnummern",
     "/stammdaten/einstellungen",
+    "/stammdaten/gewerke",
+    "/stammdaten/funktionen",
+    "/stammdaten/objektarten",
   ]) {
     revalidatePath(p);
   }
@@ -402,11 +405,17 @@ export async function saveContact(_prev: FormState, fd: FormData): Promise<FormS
   if (!name) return { ok: false, error: "Name ist erforderlich." };
   if (id && !isUuid(id)) return { ok: false, error: SAVE_FAILED };
   if (!isUuid(customer_id)) return { ok: false, error: SAVE_FAILED };
+  // AUFTRAG_6: optionale Verknuepfung auf den Funktionen-Katalog
+  // (public.contact_functions). Erforderliche Kennung fail-closed: ein nicht
+  // kanonischer Wert gelangt nicht ins SQL.
+  const functionId = optionalUuid(fd, "function_id");
+  if (functionId === "invalid") return { ok: false, error: SAVE_FAILED };
 
   const payload = {
     customer_id,
     name,
     function: strOrNull(fd, "function"),
+    function_id: functionId,
     email: strOrNull(fd, "email"),
     is_active: str(fd, "is_active") !== "false",
   };
@@ -429,18 +438,33 @@ export async function saveContact(_prev: FormState, fd: FormData): Promise<FormS
       if (id) {
         await client.query(
           `update public.contacts
-              set customer_id = $1::uuid, name = $2, "function" = $3, email = $4,
-                  is_active = $5
-            where id = $6::uuid`,
-          [payload.customer_id, payload.name, payload.function, payload.email, payload.is_active, id],
+              set customer_id = $1::uuid, name = $2, "function" = $3, function_id = $4::uuid,
+                  email = $5, is_active = $6
+            where id = $7::uuid`,
+          [
+            payload.customer_id,
+            payload.name,
+            payload.function,
+            payload.function_id,
+            payload.email,
+            payload.is_active,
+            id,
+          ],
         );
         contactId = id;
       } else {
         const inserted = await client.query<{ id: string }>(
-          `insert into public.contacts (customer_id, name, "function", email, is_active)
-           values ($1::uuid, $2, $3, $4, $5)
+          `insert into public.contacts (customer_id, name, "function", function_id, email, is_active)
+           values ($1::uuid, $2, $3, $4::uuid, $5, $6)
            returning id`,
-          [payload.customer_id, payload.name, payload.function, payload.email, payload.is_active],
+          [
+            payload.customer_id,
+            payload.name,
+            payload.function,
+            payload.function_id,
+            payload.email,
+            payload.is_active,
+          ],
         );
         const newId = inserted.rows[0]?.id;
         // Kann nur bei einem Fehlschlag von "returning" eintreten; der Wurf
@@ -746,6 +770,121 @@ export async function saveCableType(_prev: FormState, fd: FormData): Promise<For
 
 export async function setCableTypeActive(fd: FormData): Promise<void> {
   await setActive(fd, `update public.cable_types set is_active = $1 where id = $2::uuid`);
+}
+
+// =====================================================================
+// AUFTRAG_6 – Gewerke (public.trades)
+// =====================================================================
+export async function saveTrade(_prev: FormState, fd: FormData): Promise<FormState> {
+  const session = await requireStaff();
+  if (!session) return { ok: false, error: STAFF_ONLY };
+  const id = strOrNull(fd, "id");
+  const label = str(fd, "label");
+  if (!label) return { ok: false, error: "Bezeichnung ist erforderlich." };
+  if (id && !isUuid(id)) return { ok: false, error: SAVE_FAILED };
+  const payload = { label, is_active: str(fd, "is_active") !== "false" };
+  try {
+    await withUserTransaction(session.userId, async (client) => {
+      if (id) {
+        await client.query(
+          `update public.trades set label = $1, is_active = $2 where id = $3::uuid`,
+          [payload.label, payload.is_active, id],
+        );
+      } else {
+        await client.query(
+          `insert into public.trades (label, is_active) values ($1, $2)`,
+          [payload.label, payload.is_active],
+        );
+      }
+    });
+  } catch (error) {
+    if (isPgError(error, PG_UNIQUE_VIOLATION))
+      return { ok: false, error: "Dieses Gewerk ist bereits vergeben." };
+    return saveErr(error);
+  }
+  revalidateMaster();
+  return { ok: true, error: null };
+}
+
+export async function setTradeActive(fd: FormData): Promise<void> {
+  await setActive(fd, `update public.trades set is_active = $1 where id = $2::uuid`);
+}
+
+// =====================================================================
+// AUFTRAG_6 – Funktionen des Anrufenden/Ansprechpartners
+// (public.contact_functions)
+// =====================================================================
+export async function saveContactFunction(_prev: FormState, fd: FormData): Promise<FormState> {
+  const session = await requireStaff();
+  if (!session) return { ok: false, error: STAFF_ONLY };
+  const id = strOrNull(fd, "id");
+  const label = str(fd, "label");
+  if (!label) return { ok: false, error: "Bezeichnung ist erforderlich." };
+  if (id && !isUuid(id)) return { ok: false, error: SAVE_FAILED };
+  const payload = { label, is_active: str(fd, "is_active") !== "false" };
+  try {
+    await withUserTransaction(session.userId, async (client) => {
+      if (id) {
+        await client.query(
+          `update public.contact_functions set label = $1, is_active = $2 where id = $3::uuid`,
+          [payload.label, payload.is_active, id],
+        );
+      } else {
+        await client.query(
+          `insert into public.contact_functions (label, is_active) values ($1, $2)`,
+          [payload.label, payload.is_active],
+        );
+      }
+    });
+  } catch (error) {
+    if (isPgError(error, PG_UNIQUE_VIOLATION))
+      return { ok: false, error: "Diese Funktion ist bereits vergeben." };
+    return saveErr(error);
+  }
+  revalidateMaster();
+  return { ok: true, error: null };
+}
+
+export async function setContactFunctionActive(fd: FormData): Promise<void> {
+  await setActive(fd, `update public.contact_functions set is_active = $1 where id = $2::uuid`);
+}
+
+// =====================================================================
+// AUFTRAG_6 – Objektarten (Anlagen, inkl. LST-Elemente) (public.object_types)
+// =====================================================================
+export async function saveObjectType(_prev: FormState, fd: FormData): Promise<FormState> {
+  const session = await requireStaff();
+  if (!session) return { ok: false, error: STAFF_ONLY };
+  const id = strOrNull(fd, "id");
+  const label = str(fd, "label");
+  if (!label) return { ok: false, error: "Bezeichnung ist erforderlich." };
+  if (id && !isUuid(id)) return { ok: false, error: SAVE_FAILED };
+  const payload = { label, is_active: str(fd, "is_active") !== "false" };
+  try {
+    await withUserTransaction(session.userId, async (client) => {
+      if (id) {
+        await client.query(
+          `update public.object_types set label = $1, is_active = $2 where id = $3::uuid`,
+          [payload.label, payload.is_active, id],
+        );
+      } else {
+        await client.query(
+          `insert into public.object_types (label, is_active) values ($1, $2)`,
+          [payload.label, payload.is_active],
+        );
+      }
+    });
+  } catch (error) {
+    if (isPgError(error, PG_UNIQUE_VIOLATION))
+      return { ok: false, error: "Diese Objektart ist bereits vergeben." };
+    return saveErr(error);
+  }
+  revalidateMaster();
+  return { ok: true, error: null };
+}
+
+export async function setObjectTypeActive(fd: FormData): Promise<void> {
+  await setActive(fd, `update public.object_types set is_active = $1 where id = $2::uuid`);
 }
 
 // =====================================================================

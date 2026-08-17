@@ -10,8 +10,10 @@
 # insert auf public.customers besitzt - genau diese Rechte erteilt 0015. Liefe
 # 0015 vorher, wuerde D18 scheitern. Es folgen die Bildrechte (0016) mit Smoke
 # 22 und die administrative Benutzerverwaltung (0017) mit Smoke 23, danach die
-# Fehlalarm-Kennzeichnung (0018) mit Smoke 25; die Kette reicht damit von 0001
-# bis 0018. run_ap12_local.ps1 bleibt als historischer lokaler
+# Fehlalarm-Kennzeichnung (0018) mit Smoke 25 und die pflegbaren
+# Stammdaten-Kataloge Gewerk/Funktion/Objektart (0019, AUFTRAG_6) mit Smoke 26;
+# die Kette reicht damit von 0001 bis 0019. run_ap12_local.ps1 bleibt als
+# historischer lokaler
 # AP12/AP13-Nachweis unveraendert; run_ap14b_local.ps1 ist das Windows-
 # Gegenstueck zu dieser Datei.
 #
@@ -29,6 +31,26 @@
 # und den per \ir erneut eingebundenen Migrationslauf eingeschlossen - ebenfalls
 # vollstaendig per rollback zurueck. Die Migration steht unmittelbar vor ihrem
 # Smoke; das ist dieselbe Konvention wie bei 0015/21, 0016/22 und 0017/23.
+#
+# Neu aus AUFTRAG_6: HINTER 25 stehen die Migration 0019 (pflegbare
+# Stammdaten-Kataloge Gewerk/Funktion/Objektart sowie contacts.function_id)
+# und ihr Smoke 26_hlk_kataloge.sql (Fallkennung X). Dieselbe Konvention wie
+# bei 0015/21, 0016/22, 0017/23 und 0018/25: die Migration steht unmittelbar
+# vor ihrem Smoke, und dieser nimmt seine eigene Wirkungsphase - Fixtures und
+# den per \ir erneut eingebundenen Migrationslauf eingeschlossen - vollstaendig
+# per rollback zurueck.
+#
+# Neu aus AUFTRAG_7: HINTER 26 stehen die Migration 0020 (Anrufdaten an der
+# Meldung - reported_at, caller_contact_id, trade_id - sowie das "In
+# Klaerung"-Kennzeichen is_in_clarification) und ihr Smoke
+# 27_hlk_anrufdaten.sql (Fallkennung Y). Dieselbe Konvention wie bei 0015/21,
+# 0016/22, 0017/23, 0018/25 und 0019/26: die Migration steht unmittelbar vor
+# ihrem Smoke, der seine eigene Wirkungsphase - Fixtures und den per \ir
+# erneut eingebundenen Migrationslauf eingeschlossen - vollstaendig per
+# rollback zuruecknimmt. Kein zusaetzlicher Node-Lauf: AUFTRAG_7 fuehrt keine
+# neue Integrationssuite ein, der SQL-Smoke deckt Spaltenzustand, Idempotenz,
+# FK-Verhalten, die erweiterte RPC create_incident_ap12 und die View-Spalten
+# vollstaendig ab.
 #
 # Seit AP14/B laufen hier NICHT mehr ausschliesslich SQL-Dateien: nach der
 # SQL-Kette koennen optional Node-Suiten mit echtem Anwendungscode gegen
@@ -182,6 +204,19 @@ FILES=(
   # Datenbank laeuft.
   "${MIGRATIONS}/0018_ap15b_incident_metrics.sql"
   "${TEST_ROOT}/25_ap15b_incident_metrics.sql"
+  # AUFTRAG_6: pflegbare Stammdaten-Kataloge Gewerk/Funktion/Objektart. Die
+  # Migration 0019 steht unmittelbar VOR ihrem Smoke 26 - dieselbe Konvention
+  # wie bei 0015/21, 0016/22, 0017/23 und 0018/25. 0019 ist rein additiv
+  # (drei neue Tabellen, eine neue nullable Spalte auf contacts) und setzt
+  # keine Zusage einer vorhergehenden Datei herab.
+  "${MIGRATIONS}/0019_hlk_katalog_stammdaten.sql"
+  "${TEST_ROOT}/26_hlk_kataloge.sql"
+  # AUFTRAG_7: Anrufdaten an der Meldung (reported_at, caller_contact_id,
+  # trade_id) und das "In Klaerung"-Kennzeichen (is_in_clarification).
+  # Migration 0020 steht unmittelbar VOR ihrem Smoke 27 - dieselbe Konvention
+  # wie bei 0015/21, 0016/22, 0017/23, 0018/25 und 0019/26.
+  "${MIGRATIONS}/0020_hlk_meldung_anrufdaten.sql"
+  "${TEST_ROOT}/27_hlk_anrufdaten.sql"
 )
 
 for f in "${FILES[@]}"; do

@@ -1,8 +1,9 @@
 import { requireSession } from "@/lib/auth";
 import { NoAccess } from "@/components/Placeholder";
 import { PageHeader } from "@/components/ui/primitives";
+import { Button } from "@/components/ui/shadcn/button";
 import { getIncidentFormOptions } from "@/lib/incidents";
-import { NewIncidentForm } from "@/components/incidents/NewIncidentForm";
+import { NewIncidentForm, NEW_INCIDENT_FORM_ID } from "@/components/incidents/NewIncidentForm";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +20,20 @@ export default async function NeuerVorgangPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Vorgang anlegen" subtitle="Neue Vorgänge auf Basis der Stammdaten (AP9)." />
+      <PageHeader
+        title="Neue Meldung"
+        subtitle="Neue Vorgänge auf Basis der Stammdaten (AP9)."
+        actions={
+          // AUFTRAG_5, Punkt 1: Primäraktion zusätzlich oben rechts, nur ab md
+          // sichtbar (auf Mobil übernimmt die unten fixierte Leiste in
+          // NewIncidentForm die alleinige Primäraktion). Bindung an das <form>
+          // in NewIncidentForm über das native HTML5-`form`-Attribut (keine
+          // Client-Interaktivität in dieser Server-Komponente nötig).
+          <Button key="submit-top" type="submit" form={NEW_INCIDENT_FORM_ID} className="hidden h-11 px-6 md:inline-flex">
+            Meldung anlegen
+          </Button>
+        }
+      />
       {missing.length > 0 ? (
         <div
           role="alert"

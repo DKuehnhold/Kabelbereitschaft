@@ -14,12 +14,13 @@ const initial: FormState = { ok: false, error: null };
 type PhoneEntry = { phone: string; phone_type: PhoneType };
 
 function ContactForm({
-  row, onSaved, customers, stageOptions,
+  row, onSaved, customers, stageOptions, functionOptions,
 }: {
   row: ContactRow | null;
   onSaved: () => void;
   customers: CustomerRow[];
   stageOptions: StageOption[];
+  functionOptions: StageOption[];
 }) {
   const [state, action, pending] = useActionState(saveContact, initial);
   const [phones, setPhones] = useState<PhoneEntry[]>(
@@ -63,6 +64,16 @@ function ContactForm({
         <div>
           <label className={labelCls} htmlFor="k_email">E-Mail</label>
           <input id="k_email" name="email" type="email" defaultValue={row?.email ?? ""} className="input" />
+        </div>
+        <div>
+          {/* AUFTRAG_6: optionale Auswahl aus dem pflegbaren Funktionen-Katalog
+              (public.contact_functions), ergaenzt das bestehende Freitextfeld
+              "Funktion" oben und ersetzt es nicht. */}
+          <label className={labelCls} htmlFor="k_function_id">Funktion (Katalog)</label>
+          <select id="k_function_id" name="function_id" defaultValue={row?.function_id ?? ""} className="input">
+            <option value="">Keine Auswahl</option>
+            {functionOptions.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
+          </select>
         </div>
       </div>
 
@@ -123,8 +134,13 @@ function ContactForm({
 }
 
 export function ContactsClient({
-  contacts, customers, stageOptions,
-}: { contacts: ContactRow[]; customers: CustomerRow[]; stageOptions: StageOption[] }) {
+  contacts, customers, stageOptions, functionOptions,
+}: {
+  contacts: ContactRow[];
+  customers: CustomerRow[];
+  stageOptions: StageOption[];
+  functionOptions: StageOption[];
+}) {
   const [q, setQ] = useState("");
   const [showInactive, setShowInactive] = useState(false);
   const [open, setOpen] = useState(false);
@@ -183,7 +199,13 @@ export function ContactsClient({
       {rows.length === 0 ? <EmptyState text="Keine Ansprechpartner." /> : null}
 
       <MasterModal open={open} onClose={() => setOpen(false)} title={edit ? "Ansprechpartner bearbeiten" : "Neuer Ansprechpartner"}>
-        <ContactForm row={edit} onSaved={() => setOpen(false)} customers={customers} stageOptions={stageOptions} />
+        <ContactForm
+          row={edit}
+          onSaved={() => setOpen(false)}
+          customers={customers}
+          stageOptions={stageOptions}
+          functionOptions={functionOptions}
+        />
       </MasterModal>
     </div>
   );

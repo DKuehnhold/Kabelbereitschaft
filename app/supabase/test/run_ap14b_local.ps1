@@ -7,6 +7,10 @@
 #   ->  Smoke 24 (AP15-1, Statuskennzahlen des Dashboards, Fallkennung K)
 #   ->  migrations/0018  ->  Smoke 25 (AP15-b, Fehlalarm-Kennzeichnung,
 #       Fallkennung W)
+#   ->  migrations/0019  ->  Smoke 26 (AUFTRAG_6, pflegbare
+#       Stammdaten-Kataloge Gewerk/Funktion/Objektart, Fallkennung X)
+#   ->  migrations/0020  ->  Smoke 27 (AUFTRAG_7, Anrufdaten an der Meldung
+#       und "In Klaerung"-Kennzeichen, Fallkennung Y)
 #   ->  Integrationstests des Anwendungscodes (test/integration)
 #
 # Smoke 24 braucht keine eigene Migration und bleibt der LETZTE ABSOLUT
@@ -31,6 +35,28 @@
 # Vollmengen-Export (src/lib/incident-list-actions.ts). Er steht als LETZTER
 # Node-Lauf, weil seine Vollmengenfixtures den Lauf ueberdauern (Begruendung an
 # der Aufrufstelle).
+#
+# Aus AUFTRAG_6 kommen HINTER 25 die Migration 0019 (pflegbare
+# Stammdaten-Kataloge Gewerk/Funktion/Objektart sowie contacts.function_id)
+# und ihr Smoke 26_hlk_kataloge.sql (Fallkennung X) hinzu. Dieselbe Konvention
+# wie bei 0015/21, 0016/22, 0017/23 und 0018/25: die Migration steht
+# unmittelbar vor ihrem Smoke, und dieser nimmt seine eigene Wirkungsphase -
+# Fixtures und den per \ir erneut eingebundenen Lauf von 0019 eingeschlossen -
+# vollstaendig per rollback zurueck. Kein zusaetzlicher Node-Lauf: AUFTRAG_6
+# fuehrt keine neue Integrationssuite ein, der SQL-Smoke deckt Idempotenz,
+# Seeds, Rollenmatrix und FK-Verhalten vollstaendig ab.
+#
+# Aus AUFTRAG_7 kommen HINTER 26 die Migration 0020 (Anrufdaten an der
+# Meldung - reported_at, caller_contact_id, trade_id - sowie das "In
+# Klaerung"-Kennzeichen is_in_clarification) und ihr Smoke
+# 27_hlk_anrufdaten.sql (Fallkennung Y) hinzu. Dieselbe Konvention wie bei
+# 0015/21, 0016/22, 0017/23, 0018/25 und 0019/26: die Migration steht
+# unmittelbar vor ihrem Smoke, und dieser nimmt seine eigene Wirkungsphase -
+# Fixtures und den per \ir erneut eingebundenen Lauf von 0020 eingeschlossen -
+# vollstaendig per rollback zurueck. Kein zusaetzlicher Node-Lauf: AUFTRAG_7
+# fuehrt keine neue Integrationssuite ein, der SQL-Smoke deckt Spaltenzustand,
+# Idempotenz, FK-Verhalten, die erweiterte RPC create_incident_ap12 und die
+# View-Spalten vollstaendig ab.
 #
 # Die bash-Fassung run_db_tests.sh bleibt der Weg fuer die CI; diese Datei ist
 # das Windows-Gegenstueck und ergaenzt run_ap12_local.ps1 (das bewusst bei 0011
@@ -259,7 +285,25 @@ $files = @(
   # Wirkung INNERHALB von 25 wird zurueckgenommen. Genau darauf beruht der
   # sechste Integrationslauf, der danach in derselben Datenbank laeuft.
   (Join-Path $migrationRoot "0018_ap15b_incident_metrics.sql"),
-  (Join-Path $testRoot "25_ap15b_incident_metrics.sql")
+  (Join-Path $testRoot "25_ap15b_incident_metrics.sql"),
+  # AUFTRAG_6: pflegbare Stammdaten-Kataloge Gewerk/Funktion/Objektart sowie
+  # contacts.function_id (Migration 0019, Smoke 26, Fallkennung X). Dieselbe
+  # Konvention wie bei 0015/21, 0016/22, 0017/23 und 0018/25: die Migration
+  # steht unmittelbar vor ihrem Smoke, der seine eigene Wirkungsphase -
+  # Fixtures und den per \ir erneut eingebundenen Lauf von 0019 eingeschlossen -
+  # am Ende vollstaendig per rollback zuruecknimmt. Der dauerhafte Seed-Zustand
+  # der drei Kataloge (7/3/2 Startwerte) bleibt bestehen.
+  (Join-Path $migrationRoot "0019_hlk_katalog_stammdaten.sql"),
+  (Join-Path $testRoot "26_hlk_kataloge.sql"),
+  # AUFTRAG_7: Anrufdaten an der Meldung (reported_at, caller_contact_id,
+  # trade_id) und das "In Klaerung"-Kennzeichen (Migration 0020, Smoke 27,
+  # Fallkennung Y). Dieselbe Konvention wie bei 0015/21, 0016/22, 0017/23,
+  # 0018/25 und 0019/26: die Migration steht unmittelbar vor ihrem Smoke, der
+  # seine eigene Wirkungsphase - Fixtures und den per \ir erneut
+  # eingebundenen Lauf von 0020 eingeschlossen - am Ende vollstaendig per
+  # rollback zuruecknimmt.
+  (Join-Path $migrationRoot "0020_hlk_meldung_anrufdaten.sql"),
+  (Join-Path $testRoot "27_hlk_anrufdaten.sql")
 )
 foreach ($file in $files) {
   if (-not (Test-Path -LiteralPath $file)) { throw "Testdatei fehlt: $file" }
@@ -906,7 +950,7 @@ try {
   }
 
   Write-Host ""
-  Write-Host "--- AP14/B-, AP15- und AP15-b-Pruefungen aus 19_ap14b_platform.sql, 19a_ap14b_grant_reset.sql, 20_ap14b_data.sql, 21_ap14b_masterdata_inventory.sql, 22_ap14b_images.sql, 23_ap14b_admin_users.sql, 24_ap15_dashboard_metrics.sql und 25_ap15b_incident_metrics.sql ---"
+  Write-Host "--- AP14/B-, AP15-, AP15-b-, AUFTRAG_6- und AUFTRAG_7-Pruefungen aus 19_ap14b_platform.sql, 19a_ap14b_grant_reset.sql, 20_ap14b_data.sql, 21_ap14b_masterdata_inventory.sql, 22_ap14b_images.sql, 23_ap14b_admin_users.sql, 24_ap15_dashboard_metrics.sql, 25_ap15b_incident_metrics.sql, 26_hlk_kataloge.sql und 27_hlk_anrufdaten.sql ---"
   # Die Ueberschrift nennt Smoke 21 ausdruecklich mit. Er benutzt aber eigene
   # Fallpraefixe (M fuer Stammdaten, N fuer Inventar) und wuerde vom bisherigen
   # Muster "SMOKE [PRD]\d+" nicht erfasst - der Auszug waere irrefuehrend, weil
@@ -951,7 +995,23 @@ try {
       # festgehalten ist. "SMOKE W\S+" erfasst jede Fallkennung dieses Smokes;
       # die Einschraenkung auf die Datei steht in der ersten Bedingung dieser
       # Alternative.
-      ($_ -match "25_ap15b_incident_metrics" -and $_ -match "SMOKE W\S+")
+      ($_ -match "25_ap15b_incident_metrics" -and $_ -match "SMOKE W\S+") -or
+      # Smoke 26 (AUFTRAG_6) benutzt die Fallkennung X und kennt zusaetzlich
+      # "SMOKE X-FIXTURES" und "SMOKE X-ENDE". Ohne diese siebte Alternative
+      # waere der gesamte Nachweis der pflegbaren Stammdaten-Kataloge
+      # Gewerk/Funktion/Objektart im Konsolenauszug unsichtbar - dieselbe
+      # Lehre wie in den Zeilen darueber. "SMOKE X\S+" erfasst jede
+      # Fallkennung dieses Smokes; die Einschraenkung auf die Datei steht in
+      # der ersten Bedingung dieser Alternative.
+      ($_ -match "26_hlk_kataloge" -and $_ -match "SMOKE X\S+") -or
+      # Smoke 27 (AUFTRAG_7) benutzt die Fallkennung Y und kennt zusaetzlich
+      # "SMOKE Y-FIXTURES" und "SMOKE Y-ENDE". Ohne diese achte Alternative
+      # waere der gesamte Nachweis der Anrufdaten/des "In Klaerung"-
+      # Kennzeichens im Konsolenauszug unsichtbar - dieselbe Lehre wie in den
+      # Zeilen darueber. "SMOKE Y\S+" erfasst jede Fallkennung dieses
+      # Smokes; die Einschraenkung auf die Datei steht in der ersten
+      # Bedingung dieser Alternative.
+      ($_ -match "27_hlk_anrufdaten" -and $_ -match "SMOKE Y\S+")
     } |
     ForEach-Object { Write-Host (($_ -split "NOTICE:\s+")[-1]) }
 

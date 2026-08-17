@@ -152,6 +152,14 @@ export type Incident = {
   closing_note: string | null;
   closed_at: string | null;
   closed_by: string | null;
+  // AUFTRAG_7 (Migration 0020): Anrufdaten an der Meldung und das "In
+  // Klaerung"-Kennzeichen. "Annahme" bleibt ausdruecklich created_at/
+  // created_by (AuditCols unten) - es gibt keine Spalten accepted_at/
+  // accepted_by (Entscheidung Dennis, AUFTRAG_7.md).
+  reported_at: string | null;
+  caller_contact_id: string | null;
+  trade_id: string | null;
+  is_in_clarification: boolean;
 } & AuditCols;
 
 export type IncidentAssignment = {
@@ -312,6 +320,10 @@ export type IncidentListView = {
   // AP13 additiv: offen = Aufgabe im Status 'open' oder 'in_progress'.
   has_open_task: boolean;
   is_false_alarm: boolean;
+  // AUFTRAG_7 (Migration 0020): additiv ans Ende angehaengt.
+  is_in_clarification: boolean;
+  trade_id: string | null;
+  trade_label: string | null;
 };
 
 // =====================================================================
@@ -494,6 +506,12 @@ export type CreateIncidentAp12Args = Omit<CreateIncidentAp10Args, "p_cable_type_
   p_contact_id: string | null;
   p_contact_phone_number_id: string | null;
   p_cable_positions: IncidentCablePositionInput[];
+  // AUFTRAG_7 (Migration 0020): additive, nachgestellte Parameter mit
+  // Default null - bestehende Aufrufer mit nur 21 Argumenten bleiben
+  // lauffaehig (siehe Migration 0020, Abschnitt 5).
+  p_reported_at?: string | null;
+  p_caller_contact_id?: string | null;
+  p_trade_id?: string | null;
 };
 export type UpdateIncidentAp12Args = { p_id: string } & CreateIncidentAp12Args;
 

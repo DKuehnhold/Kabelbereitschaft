@@ -1284,6 +1284,22 @@ entscheidungsfrei lt. Entscheidung Dennis).
   (d) **CSV-Export: beide Exporte bleiben, Rollen Admin + Disponent** — gefilterter Export
   Obergrenze 5.000, Vollmengen-Export 20.000; `04-UI-UX/LISTENKONZEPT.md` und
   `01-Anforderungen/ROLLEN_UND_RECHTE.md` werden entsprechend aktualisiert (Doku-Scheibe).
+- **Neuer bestätigter Referenzstand (2026-08-16): `986f891` auf `main`, CI vollständig grün.**
+  Dennis hat den gesamten AP15-b-/GUI-Arbeitsbaum selbst committet und gepusht — drei Commits:
+  `41cf12e` („feat: AP15-b Fehlalarm/Export, shadcn-Fundament, Branding Bereitschaftsapp HLK"),
+  `1671c2e` („fix(ci): test:unit ohne --test-isolation", Node-22-Kompatibilität — die Option
+  existiert erst ab Node 24 und stammte aus einem lokalen Node-24-Lauf; in der Node-22-Sandbox
+  reproduziert) und `986f891` („test(e2e): Manifestname Bereitschaftsapp HLK"). Der CI-Lauf zu
+  `986f891` ist mit allen vier Jobs (verify, database, container, objectstore) **grün** — durch
+  Dennis von der Actions-Seite berichtet, von Claude nicht selbst abgerufen. Damit sind erstmals
+  CI-bestätigt: **Migration 0018** samt Smoke 25 und sechster Integrationssuite, das
+  shadcn-Fundament, das Branding und die F10-Allowlist. Der frühere Referenzstand `9aaebdf`/
+  `45dfcb3` ist Vorfahr und überholt.
+  **Review-Lehre aus dem roten Zwischenlauf:** Branding-/UI-Fundstellenlisten müssen neben
+  `src/` auch `e2e/` (und `test/`) umfassen — `e2e/public.spec.ts` prüfte den Manifestnamen und
+  war in AUFTRAG_4 nicht enthalten. Außerdem gehört bei package.json-Skriptänderungen künftig
+  `npm run test:unit` (nicht nur `node --test` direkt) in die Prüfkette, damit Node-Versions-
+  abhängige Optionen auffallen.
 - **Neues Anforderungsthema:** Pflegeformular für die Disposition zur **Metadaten-Pflege**.
   Fachliche Grundlage ist eine Excel-Datei von Dennis, die **noch nicht im Vault liegt**
   (Stand 2026-08-16 keine xlsx/csv im Vault gefunden); Anforderungsaufnahme startet, sobald die

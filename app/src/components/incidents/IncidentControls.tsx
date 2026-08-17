@@ -4,6 +4,7 @@ import {
   deactivateAssignment,
   addNote,
   setFalseAlarm,
+  setInClarification,
 } from "@/lib/incident-actions";
 import { AssignMonteurForm } from "@/components/incidents/AssignMonteurForm";
 import {
@@ -69,6 +70,19 @@ export function IncidentControls({
             </button>
           </form>
         ) : null}
+        {/* AUFTRAG_8: „In Klärung“ — analog zum Fehlalarm-Umschalter oben, aber
+            OHNE Rollen-Sichtbarkeitsbeschränkung (Entscheidung Dennis): die
+            RLS-Policy entscheidet, wer die Zeile ändern darf. */}
+        <form action={setInClarification} className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
+          <input type="hidden" name="id" value={incident.id} />
+          <input type="hidden" name="value" value={incident.is_in_clarification ? "0" : "1"} />
+          <span className="text-sm text-slate-700">
+            In Klärung: {incident.is_in_clarification ? "Ja" : "Nein"}
+          </span>
+          <button type="submit" className={btn}>
+            {incident.is_in_clarification ? "„In Klärung“-Kennzeichnung aufheben" : "Als „In Klärung“ kennzeichnen"}
+          </button>
+        </form>
       </div>
 
       {/* Zustandsbewertung */}

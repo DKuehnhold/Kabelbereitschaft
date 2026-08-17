@@ -33,9 +33,9 @@ export default async function VorgaengePage({
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Vorgänge"
+        title="Meldungen"
         subtitle="Operative Arbeitsliste"
-        actions={<Link href="/vorgaenge/neu" className="btn btn-primary">+ Vorgang anlegen</Link>}
+        actions={<Link href="/vorgaenge/neu" className="btn btn-primary">+ Meldung anlegen</Link>}
       />
       <OperationalList
         rows={result.rows}

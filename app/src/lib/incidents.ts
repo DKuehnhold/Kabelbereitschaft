@@ -102,6 +102,10 @@ export type IncidentRow = {
   // braucht ihn, um sie anzuzeigen und umzuschalten. Seit Migration 0018 NOT
   // NULL DEFAULT false - ein Nullwert ist hier nicht moeglich.
   is_false_alarm: boolean;
+  // AUFTRAG_8: aktueller Wert des "In Klaerung"-Kennzeichens (Migration 0020).
+  // Anders als is_false_alarm gibt es dafuer KEINEN Waechter - die Detailseite
+  // braucht ihn dennoch, um ihn anzuzeigen und umzuschalten.
+  is_in_clarification: boolean;
   // Frühester Wechsel nach „technisch_abgeschlossen" (für CSV-Export); aus Chronik.
   technisch_abgeschlossen_at: string | null;
   stage: StageRef;
@@ -204,7 +208,7 @@ const INCIDENT_ROW_COLUMNS = `
   i.contact_name_snapshot, i.contact_function_snapshot, i.contact_phone_snapshot,
   i.title, i.description, i.internal_note, i.closing_note,
   i.on_call_number_id, i.call_received_at, i.construction_stage_id,
-  i.closed_at, i.closed_by, i.created_at, i.updated_at, i.is_false_alarm,
+  i.closed_at, i.closed_by, i.created_at, i.updated_at, i.is_false_alarm, i.is_in_clarification,
   (
     select min(h.changed_at)
     from public.incident_status_history h
@@ -414,6 +418,9 @@ export type IncidentFormOptions = {
   onCall: IncidentFormOption[];
   cableTypes: { id: string; code: string; name: string }[];
   contacts: IncidentFormContact[];
+  // AUFTRAG_7: Gewerke (public.trades, 0019/AUFTRAG_6) fuer das optionale
+  // Gewerk-Auswahlfeld an der Meldung (Migration 0020, incidents.trade_id).
+  trades: IncidentFormOption[];
   defaults: { customer_id: string | null; on_call_number_id: string | null };
 };
 
@@ -446,6 +453,9 @@ type FormStageRow = {
 };
 type VzgLineOptionRow = { id: string; line_number: string; construction_stage_id: string };
 type CableTypeOptionRow = { id: string; code: string; name: string };
+// AUFTRAG_7: Gewerke-Option (public.trades, 0019). Nur id/label - dieselbe
+// minimale Form wie IncidentFormOption.
+type TradeOptionRow = { id: string; label: string };
 type ContactOptionResult = { contact: IncidentFormContact };
 type AppSettingsRow = { default_customer_id: string | null; default_on_call_number_id: string | null };
 type CreatorOptionRow = { id: string; full_name: string | null; role: string };
@@ -483,6 +493,7 @@ function emptyIncidentFormOptions(): IncidentFormOptions {
     onCall: [],
     cableTypes: [],
     contacts: [],
+    trades: [],
     defaults: { customer_id: null, on_call_number_id: null },
   };
 }
@@ -528,6 +539,15 @@ export async function getIncidentFormOptions(): Promise<IncidentFormOptions> {
         order by sort_order asc, name asc`,
     );
     const contacts = await client.query<ContactOptionResult>(FORM_CONTACTS_SQL);
+    // AUFTRAG_7: Gewerke fuer das optionale Auswahlfeld an der Meldung
+    // (Migration 0020, incidents.trade_id). Nur aktive Gewerke, alphabetisch -
+    // dasselbe Muster wie die uebrigen Optionslisten dieser Funktion.
+    const trades = await client.query<TradeOptionRow>(
+      `select id, label
+         from public.trades
+        where is_active
+        order by label asc`,
+    );
     // Singleton der Anwendungsvorgaben. Fehlt die Zeile, gilt wie bisher die
     // leere Vorbelegung - niemals eine Ausnahme.
     const settings = await client.query<AppSettingsRow>(
@@ -558,6 +578,7 @@ export async function getIncidentFormOptions(): Promise<IncidentFormOptions> {
       })),
       cableTypes: cableTypes.rows.map((t) => ({ id: t.id, code: t.code, name: t.name })),
       contacts: contacts.rows.map((row) => row.contact),
+      trades: trades.rows.map((t) => ({ id: t.id, label: t.label })),
       defaults: {
         customer_id: defaults.default_customer_id,
         on_call_number_id: defaults.default_on_call_number_id,
@@ -574,7 +595,10 @@ const LIST_SELECT =
   "id, incident_no, status, priority, customer_id, customer_name, construction_stage_id, stage_code, stage_name, " +
   "vzg_line_id, vzg_line_number, vzg_line_ref, on_call_number_id, on_call_number, on_call_label, operating_point, " +
   "km_from, km_to, created_at, created_by, updated_at, image_count, cable_arts, monteur_names, monteur_ids, " +
-  "no_monteur, no_images, no_cable, historic_vzg, has_open_task, is_false_alarm";
+  "no_monteur, no_images, no_cable, historic_vzg, has_open_task, is_false_alarm, " +
+  // AUFTRAG_8: additiv aus incident_list_view (Migration 0020) - "In
+  // Klaerung"-Kennzeichen und Gewerk an der Meldung.
+  "is_in_clarification, trade_id, trade_label";
 
 const SORT_COLUMN: Record<IncidentListSortField, string> = {
   incident_no: "incident_no",
@@ -730,6 +754,10 @@ async function fetchList(
   // SQL-NULL binden und den Vergleich `is_false_alarm = NULL` unbemerkt
   // dauerhaft unwahr machen. Beides gilt hier ausdruecklich als unbrauchbar.
   if (f.falseAlarm !== undefined && typeof f.falseAlarm !== "boolean") return { rows: [], total: 0 };
+  // AUFTRAG_8: "In Klaerung"-Statusfilter - dieselbe Herkunft und dasselbe
+  // Risiko wie beim Fehlalarm-Filter (22P02 bei Nicht-Booleschem, stumme
+  // Dauer-Unwahrheit bei SQL-NULL). Exakt dieselbe Vorabpruefung.
+  if (f.inClarification !== undefined && typeof f.inClarification !== "boolean") return { rows: [], total: 0 };
 
   const values: unknown[] = [];
   const conditions: string[] = [];
@@ -754,6 +782,9 @@ async function fetchList(
   // AP15-b: Fehlalarm-Statusfilter. undefined = kein Filter (beide Werte).
   if (f.falseAlarm !== undefined)
     conditions.push(`is_false_alarm = ${bind(values, f.falseAlarm)}::boolean`);
+  // AUFTRAG_8: "In Klaerung"-Statusfilter. undefined = kein Filter (beide Werte).
+  if (f.inClarification !== undefined)
+    conditions.push(`is_in_clarification = ${bind(values, f.inClarification)}::boolean`);
   if (f.date_from) conditions.push(`created_date_local >= ${bind(values, f.date_from)}::date`);
   if (f.date_to) conditions.push(`created_date_local <= ${bind(values, f.date_to)}::date`);
   const term = (f.q ?? "").trim();
@@ -1006,6 +1037,48 @@ export async function setIncidentFalseAlarm(incidentId: string, value: boolean):
       return { ok: false, error: "Die Fehlalarm-Kennzeichnung darf nur die Disposition ändern." };
     console.error(
       "Fehlalarm-Kennzeichnung konnte nicht geändert werden",
+      error instanceof Error ? error.message : "unbekannter Fehler",
+    );
+    return { ok: false, error: "Die Änderung ist fehlgeschlagen. Bitte erneut versuchen." };
+  }
+}
+
+// =====================================================================
+// AUFTRAG_8: "In Klaerung"-Kennzeichen setzen/aendern.
+//
+// Anders als is_false_alarm (Migration 0018, Waechter
+// tg_incident_guard_false_alarm, ausschliesslich Disponent) gibt es fuer
+// is_in_clarification KEINEN Waechter (Migration 0020, Entscheidung Dennis):
+// setzbar von jedem, der die Zeile per RLS aendern darf (incidents_update:
+// is_staff() ODER der aktiv zugewiesene Monteur). Diese Funktion bindet den
+// neuen Wert ausschliesslich als Parameter; kein Eingabewert gelangt in den
+// SQL-Text - exaktes Muster von setIncidentFalseAlarm oben.
+// =====================================================================
+type InClarificationUpdateRow = { id: string };
+
+export async function setIncidentInClarification(incidentId: string, value: boolean): Promise<FormState> {
+  const session = await getSessionProfile();
+  if (!session || !isUuid(incidentId)) return { ok: false, error: "Der Vorgang wurde nicht gefunden." };
+
+  try {
+    const updated = await withUserTransaction(session.userId, async (client) => {
+      const result = await client.query<InClarificationUpdateRow>(
+        `update public.incidents set is_in_clarification = $2::boolean where id = $1::uuid returning id`,
+        [incidentId, value],
+      );
+      return result.rows[0] ?? null;
+    });
+
+    if (!updated) return { ok: false, error: "Der Vorgang wurde nicht gefunden." };
+    return { ok: true, error: null };
+  } catch (error) {
+    // 42501 deckt hier ausschliesslich eine RLS-Verweigerung ab (kein Zugriff
+    // auf die Zeile) - anders als bei is_false_alarm gibt es keinen
+    // zusaetzlichen Waechter, der eine Rolle ausschliesst.
+    if (isPgError(error, PG_INSUFFICIENT_PRIVILEGE))
+      return { ok: false, error: "Sie dürfen die „In Klärung“-Kennzeichnung für diese Meldung nicht ändern." };
+    console.error(
+      "„In Klärung“-Kennzeichnung konnte nicht geändert werden",
       error instanceof Error ? error.message : "unbekannter Fehler",
     );
     return { ok: false, error: "Die Änderung ist fehlgeschlagen. Bitte erneut versuchen." };

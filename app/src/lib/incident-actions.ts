@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { isUuid, withUserTransaction, type DatabaseClient } from "@/lib/db";
 import { getSessionProfile } from "@/lib/auth";
+import { parseBerlinDatetimeLocal } from "@/lib/date-local";
 import {
   INCIDENT_STATUS,
   MONTEUR_STATUS,
@@ -12,7 +13,7 @@ import {
   type ConditionRating,
 } from "@/lib/status";
 import { PRIORITIES, type Priority } from "@/lib/priority";
-import { assignIncidentMonteur, setIncidentFalseAlarm } from "@/lib/incidents";
+import { assignIncidentMonteur, setIncidentFalseAlarm, setIncidentInClarification } from "@/lib/incidents";
 import type { FormState } from "@/lib/incidents";
 
 // AP14/B: Schreibaktionen der Vorgänge auf PostgreSQL (ADR-011 / 2.5).
@@ -257,6 +258,28 @@ export async function createIncident(_prev: FormState, fd: FormData): Promise<Fo
   if (positionError) return { ok: false, error: positionError };
   if (!PRIORITIES.includes(f.priority)) return { ok: false, error: "Ungültige Priorität." };
 
+  // AUFTRAG_7: Anrufdaten - drei optionale Felder, additiv zu den
+  // Pflichtfeldern oben. caller_contact_id/trade_id werden wie contact_id
+  // ungeprüft (kein isUuid()-Vorabcheck) als Parameter gebunden; eine
+  // unbrauchbare Kennung meldet die Datenbank über den Fremdschlüssel
+  // (23503) bzw. eine Typumwandlung, beides von mapDbError() abgedeckt -
+  // dasselbe Verhalten wie beim bestehenden contact_id.
+  const callerContactId = strOrNull(fd, "caller_contact_id");
+  const tradeId = strOrNull(fd, "trade_id");
+  const reportedAtRaw = str(fd, "reported_at");
+  let reportedAtIso: string | null = null;
+  if (reportedAtRaw) {
+    // Der Wert stammt aus einem <input type="datetime-local"> und wird als
+    // Europe/Berlin-Wanduhrzeit interpretiert (date-local.ts,
+    // parseBerlinDatetimeLocal) - dieselbe Herleitung, die das Formular für
+    // die Vorbelegung mit "jetzt" verwendet. Ein manipulierter/unbrauchbarer
+    // Wert wird serverseitig fail-closed abgewiesen statt an die Datenbank
+    // durchgereicht zu werden.
+    const parsed = parseBerlinDatetimeLocal(reportedAtRaw);
+    if (!parsed) return { ok: false, error: "Ungültiger Anrufzeitpunkt." };
+    reportedAtIso = parsed.toISOString();
+  }
+
   let outcome: WriteOutcome;
   try {
     // Referenzprüfung und RPC in EINER Transaktion.
@@ -279,7 +302,8 @@ export async function createIncident(_prev: FormState, fd: FormData): Promise<Fo
                   $1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::public.incident_priority,
                   $6, $7, $8, $9, $10, $11, $12, $13,
                   $14::numeric, $15::numeric, $16, $17, $18,
-                  $19::uuid, $20::uuid, $21::jsonb
+                  $19::uuid, $20::uuid, $21::jsonb,
+                  $22::timestamptz, $23::uuid, $24::uuid
                 ) as id`,
         [
           f.customer_id!,
@@ -303,6 +327,9 @@ export async function createIncident(_prev: FormState, fd: FormData): Promise<Fo
           f.contact_id,
           f.contact_phone_number_id,
           cablePositionsJson(positions!, false),
+          reportedAtIso,
+          callerContactId,
+          tradeId,
         ],
       );
       const id = created.rows[0]?.id ?? null;
@@ -482,6 +509,28 @@ export async function setFalseAlarm(fd: FormData): Promise<void> {
   // diese void-Aktion – wie changeStatus – kein Ergebnis an das Formular
   // zurückgeben kann.
   await setIncidentFalseAlarm(id, value === "1");
+  revalidateAll(id);
+}
+
+// ---------- „In Klärung“ kennzeichnen/aufheben (jede Rolle mit Schreibrecht) ----------
+// Anders als setFalseAlarm gibt es hier KEINE serverseitige Rollenprüfung vor
+// dem Datenbankzugriff (Entscheidung Dennis, AUFTRAG_8): maßgeblich ist
+// ausschließlich die RLS-Policy incidents_update (is_staff() ODER der aktiv
+// zugewiesene Monteur). setIncidentInClarification() klassifiziert eine
+// RLS-Verweigerung (42501) selbst zu einer freundlichen Meldung in ihrem
+// FormState.
+export async function setInClarification(fd: FormData): Promise<void> {
+  const session = await getSessionProfile();
+  if (!session) return;
+  const id = str(fd, "id");
+  const value = str(fd, "value");
+  if (!id || (value !== "1" && value !== "0")) return;
+
+  // setIncidentInClarification() fängt ihre Fehler selbst ab und protokolliert
+  // serverseitig; ihr FormState wird hier bewusst nicht weitergegeben, wie bei
+  // setFalseAlarm – diese void-Aktion kann kein Ergebnis an das Formular
+  // zurückgeben.
+  await setIncidentInClarification(id, value === "1");
   revalidateAll(id);
 }
 

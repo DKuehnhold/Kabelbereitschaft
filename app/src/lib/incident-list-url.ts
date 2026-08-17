@@ -36,6 +36,10 @@ export function parseIncidentListQuery(get: ParamGetter): IncidentListQuery {
   // AP15-b: Fehlalarm-Statusfilter. "1" = nur Fehlalarme, "0" = nur echte
   // Vorgaenge, fehlend/anderer Wert = kein Filter (beide Werte, wie bisher).
   const falseAlarm = clean(get("fehlalarm"));
+  // AUFTRAG_8: "In Klaerung"-Statusfilter, exaktes Fehlalarm-Muster. "1" = nur
+  // Meldungen in Klaerung, "0" = nur nicht in Klaerung, fehlend/anderer Wert =
+  // kein Filter (beide Werte).
+  const inClarification = clean(get("klaerung"));
 
   const filters: IncidentListFilters = {
     q: clean(get("q")),
@@ -53,6 +57,7 @@ export function parseIncidentListQuery(get: ParamGetter): IncidentListQuery {
     activity: activity === "active" || activity === "closed" ? (activity as IncidentActivity) : undefined,
     hasOpenTask: openTask === "1" ? true : undefined,
     falseAlarm: falseAlarm === "1" ? true : falseAlarm === "0" ? false : undefined,
+    inClarification: inClarification === "1" ? true : inClarification === "0" ? false : undefined,
   };
 
   const sort: IncidentListSort = [];
@@ -94,6 +99,7 @@ export function buildIncidentListParams(query: IncidentListQuery): URLSearchPara
   set("activity", f.activity && f.activity !== "all" ? f.activity : undefined);
   set("offen", f.hasOpenTask ? "1" : undefined);
   set("fehlalarm", f.falseAlarm === true ? "1" : f.falseAlarm === false ? "0" : undefined);
+  set("klaerung", f.inClarification === true ? "1" : f.inClarification === false ? "0" : undefined);
   if (query.sort.length) p.set("sort", query.sort.map((s) => `${s.field}:${s.dir}`).join(","));
   if (query.page > 1) p.set("page", String(query.page));
   if (query.pageSize !== 50) p.set("size", String(query.pageSize));

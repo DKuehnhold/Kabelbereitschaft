@@ -16,8 +16,11 @@ export type NavItem = {
 // Grundnavigation. Sichtbarkeit je Rolle (durchgesetzt zusaetzlich serverseitig).
 export const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", roles: ["admin", "disponent", "monteur"] },
-  { href: "/vorgaenge", label: "Vorgänge", roles: ["admin", "disponent"] },
-  { href: "/vorgaenge/neu", label: "Vorgang anlegen", roles: ["admin", "disponent"] },
+  // AUFTRAG_8: reiner Anzeigetext (Label der Navigation) - Route/Href
+  // unverändert, nur die Beschriftung folgt der neuen Begrifflichkeit
+  // "Meldung(en)" der Listen-Seite.
+  { href: "/vorgaenge", label: "Meldungen", roles: ["admin", "disponent"] },
+  { href: "/vorgaenge/neu", label: "Meldung anlegen", roles: ["admin", "disponent"] },
   { href: "/meine-einsaetze", label: "Meine Einsätze", roles: ["monteur"] },
   { href: "/bestand", label: "Bestand", roles: ["admin", "disponent", "monteur"] },
   { href: "/material", label: "Material", roles: ["admin"] },
@@ -56,6 +59,9 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/stammdaten/monteure", label: "Monteure", roles: ["admin", "disponent"] },
       { href: "/stammdaten/teams", label: "Teams", roles: ["admin", "disponent"] },
       { href: "/stammdaten/kabelarten", label: "Kabelarten", roles: ["admin", "disponent"] },
+      { href: "/stammdaten/gewerke", label: "Gewerke", roles: ["admin", "disponent"] },
+      { href: "/stammdaten/funktionen", label: "Funktionen", roles: ["admin", "disponent"] },
+      { href: "/stammdaten/objektarten", label: "Objektarten", roles: ["admin", "disponent"] },
       { href: "/stammdaten/bereitschaftsnummern", label: "Bereitschaftsnummern", roles: ["admin", "disponent"] },
       { href: "/stammdaten/einstellungen", label: "Einstellungen", roles: ["admin", "disponent"] },
     ],

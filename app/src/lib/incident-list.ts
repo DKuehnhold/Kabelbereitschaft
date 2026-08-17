@@ -40,6 +40,15 @@ export type IncidentListRow = {
   // AP15-b: Fehlalarm-Kennzeichnung. Aendern ist ausschliesslich der Rolle
   // Disponent erlaubt (RLS-Waechter, Migration 0018).
   is_false_alarm: boolean;
+  // AUFTRAG_7 (Migration 0020): additive Typerweiterung fuer
+  // incident_list_view. "In Klaerung"-Kennzeichen (KEIN Waechter, siehe
+  // 0020) sowie Gewerk an der Meldung. Die Verdrahtung in die SQL-Projektion
+  // (incidents.ts: LIST_SELECT/fetchList) und die Listen-/Detail-UI sind seit
+  // AUFTRAG_8 vollstaendig (Meldungsliste, Labels, In-Klaerung-Sicht,
+  // Gewerk-Spalte).
+  is_in_clarification: boolean;
+  trade_id: string | null;
+  trade_label: string | null;
 };
 
 export type IncidentActivity = "all" | "active" | "closed";
@@ -63,6 +72,10 @@ export type IncidentListFilters = {
   hasOpenTask?: boolean;
   // AP15-b: Fehlalarm-Statusfilter. undefined = kein Filter (beide Werte).
   falseAlarm?: boolean;
+  // AUFTRAG_8: "In Klaerung"-Statusfilter, exaktes Fehlalarm-Muster (Vorabtyp-
+  // pruefung + Bedingung in fetchList/incidents.ts, URL-Parameter "klaerung"
+  // in incident-list-url.ts). undefined = kein Filter (beide Werte).
+  inClarification?: boolean;
 };
 
 export type IncidentListSortField =

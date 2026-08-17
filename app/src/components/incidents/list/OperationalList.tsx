@@ -168,6 +168,12 @@ export function OperationalList({
       label: `Fehlalarm: ${f.falseAlarm ? "Ja" : "Nein"}`,
       clear: () => updateFilters({ falseAlarm: undefined }),
     });
+  if (f.inClarification !== undefined)
+    chips.push({
+      key: "in-clarification",
+      label: `In Klärung: ${f.inClarification ? "Ja" : "Nein"}`,
+      clear: () => updateFilters({ inClarification: undefined }),
+    });
   if (f.customer_id) chips.push({ key: "customer", label: `Kunde: ${nameOf(options.customers, f.customer_id)}`, clear: () => updateFilters({ customer_id: undefined }) });
   if (f.stage_id) chips.push({ key: "stage", label: `Bauabschnitt: ${nameOf(options.stages, f.stage_id)}`, clear: () => updateFilters({ stage_id: undefined, vzg_line_id: undefined }) });
   if (f.vzg_line_id) chips.push({ key: "vzg", label: `VzG: ${nameOf(options.vzgLines, f.vzg_line_id)}`, clear: () => updateFilters({ vzg_line_id: undefined }) });
@@ -317,6 +323,11 @@ export function OperationalList({
             label="Fehlalarm" value={f.falseAlarm === undefined ? "all" : f.falseAlarm ? "yes" : "no"}
             options={[["all", "Alle"], ["yes", "Ja"], ["no", "Nein"]]}
             onChange={(v) => updateFilters({ falseAlarm: v === "all" ? undefined : v === "yes" })}
+          />
+          <Segmented
+            label="In Klärung" value={f.inClarification === undefined ? "all" : f.inClarification ? "yes" : "no"}
+            options={[["all", "Alle"], ["yes", "Ja"], ["no", "Nein"]]}
+            onChange={(v) => updateFilters({ inClarification: v === "all" ? undefined : v === "yes" })}
           />
           <button type="button" className="btn btn-outline" onClick={() => setAdvanced((v) => !v)}>
             {advanced ? "Weitere Filter ausblenden" : "Weitere Filter"}
@@ -472,10 +483,10 @@ export function OperationalList({
               <SortTh c={SORTABLE[2]} info={sortInfo("priority")} onClick={() => toggleSort("priority")} />
               <SortTh c={SORTABLE[3]} info={sortInfo("customer")} onClick={() => toggleSort("customer")} />
               <SortTh c={SORTABLE[4]} info={sortInfo("construction_stage")} onClick={() => toggleSort("construction_stage")} />
-              <Th>VzG</Th><Th>Betriebsstelle</Th><Th>km</Th><Th>Bereitschaft</Th><Th>Kabelarten</Th>
+              <Th>VzG</Th><Th>Betriebsstelle</Th><Th>km</Th><Th>Bereitschaft</Th><Th>Kabelarten</Th><Th>Gewerk</Th>
               <SortTh c={SORTABLE[5]} info={sortInfo("created_at")} onClick={() => toggleSort("created_at")} />
               <SortTh c={SORTABLE[6]} info={sortInfo("updated_at")} onClick={() => toggleSort("updated_at")} />
-              <Th>Monteure</Th><Th>Bilder</Th><Th>Offene Aufgabe</Th>
+              <Th>Monteure</Th><Th>Bilder</Th><Th>Offene Aufgabe</Th><Th>In Klärung</Th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
@@ -508,6 +519,7 @@ export function OperationalList({
                       </span>
                     )}
                   </td>
+                  <td className="px-3 py-2 text-muted">{r.trade_label ?? "–"}</td>
                   <td className="px-3 py-2 text-muted">{fmt(r.created_at)}</td>
                   <td className="px-3 py-2 text-muted">{fmt(r.updated_at)}</td>
                   <td className="px-3 py-2 text-muted">{monteure(r)}</td>
@@ -515,11 +527,14 @@ export function OperationalList({
                   <td className="px-3 py-2">
                     {r.has_open_task ? <Badge tone="warning">Ja</Badge> : <span className="text-muted">—</span>}
                   </td>
+                  <td className="px-3 py-2">
+                    {r.is_in_clarification ? <Badge tone="info">In Klärung</Badge> : <span className="text-muted">—</span>}
+                  </td>
                 </tr>
               );
             })}
             {rows.length === 0 ? (
-              <tr><td colSpan={16} className="px-3 py-8 text-center text-muted">Keine Vorgänge gefunden.</td></tr>
+              <tr><td colSpan={18} className="px-3 py-8 text-center text-muted">Keine Meldungen gefunden.</td></tr>
             ) : null}
           </tbody>
         </table>
@@ -547,16 +562,18 @@ export function OperationalList({
                 {cables.length === 0 ? <span className="text-xs text-muted">Keine Kabelart</span> :
                   cables.map((g) => <Badge key={g.name} tone="info">{g.count > 1 ? `${g.name} ×${g.count}` : g.name}</Badge>)}
               </div>
+              <div className="mt-1 text-xs text-muted">Gewerk: {r.trade_label ?? "–"}</div>
               <div className="mt-1 text-xs text-muted">Monteure: {monteure(r)} · Bilder: {r.image_count} · {fmt(r.updated_at)}</div>
-              {r.has_open_task ? (
+              {r.has_open_task || r.is_in_clarification ? (
                 <div className="mt-1 flex flex-wrap gap-1">
-                  <Badge tone="warning">Offene Aufgabe</Badge>
+                  {r.has_open_task ? <Badge tone="warning">Offene Aufgabe</Badge> : null}
+                  {r.is_in_clarification ? <Badge tone="info">In Klärung</Badge> : null}
                 </div>
               ) : null}
             </div>
           );
         })}
-        {rows.length === 0 ? <div className="card p-6 text-center text-muted">Keine Vorgänge gefunden.</div> : null}
+        {rows.length === 0 ? <div className="card p-6 text-center text-muted">Keine Meldungen gefunden.</div> : null}
       </div>
 
       {/* Pagination */}

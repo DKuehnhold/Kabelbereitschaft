@@ -93,3 +93,73 @@ export function startOfTodayBerlin(reference: Date = new Date()): Date {
 export function startOfTodayBerlinIso(reference: Date = new Date()): string {
   return startOfTodayBerlin(reference).toISOString();
 }
+
+// =====================================================================
+// AUFTRAG_7: Umrechnung zwischen dem Wert eines <input type="datetime-local">
+// (eine Wanduhrzeit ohne Zeitzone, z. B. "2026-08-17T14:30") und einem
+// tatsaechlichen Zeitpunkt (Instant) - fuer den neuen Anrufzeitpunkt
+// (incidents.reported_at). Wiederverwendung derselben Herleitung wie
+// startOfTodayBerlin() oben: die gesuchte Wanduhrzeit wird zunaechst so
+// interpretiert, als waere sie UTC, dann um den an dieser Stelle geltenden
+// Berliner Offset korrigiert, und die Korrektur am Ergebnis (statt nur am
+// Referenzzeitpunkt) ein zweites Mal nachgezogen - das deckt den
+// Sommer-/Winterzeit-Wechsel exakt wie bei der Tagesgrenze ab.
+//
+// WARUM HIER UND NICHT NUR SERVERSEITIG IN incident-actions.ts: das Formular
+// (NewIncidentForm.tsx, Client-Komponente) belegt das Feld mit "jetzt" vor und
+// muss dafuer dieselbe Berliner Wanduhrzeit erzeugen, die die Datenbank spaeter
+// speichert - sonst wichen Vorbelegung und gespeicherter Wert bei einem
+// Server-Client-Zeitzonenunterschied voneinander ab. Beide Seiten nutzen daher
+// dieselbe Herleitung aus diesem Modul (reine Funktionen, kein
+// Server-/DB-Import, siehe Kopfkommentar der Datei).
+
+/** Berliner Wanduhrzeit (Jahr, Monat 1-12, Tag, Stunde, Minute) als Instant. */
+export function berlinWallTimeToInstant(
+  year: number,
+  month: number,
+  day: number,
+  hour: number,
+  minute: number,
+  second = 0,
+): Date {
+  const wallAsUtcMillis = Date.UTC(year, month - 1, day, hour, minute, second, 0);
+  const offsetAtWall = berlinOffsetMinutes(new Date(wallAsUtcMillis));
+  let candidate = new Date(wallAsUtcMillis - offsetAtWall * 60000);
+  const offsetAtCandidate = berlinOffsetMinutes(candidate);
+  if (offsetAtCandidate !== offsetAtWall) {
+    candidate = new Date(wallAsUtcMillis - offsetAtCandidate * 60000);
+  }
+  return candidate;
+}
+
+/** Berliner Wanduhrzeit eines Instants im Format von <input type="datetime-local"> ("YYYY-MM-DDTHH:mm"). */
+export function formatBerlinDatetimeLocal(instant: Date): string {
+  const p = partsAt(instant);
+  return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
+}
+
+const DATETIME_LOCAL_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/;
+
+/**
+ * Wert eines <input type="datetime-local"> als Berliner Wanduhrzeit
+ * interpretiert und in einen Instant umgerechnet. Fail-closed: `null` bei
+ * jeder Abweichung vom Muster UND bei einem nicht existierenden Kalendertag
+ * bzw. einer nicht existierenden Uhrzeit (Rueckrechnungsprobe, dasselbe
+ * Prinzip wie isIsoDate() in incidents.ts - Date.UTC() normalisiert einen
+ * Ueberlauf wie 2026-02-31 sonst stillschweigend statt ihn abzuweisen).
+ */
+export function parseBerlinDatetimeLocal(value: string): Date | null {
+  const match = DATETIME_LOCAL_PATTERN.exec(value.trim());
+  if (!match) return null;
+  const [, y, mo, d, h, mi] = match;
+  const month = Number(mo);
+  const day = Number(d);
+  const hour = Number(h);
+  const minute = Number(mi);
+  if (month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59) return null;
+
+  const instant = berlinWallTimeToInstant(Number(y), month, day, hour, minute, 0);
+  if (Number.isNaN(instant.getTime())) return null;
+  if (formatBerlinDatetimeLocal(instant) !== `${y}-${mo}-${d}T${h}:${mi}`) return null;
+  return instant;
+}
