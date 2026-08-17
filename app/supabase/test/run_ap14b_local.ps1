@@ -11,6 +11,8 @@
 #       Stammdaten-Kataloge Gewerk/Funktion/Objektart, Fallkennung X)
 #   ->  migrations/0020  ->  Smoke 27 (AUFTRAG_7, Anrufdaten an der Meldung
 #       und "In Klaerung"-Kennzeichen, Fallkennung Y)
+#   ->  migrations/0021  ->  Smoke 28 (AUFTRAG_10, Bereitschaftsplan/
+#       Einsatzplanung, Fallkennung Z)
 #   ->  Integrationstests des Anwendungscodes (test/integration)
 #
 # Smoke 24 braucht keine eigene Migration und bleibt der LETZTE ABSOLUT
@@ -57,6 +59,17 @@
 # fuehrt keine neue Integrationssuite ein, der SQL-Smoke deckt Spaltenzustand,
 # Idempotenz, FK-Verhalten, die erweiterte RPC create_incident_ap12 und die
 # View-Spalten vollstaendig ab.
+#
+# Aus AUFTRAG_10 kommen HINTER 27 die Migration 0021 (Bereitschaftsplan/
+# Einsatzplanung, Tabelle public.on_call_plan) und ihr Smoke
+# 28_hlk_bereitschaftsplan.sql (Fallkennung Z) hinzu. Dieselbe Konvention wie
+# bei 0015/21, 0016/22, 0017/23, 0018/25, 0019/26 und 0020/27: die Migration
+# steht unmittelbar vor ihrem Smoke, und dieser nimmt seine eigene
+# Wirkungsphase - Fixtures und den per \ir erneut eingebundenen Lauf von 0021
+# eingeschlossen - vollstaendig per rollback zurueck. Kein zusaetzlicher
+# Node-Lauf: AUFTRAG_10 fuehrt keine neue Integrationssuite ein, der
+# SQL-Smoke deckt Idempotenz, Unique, Rollenmatrix, FK-Verhalten und die
+# Audit-Protokollierung bei delete vollstaendig ab.
 #
 # Die bash-Fassung run_db_tests.sh bleibt der Weg fuer die CI; diese Datei ist
 # das Windows-Gegenstueck und ergaenzt run_ap12_local.ps1 (das bewusst bei 0011
@@ -303,7 +316,16 @@ $files = @(
   # eingebundenen Lauf von 0020 eingeschlossen - am Ende vollstaendig per
   # rollback zuruecknimmt.
   (Join-Path $migrationRoot "0020_hlk_meldung_anrufdaten.sql"),
-  (Join-Path $testRoot "27_hlk_anrufdaten.sql")
+  (Join-Path $testRoot "27_hlk_anrufdaten.sql"),
+  # AUFTRAG_10: Bereitschaftsplan (Einsatzplanung, Tabelle
+  # public.on_call_plan; Migration 0021, Smoke 28, Fallkennung Z). Dieselbe
+  # Konvention wie bei 0015/21, 0016/22, 0017/23, 0018/25, 0019/26 und
+  # 0020/27: die Migration steht unmittelbar vor ihrem Smoke, der seine
+  # eigene Wirkungsphase - Fixtures und den per \ir erneut eingebundenen
+  # Lauf von 0021 eingeschlossen - am Ende vollstaendig per rollback
+  # zuruecknimmt.
+  (Join-Path $migrationRoot "0021_hlk_bereitschaftsplan.sql"),
+  (Join-Path $testRoot "28_hlk_bereitschaftsplan.sql")
 )
 foreach ($file in $files) {
   if (-not (Test-Path -LiteralPath $file)) { throw "Testdatei fehlt: $file" }

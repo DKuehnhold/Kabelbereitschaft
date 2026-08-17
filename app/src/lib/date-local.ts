@@ -163,3 +163,89 @@ export function parseBerlinDatetimeLocal(value: string): Date | null {
   if (formatBerlinDatetimeLocal(instant) !== `${y}-${mo}-${d}T${h}:${mi}`) return null;
   return instant;
 }
+
+// =====================================================================
+// AUFTRAG_10: Wochenstart Montag (Europe/Berlin) fuer den Bereitschaftsplan
+// (public.on_call_plan, `plan_date date`). Der Plan arbeitet ausschliesslich
+// mit reinen Kalendertagen (kein Zeitanteil, keine Instant-Umrechnung) -
+// anders als reported_at/berlinWallTimeToInstant oben. Trotzdem ist die
+// Ermittlung "welcher Kalendertag ist HEUTE in Berlin" (Schritt 1 unten)
+// DIESELBE zeitzonenabhaengige Frage wie bei startOfTodayBerlin() und nutzt
+// deshalb dieselbe Grundlage (partsAt() mit Intl.DateTimeFormat,
+// timeZone: Europe/Berlin) - ein `new Date()` ausgewertet in der Zeitzone des
+// Node-Prozesses waere an einem Tageswechsel um Mitternacht Berliner Zeit
+// falsch (derselbe Fehler wie im Kopfkommentar dieser Datei beschrieben).
+//
+// DST-FESTIGKEIT: sobald der Berliner Kalendertag (Jahr/Monat/Tag) einmal
+// zuverlaessig ermittelt ist, ist jede weitere Rechnung (Wochentag bestimmen,
+// Tage addieren) REINE Kalenderarithmetik auf Jahr/Monat/Tag - sie verlaesst
+// die Zeitzone nicht mehr und ist deshalb unabhaengig von der Sommer-/
+// Winterzeit. Ein Tag hat im Kalender immer 24 Stunden, auch am Tag des
+// DST-Wechsels (an dem die Wanduhr in Berlin nur 23 bzw. 25 Stunden zaehlt) -
+// das betrifft ausschliesslich Instant-Rechnungen (siehe
+// berlinWallTimeToInstant oben), nicht die Kalendertag-Arithmetik hier.
+// `Date.UTC(...)` dient unten nur als bequemer, ueberlaufsicherer
+// Kalenderrechner (JavaScript normalisiert z. B. Tag 32 automatisch auf den
+// naechsten Monat) und hat mit der tatsaechlichen Zeitzone nichts zu tun.
+
+const ISO_CALENDAR_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/**
+ * True, wenn `value` eine kanonische Kalenderdatumszeichenkette
+ * "YYYY-MM-DD" ist UND ein tatsaechlich existierender Kalendertag - dieselbe
+ * Rueckrechnungsprobe wie bei isIsoDate() in incidents.ts und
+ * parseBerlinDatetimeLocal() oben (ein Ueberlauf wie "2026-02-31" wuerde von
+ * `Date.UTC` sonst stillschweigend auf den 3. Maerz normalisiert statt
+ * abgewiesen zu werden).
+ */
+export function isIsoCalendarDate(value: string): boolean {
+  const match = ISO_CALENDAR_DATE_PATTERN.exec(value);
+  if (!match) return false;
+  const [, y, mo, d] = match;
+  const asUtc = new Date(Date.UTC(Number(y), Number(mo) - 1, Number(d)));
+  if (Number.isNaN(asUtc.getTime())) return false;
+  return asUtc.toISOString().slice(0, 10) === value;
+}
+
+/**
+ * Kalendertag "YYYY-MM-DD" von `instant`, ausgewertet als Berliner
+ * Wanduhrzeit (Europe/Berlin) - nicht als Zeitzone des Node-Prozesses.
+ */
+export function berlinCalendarDateIso(instant: Date = new Date()): string {
+  const p = partsAt(instant);
+  return `${p.year}-${p.month}-${p.day}`;
+}
+
+/**
+ * Ein Kalendertag "YYYY-MM-DD" plus/minus `days` volle Tage - reine
+ * Kalenderarithmetik ohne Zeitzonenbezug (siehe Kopfkommentar dieses
+ * Abschnitts). `days` darf negativ sein (Rueckwaertsnavigation).
+ */
+export function addDaysToIsoDate(iso: string, days: number): string {
+  const match = ISO_CALENDAR_DATE_PATTERN.exec(iso);
+  if (!match) throw new Error(`addDaysToIsoDate: kein gueltiges Kalenderdatum: "${iso}"`);
+  const [, y, mo, d] = match;
+  const asUtc = new Date(Date.UTC(Number(y), Number(mo) - 1, Number(d)));
+  asUtc.setUTCDate(asUtc.getUTCDate() + days);
+  return asUtc.toISOString().slice(0, 10);
+}
+
+/**
+ * Montag "YYYY-MM-DD" der Berliner Kalenderwoche, die `reference` enthaelt
+ * (Wochenstart Montag, wie in der Excel-Matrix "Einsatzplanung" und laut
+ * AUFTRAG_10 verbindlich festgelegt). `reference` ist ein Instant (Default
+ * `new Date()`); sein Berliner Kalendertag wird zunaechst ueber
+ * berlinCalendarDateIso() ermittelt (zeitzonenabhaengiger Schritt), danach
+ * ausschliesslich mit reiner Kalenderarithmetik auf den Montag derselben
+ * Woche zurueckgerechnet (DST-unabhaengiger Schritt, siehe Kopfkommentar).
+ *
+ * `getUTCDay()` liefert 0 (Sonntag) bis 6 (Samstag); der Montag derselben
+ * Woche liegt bei Sonntag 6 Tage zurueck, sonst `wochentag - 1` Tage.
+ */
+export function mondayOfWeekBerlinIso(reference: Date = new Date()): string {
+  const todayIso = berlinCalendarDateIso(reference);
+  const [, y, mo, d] = ISO_CALENDAR_DATE_PATTERN.exec(todayIso)!;
+  const weekday = new Date(Date.UTC(Number(y), Number(mo) - 1, Number(d))).getUTCDay();
+  const daysSinceMonday = weekday === 0 ? 6 : weekday - 1;
+  return addDaysToIsoDate(todayIso, -daysSinceMonday);
+}

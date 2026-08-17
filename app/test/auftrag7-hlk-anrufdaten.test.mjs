@@ -227,10 +227,18 @@ test("run_db_tests.sh und run_ap14b_local.ps1: 0020/27_hlk_anrufdaten stehen unm
   assert.ok(ps1.includes('(Join-Path $testRoot "27_hlk_anrufdaten.sql")'), "run_ap14b_local.ps1: Smoke 27 fehlt in der Dateikette");
 });
 
-test('ci.yml: Schrittname nennt "Migrationen 0001-0020, Smokes 15-27"', async () => {
+test('ci.yml: Schrittname nennt "Migrationen 0001-0021, Smokes 15-28"', async () => {
+  // Ursprung dieser Pruefung war AUFTRAG_7 ("...0001-0020, Smokes 15-27").
+  // AUFTRAG_10 fuehrt die additive Kette bis 0021/28 fort (Migration 0021,
+  // Smoke 28_hlk_bereitschaftsplan.sql) und benennt den CI-Schritt
+  // entsprechend um (00-Projektsteuerung/AUFTRAG_10.md). Diese Datei prueft
+  // ausschliesslich den WORTLAUT des jeweils aktuellen CI-Schrittnamens - der
+  // Nachweis, DASS 0021/28 tatsaechlich Teil der Kette sind, steht in
+  // auftrag10-bereitschaftsplan.test.mjs und in run_db_tests.sh/
+  // run_ap14b_local.ps1 selbst.
   const yml = await readSource("../../.github/workflows/ci.yml");
   assert.ok(
-    yml.includes("Migrationen 0001-0020, Smokes 15-27"),
-    'ci.yml: der CI-Schrittname enthaelt nicht "Migrationen 0001-0020, Smokes 15-27"',
+    yml.includes("Migrationen 0001-0021, Smokes 15-28"),
+    'ci.yml: der CI-Schrittname enthaelt nicht "Migrationen 0001-0021, Smokes 15-28"',
   );
 });

@@ -52,6 +52,17 @@
 # FK-Verhalten, die erweiterte RPC create_incident_ap12 und die View-Spalten
 # vollstaendig ab.
 #
+# Neu aus AUFTRAG_10: HINTER 27 stehen die Migration 0021 (Bereitschaftsplan/
+# Einsatzplanung, Tabelle public.on_call_plan) und ihr Smoke
+# 28_hlk_bereitschaftsplan.sql (Fallkennung Z). Dieselbe Konvention wie bei
+# 0015/21, 0016/22, 0017/23, 0018/25, 0019/26 und 0020/27: die Migration steht
+# unmittelbar vor ihrem Smoke, der seine eigene Wirkungsphase - Fixtures und
+# den per \ir erneut eingebundenen Lauf von 0021 eingeschlossen - vollstaendig
+# per rollback zuruecknimmt. Kein zusaetzlicher Node-Lauf: AUFTRAG_10 fuehrt
+# keine neue Integrationssuite ein, der SQL-Smoke deckt Idempotenz, Unique,
+# Rollenmatrix, FK-Verhalten und die Audit-Protokollierung bei delete
+# vollstaendig ab.
+#
 # Seit AP14/B laufen hier NICHT mehr ausschliesslich SQL-Dateien: nach der
 # SQL-Kette koennen optional Node-Suiten mit echtem Anwendungscode gegen
 # dieselbe temporaere Datenbank ausgefuehrt werden.
@@ -217,6 +228,12 @@ FILES=(
   # wie bei 0015/21, 0016/22, 0017/23, 0018/25 und 0019/26.
   "${MIGRATIONS}/0020_hlk_meldung_anrufdaten.sql"
   "${TEST_ROOT}/27_hlk_anrufdaten.sql"
+  # AUFTRAG_10: Bereitschaftsplan (Einsatzplanung) - Tabelle public.on_call_plan
+  # (wer hat wann je Bauabschnitt Bereitschaft). Migration 0021 steht
+  # unmittelbar VOR ihrem Smoke 28 - dieselbe Konvention wie bei 0015/21,
+  # 0016/22, 0017/23, 0018/25, 0019/26 und 0020/27.
+  "${MIGRATIONS}/0021_hlk_bereitschaftsplan.sql"
+  "${TEST_ROOT}/28_hlk_bereitschaftsplan.sql"
 )
 
 for f in "${FILES[@]}"; do

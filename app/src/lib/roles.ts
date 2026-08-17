@@ -22,6 +22,9 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/vorgaenge", label: "Meldungen", roles: ["admin", "disponent"] },
   { href: "/vorgaenge/neu", label: "Meldung anlegen", roles: ["admin", "disponent"] },
   { href: "/meine-einsaetze", label: "Meine Einsätze", roles: ["monteur"] },
+  // AUFTRAG_10: für alle Rollen sichtbar (Monteur read-only, Staff bedient
+  // die Wochenansicht) - Sichtbarkeit/Bedienbarkeit steuert die Seite selbst.
+  { href: "/bereitschaftsplan", label: "Bereitschaftsplan", roles: ["admin", "disponent", "monteur"] },
   { href: "/bestand", label: "Bestand", roles: ["admin", "disponent", "monteur"] },
   { href: "/material", label: "Material", roles: ["admin"] },
   { href: "/lager", label: "Lagerorte", roles: ["admin"] },
