@@ -5,8 +5,8 @@ import { useOffline, offlineManager } from "@/lib/offline/useOffline";
 import { INCIDENT_STATUS, MONTEUR_STATUS, STATUS_LABELS, IMAGE_CATEGORIES, IMAGE_CATEGORY_LABELS, type ImageCategory } from "@/lib/status";
 import type { UserRole } from "@/lib/roles";
 
-const field = "rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 w-full";
-const btn = "rounded-md bg-blue-900 px-4 py-2 text-sm font-medium text-white hover:bg-blue-800 disabled:opacity-50";
+const field = "rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-ring w-full";
+const btn = "rounded-md bg-brand px-4 py-2 text-sm font-medium text-brand-fg hover:bg-brand-hover disabled:opacity-50";
 
 // Offline-fähige Erfassung: Notiz, Statusvormerkung, Bilder zur Upload-Warteschlange.
 // Online werden die Aktionen sofort synchronisiert, offline vorgemerkt (kein Verlust).

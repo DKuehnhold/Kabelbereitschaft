@@ -73,7 +73,7 @@ export default async function DashboardPage() {
         <h1 className="text-2xl font-semibold text-slate-900">Dashboard</h1>
         <Link
           href="/vorgaenge/neu"
-          className="rounded-md bg-blue-900 px-4 py-2 text-sm font-medium text-white hover:bg-blue-800"
+          className="rounded-md bg-brand px-4 py-2 text-sm font-medium text-brand-fg hover:bg-brand-hover"
         >
           + Vorgang anlegen
         </Link>

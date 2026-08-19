@@ -19,9 +19,13 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
+  // AUFTRAG_13: alte Blau-Werte (#1e3a8a/#0b1220, vor AUFTRAG_11) auf das
+  // aktuelle Marken-Rot umgestellt - identisch zu `theme_color` in
+  // manifest.ts (#7f1d1d), damit Browser-Chrome/Task-Switcher nicht mehr
+  // blau einfärben.
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#1e3a8a" },
-    { media: "(prefers-color-scheme: dark)", color: "#0b1220" },
+    { media: "(prefers-color-scheme: light)", color: "#7f1d1d" },
+    { media: "(prefers-color-scheme: dark)", color: "#dc2626" },
   ],
   width: "device-width",
   initialScale: 1,

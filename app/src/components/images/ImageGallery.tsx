@@ -88,8 +88,8 @@ export function ImageGallery({
     uploadAction(fd);
   }
 
-  const btn = "rounded-md bg-blue-900 px-4 py-2 text-sm font-medium text-white hover:bg-blue-800 disabled:opacity-50";
-  const field = "rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 w-full";
+  const btn = "rounded-md bg-brand px-4 py-2 text-sm font-medium text-brand-fg hover:bg-brand-hover disabled:opacity-50";
+  const field = "rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-ring w-full";
 
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-4">
@@ -105,7 +105,7 @@ export function ImageGallery({
             onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
             onDragLeave={() => setDragOver(false)}
             onDrop={(e) => { e.preventDefault(); setDragOver(false); addFiles(e.dataTransfer.files); }}
-            className={`rounded-lg border-2 border-dashed p-4 text-center text-sm ${dragOver ? "border-blue-500 bg-blue-50" : "border-slate-300"}`}
+            className={`rounded-lg border-2 border-dashed p-4 text-center text-sm ${dragOver ? "border-ring bg-surface-2" : "border-slate-300"}`}
           >
             <p className="text-slate-600">Bilder hierher ziehen oder auswählen</p>
             <p className="mt-1 text-xs text-slate-400">JPG oder PNG, max. {MAX_IMAGE_MB} MB je Datei</p>
@@ -167,7 +167,7 @@ export function ImageGallery({
               key={img.id}
               type="button"
               onClick={() => setOpenIndex(idx)}
-              className="group overflow-hidden rounded-lg border border-slate-200 text-left hover:border-blue-400"
+              className="group overflow-hidden rounded-lg border border-slate-200 text-left hover:border-brand"
             >
               <div className="aspect-square w-full bg-slate-100">
                 {img.signed_url ? (
@@ -224,7 +224,7 @@ function Lightbox({
 }) {
   const [catState, catAction, catPending] = useActionState(changeImageCategory, initial);
   const [descState, descAction, descPending] = useActionState(changeImageDescription, initial);
-  const field = "rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 w-full";
+  const field = "rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-ring w-full";
   const smallBtn = "rounded-md bg-slate-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50";
 
   const gps = image.gps_lat != null && image.gps_lon != null;
@@ -262,7 +262,7 @@ function Lightbox({
             label="GPS"
             value={
               gps ? (
-                <a className="text-blue-800 hover:underline" href={`https://www.google.com/maps?q=${image.gps_lat},${image.gps_lon}`} target="_blank" rel="noopener noreferrer">
+                <a className="text-brand hover:underline" href={`https://www.google.com/maps?q=${image.gps_lat},${image.gps_lon}`} target="_blank" rel="noopener noreferrer">
                   {image.gps_lat!.toFixed(6)}, {image.gps_lon!.toFixed(6)} (Karte öffnen)
                 </a>
               ) : "—"

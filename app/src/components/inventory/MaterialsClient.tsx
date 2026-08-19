@@ -6,9 +6,9 @@ import { saveMaterial, setMaterialActive } from "@/lib/inventory-actions";
 import type { MaterialRow } from "@/lib/inventory";
 import type { FormState } from "@/lib/incidents";
 
-const field = "rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 w-full";
+const field = "rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-ring w-full";
 const label = "mb-1 block text-sm font-medium text-slate-700";
-const btn = "rounded-md bg-blue-900 px-4 py-2 text-sm font-medium text-white hover:bg-blue-800 disabled:opacity-60";
+const btn = "rounded-md bg-brand px-4 py-2 text-sm font-medium text-brand-fg hover:bg-brand-hover disabled:opacity-60";
 
 function MaterialForm({ material, onSaved }: { material: MaterialRow | null; onSaved: () => void }) {
   const [state, action, pending] = useActionState(saveMaterial, { ok: false, error: null } as FormState);
@@ -106,7 +106,7 @@ export function MaterialsClient({ materials }: { materials: MaterialRow[] }) {
                 </td>
                 <td className="px-3 py-2">
                   <div className="flex items-center gap-3">
-                    <button type="button" onClick={() => openEdit(m)} className="text-blue-800 hover:underline">Bearbeiten</button>
+                    <button type="button" onClick={() => openEdit(m)} className="text-brand hover:underline">Bearbeiten</button>
                     <form action={setMaterialActive}>
                       <input type="hidden" name="id" value={m.id} />
                       <input type="hidden" name="active" value={m.is_active ? "false" : "true"} />

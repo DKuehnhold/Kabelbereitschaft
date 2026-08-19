@@ -5,10 +5,12 @@ import { useRouter } from "next/navigation";
 import {
   saveTechnician, setTechnicianActive,
   previewTechnicianImport, commitTechnicianImport,
+  setTechnicianQualifications,
 } from "@/lib/masterdata-actions";
 import type { TechnicianRow, StageOption } from "@/lib/masterdata";
 import type { ImportPreview, ImportCommitResult, ImportRowStatus } from "@/lib/csv-import";
 import type { FormState } from "@/lib/incidents";
+import type { QualificationRow } from "@/lib/qualifications";
 import {
   MasterModal, Toolbar, StatusPill, RowActions, FormError, FormActions,
   TableWrap, Th, Td, CardList, EmptyState, labelCls,
@@ -51,6 +53,74 @@ function TechnicianForm({
       </div>
       <FormActions pending={pending} />
     </form>
+  );
+}
+
+/**
+ * AUFTRAG_14: Qualifikations-Zuordnung (Mehrfachauswahl) - eigener Bereich
+ * unterhalb des Stammdatenformulars, weil setTechnicianQualifications() eine
+ * einfache async Funktion ist (kein FormState-Formular wie saveTechnician:
+ * sie ersetzt eine ganze Menge, kein einzelnes Feld). Nur für BESTEHENDE
+ * Monteure sichtbar - ein neuer Monteur muss zuerst gespeichert werden,
+ * bevor er eine technician_id hat, der eine Zuordnung anhängen könnte.
+ */
+function TechnicianQualifications({
+  technicianId, qualifications, initialIds,
+}: { technicianId: string; qualifications: QualificationRow[]; initialIds: string[] }) {
+  const router = useRouter();
+  const [selected, setSelected] = useState<Set<string>>(new Set(initialIds));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  const toggle = (id: string) => {
+    setSaved(false);
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const onSave = async () => {
+    setBusy(true); setError(null); setSaved(false);
+    const result = await setTechnicianQualifications(technicianId, Array.from(selected));
+    setBusy(false);
+    if (!result.ok) { setError(result.error); return; }
+    setSaved(true);
+    router.refresh();
+  };
+
+  if (qualifications.length === 0) {
+    return (
+      <p className="text-sm text-muted">
+        Noch keine Qualifikationen im Katalog (Stammdaten → Qualifikationen).
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-2 border-t border-border pt-3">
+      <div className={labelCls}>Qualifikationen (mehrfach möglich)</div>
+      <FormError error={error} />
+      {saved ? <p className="text-sm" style={{ color: "var(--success)" }}>Gespeichert.</p> : null}
+      <div className="flex flex-wrap gap-3">
+        {qualifications.map((q) => (
+          <label key={q.id} className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox" checked={selected.has(q.id)} onChange={() => toggle(q.id)} disabled={busy}
+              style={{ minHeight: "20px", minWidth: "20px" }}
+            />
+            {q.label}
+          </label>
+        ))}
+      </div>
+      <div className="flex justify-end">
+        <button type="button" onClick={onSave} disabled={busy} className="btn btn-outline" style={{ minHeight: "44px" }}>
+          {busy ? "Bitte warten…" : "Qualifikationen speichern"}
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -187,8 +257,13 @@ function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void })
 }
 
 export function TechniciansClient({
-  technicians, profileOptions,
-}: { technicians: TechnicianRow[]; profileOptions: StageOption[] }) {
+  technicians, profileOptions, qualifications, qualificationIdsByTechnician,
+}: {
+  technicians: TechnicianRow[];
+  profileOptions: StageOption[];
+  qualifications?: QualificationRow[];
+  qualificationIdsByTechnician?: Record<string, string[]>;
+}) {
   const [q, setQ] = useState("");
   const [showInactive, setShowInactive] = useState(false);
   const [open, setOpen] = useState(false);
@@ -251,6 +326,15 @@ export function TechniciansClient({
 
       <MasterModal open={open} onClose={() => setOpen(false)} title={edit ? "Monteur bearbeiten" : "Neuer Monteur"}>
         <TechnicianForm row={edit} onSaved={() => setOpen(false)} profileOptions={profileOptions} />
+        {edit && qualifications ? (
+          <div className="mt-4">
+            <TechnicianQualifications
+              technicianId={edit.id}
+              qualifications={qualifications}
+              initialIds={qualificationIdsByTechnician?.[edit.id] ?? []}
+            />
+          </div>
+        ) : null}
       </MasterModal>
 
       <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} />

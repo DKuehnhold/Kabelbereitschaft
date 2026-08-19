@@ -7,9 +7,9 @@ import { STORAGE_LOCATION_TYPES, STORAGE_LOCATION_TYPE_LABELS } from "@/lib/stat
 import type { LocationRow } from "@/lib/inventory";
 import type { FormState } from "@/lib/incidents";
 
-const field = "rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 w-full";
+const field = "rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-ring w-full";
 const label = "mb-1 block text-sm font-medium text-slate-700";
-const btn = "rounded-md bg-blue-900 px-4 py-2 text-sm font-medium text-white hover:bg-blue-800 disabled:opacity-60";
+const btn = "rounded-md bg-brand px-4 py-2 text-sm font-medium text-brand-fg hover:bg-brand-hover disabled:opacity-60";
 
 function LocationForm({ location, onSaved }: { location: LocationRow | null; onSaved: () => void }) {
   const [state, action, pending] = useActionState(saveLocation, { ok: false, error: null } as FormState);
@@ -92,7 +92,7 @@ export function LocationsClient({ locations }: { locations: LocationRow[] }) {
                 </td>
                 <td className="px-3 py-2">
                   <div className="flex items-center gap-3">
-                    <button type="button" onClick={() => { setEdit(l); setOpen(true); }} className="text-blue-800 hover:underline">Bearbeiten</button>
+                    <button type="button" onClick={() => { setEdit(l); setOpen(true); }} className="text-brand hover:underline">Bearbeiten</button>
                     <form action={setLocationActive}>
                       <input type="hidden" name="id" value={l.id} />
                       <input type="hidden" name="active" value={l.is_active ? "false" : "true"} />

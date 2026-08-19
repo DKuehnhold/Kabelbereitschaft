@@ -55,6 +55,10 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Stammdaten",
     roles: ["admin", "disponent"],
     items: [
+      // AUFTRAG_16: Übersichtsseite mit Akkordeon - Pflege aller 13 Arten
+      // inline, ohne Seitenwechsel. Bewusst als erstes Element, die 13
+      // bestehenden Einzelrouten darunter bleiben zeichengleich erhalten.
+      { href: "/stammdaten", label: "Stammdaten (Übersicht)", roles: ["admin", "disponent"] },
       { href: "/stammdaten/kunden", label: "Kunden", roles: ["admin", "disponent"] },
       { href: "/stammdaten/bauabschnitte", label: "Bauabschnitte", roles: ["admin", "disponent"] },
       { href: "/stammdaten/vzg", label: "VzG-Strecken", roles: ["admin", "disponent"] },
@@ -65,6 +69,8 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/stammdaten/gewerke", label: "Gewerke", roles: ["admin", "disponent"] },
       { href: "/stammdaten/funktionen", label: "Funktionen", roles: ["admin", "disponent"] },
       { href: "/stammdaten/objektarten", label: "Objektarten", roles: ["admin", "disponent"] },
+      // AUFTRAG_14: neues Stammdatum Qualifikationen (Dispo-Board).
+      { href: "/stammdaten/qualifikationen", label: "Qualifikationen", roles: ["admin", "disponent"] },
       { href: "/stammdaten/bereitschaftsnummern", label: "Bereitschaftsnummern", roles: ["admin", "disponent"] },
       { href: "/stammdaten/einstellungen", label: "Einstellungen", roles: ["admin", "disponent"] },
     ],

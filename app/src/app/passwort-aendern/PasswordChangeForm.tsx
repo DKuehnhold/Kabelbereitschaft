@@ -25,12 +25,12 @@ export function PasswordChangeForm({
   const [state, formAction, pending] = useActionState(changePassword, initialState);
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-100 px-4">
-      <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
+    <main className="flex min-h-screen items-center justify-center bg-background px-4">
+      <div className="w-full max-w-sm rounded-xl border border-border bg-surface p-8 shadow-sm">
         <div className="mb-6 flex flex-col items-center gap-3 text-center">
-          <Logo height={40} />
-          <h1 className="text-lg font-semibold text-slate-900">Passwort ändern</h1>
-          <p className="text-sm text-slate-500">{email}</p>
+          <Logo height={56} />
+          <h1 className="text-lg font-semibold text-foreground">Passwort ändern</h1>
+          <p className="text-sm text-muted">{email}</p>
         </div>
 
         {forced ? (
@@ -44,7 +44,7 @@ export function PasswordChangeForm({
           <div>
             <label
               htmlFor="currentPassword"
-              className="mb-1 block text-sm font-medium text-slate-700"
+              className="mb-1 block text-sm font-medium text-foreground"
             >
               Aktuelles Passwort
             </label>
@@ -54,14 +54,14 @@ export function PasswordChangeForm({
               type="password"
               autoComplete="current-password"
               required
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              className="input"
             />
           </div>
 
           <div>
             <label
               htmlFor="newPassword"
-              className="mb-1 block text-sm font-medium text-slate-700"
+              className="mb-1 block text-sm font-medium text-foreground"
             >
               Neues Passwort
             </label>
@@ -73,9 +73,9 @@ export function PasswordChangeForm({
               required
               minLength={minLength}
               aria-describedby="newPasswordHint"
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              className="input"
             />
-            <p id="newPasswordHint" className="mt-1 text-xs text-slate-500">
+            <p id="newPasswordHint" className="mt-1 text-xs text-muted">
               Mindestens {minLength} Zeichen.
             </p>
           </div>
@@ -83,7 +83,7 @@ export function PasswordChangeForm({
           <div>
             <label
               htmlFor="confirmPassword"
-              className="mb-1 block text-sm font-medium text-slate-700"
+              className="mb-1 block text-sm font-medium text-foreground"
             >
               Neues Passwort bestätigen
             </label>
@@ -94,7 +94,7 @@ export function PasswordChangeForm({
               autoComplete="new-password"
               required
               minLength={minLength}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              className="input"
             />
           </div>
 
@@ -107,7 +107,7 @@ export function PasswordChangeForm({
           <button
             type="submit"
             disabled={pending}
-            className="w-full rounded-md bg-blue-900 px-4 py-2 text-sm font-medium text-white hover:bg-blue-800 disabled:opacity-60"
+            className="btn btn-primary w-full"
           >
             {pending ? "Wird geändert…" : "Passwort ändern"}
           </button>
@@ -118,7 +118,7 @@ export function PasswordChangeForm({
         <form action="/auth/signout" method="post" className="mt-4">
           <button
             type="submit"
-            className="w-full rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+            className="btn btn-outline w-full"
           >
             Abmelden
           </button>

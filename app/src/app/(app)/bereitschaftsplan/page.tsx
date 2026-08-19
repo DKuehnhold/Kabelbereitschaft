@@ -1,19 +1,20 @@
 import { requireSession } from "@/lib/auth";
 import { PageHeader } from "@/components/ui/primitives";
-import { listOnCallWeek } from "@/lib/on-call-plan";
-import { getActiveTechnicians } from "@/lib/masterdata";
+import { listOnCallWeek, listOnCallMonth } from "@/lib/on-call-plan";
+import { getActiveTechniciansWithColor } from "@/lib/masterdata";
 import { OnCallPlanClient } from "@/components/on-call-plan/OnCallPlanClient";
-import { isIsoCalendarDate, mondayOfWeekBerlinIso } from "@/lib/date-local";
+import { isIsoCalendarDate, mondayOfWeekBerlinIso, startOfMonthBerlinIso } from "@/lib/date-local";
 
 export const dynamic = "force-dynamic";
 
-// AUFTRAG_10: Bereitschaftsplan (Einsatzplanung) - Wochenansicht wie die
-// Excel-Matrix "Einsatzplanung". Fuer ALLE Rollen sichtbar (Navigation in
-// roles.ts): der Monteur sieht den Plan read-only, Staff (admin, disponent)
-// bedient ihn. Die Sichtbarkeit der Bedienelemente kommt allein aus `canEdit`
-// unten (echtes Weglassen, kein Verstecken per CSS); die Durchsetzung selbst
-// laeuft ueber RLS (0021_hlk_bereitschaftsplan.sql) und die
-// Staff-Allowlist in on-call-plan-actions.ts.
+// AUFTRAG_10/AUFTRAG_14: Dispo-Board - Wochen- ODER Monatsansicht (Umschalter,
+// Punkt 11 des Auftrags) mit rechter Monteurliste (farbig nach höchster
+// Qualifikation, Punkt 3/12) und einer eigenen Zeile "Dispo/Bereitschafts-
+// telefon" (Punkt 14). Fuer ALLE Rollen sichtbar (Navigation in roles.ts):
+// der Monteur sieht read-only, Staff (admin, disponent) bedient. Die
+// Sichtbarkeit der Bedienelemente kommt allein aus `canEdit` (echtes
+// Weglassen, kein Verstecken per CSS); die Durchsetzung selbst laeuft ueber
+// RLS (0021/0022) und die Staff-Allowlist in on-call-plan-actions.ts.
 export default async function BereitschaftsplanPage({
   searchParams,
 }: {
@@ -21,29 +22,38 @@ export default async function BereitschaftsplanPage({
 }) {
   const session = await requireSession();
   const sp = await searchParams;
-  const wocheParam = sp.woche;
-  const wocheValue = Array.isArray(wocheParam) ? wocheParam[0] : wocheParam;
-  const weekStart =
-    wocheValue && isIsoCalendarDate(wocheValue) ? wocheValue : mondayOfWeekBerlinIso();
+  const first = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
 
-  const [week, technicians] = await Promise.all([
-    listOnCallWeek(weekStart),
-    getActiveTechnicians(),
+  const ansichtValue = first(sp.ansicht);
+  const view: "woche" | "monat" = ansichtValue === "monat" ? "monat" : "woche";
+
+  const wocheValue = first(sp.woche);
+  const weekStart = wocheValue && isIsoCalendarDate(wocheValue) ? wocheValue : mondayOfWeekBerlinIso();
+
+  const monatValue = first(sp.monat);
+  const monthStart = monatValue && isIsoCalendarDate(monatValue) ? monatValue : startOfMonthBerlinIso();
+
+  const [week, month, technicians] = await Promise.all([
+    view === "woche" ? listOnCallWeek(weekStart) : Promise.resolve(null),
+    view === "monat" ? listOnCallMonth(monthStart) : Promise.resolve(null),
+    getActiveTechniciansWithColor(),
   ]);
 
   const canEdit = session.role === "admin" || session.role === "disponent";
-  const technicianOptions = technicians.map((t) => ({
-    id: t.id,
-    label: `${t.first_name} ${t.last_name}`,
-  }));
 
   return (
     <div className="space-y-4">
       <PageHeader
         title="Bereitschaftsplan"
-        subtitle="Wer hat wann je Bauabschnitt Bereitschaft."
+        subtitle="Wer hat wann je Bauabschnitt Bereitschaft - und wer besetzt die Dispo/das Bereitschaftstelefon."
       />
-      <OnCallPlanClient week={week} technicianOptions={technicianOptions} canEdit={canEdit} />
+      <OnCallPlanClient
+        view={view}
+        week={week}
+        month={month}
+        technicians={technicians}
+        canEdit={canEdit}
+      />
     </div>
   );
 }

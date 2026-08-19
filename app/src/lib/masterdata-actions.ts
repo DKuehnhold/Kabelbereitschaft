@@ -5,6 +5,7 @@ import { isUuid, withUserTransaction } from "@/lib/db";
 import { isPgError, PG_CHECK_VIOLATION, PG_UNIQUE_VIOLATION } from "@/lib/db/pg-errors";
 import { getSessionProfile } from "@/lib/auth";
 import { PHONE_TYPES, type PhoneType } from "@/lib/status";
+import { isQualificationColorKey } from "@/lib/qualifications";
 import type { FormState } from "@/lib/incidents";
 import {
   parseTechnicianCsv,
@@ -121,6 +122,10 @@ function revalidateMaster() {
     "/stammdaten/gewerke",
     "/stammdaten/funktionen",
     "/stammdaten/objektarten",
+    // AUFTRAG_14: neue Pflegeseite Qualifikationen + Dispo-Board (die
+    // Qualifikations-Zuordnung wirkt auf die Monteur-Farben im Board).
+    "/stammdaten/qualifikationen",
+    "/bereitschaftsplan",
   ]) {
     revalidatePath(p);
   }
@@ -911,6 +916,99 @@ export async function saveSettings(_prev: FormState, fd: FormData): Promise<Form
                 default_on_call_number_id = excluded.default_on_call_number_id`,
         [defaultCustomerId, defaultOnCallNumberId],
       );
+    });
+  } catch (error) {
+    return saveErr(error);
+  }
+  revalidateMaster();
+  return { ok: true, error: null };
+}
+
+// =====================================================================
+// AUFTRAG_14 – Qualifikationen (public.qualifications) und ihre Zuordnung
+// (public.technician_qualifications).
+//
+// saveQualification folgt exakt dem Muster von saveTrade/saveContactFunction
+// oben (id/label/is_active), ergänzt um rank (Ganzzahl) und color (fester
+// Palettenschlüssel, geprüft VOR dem SQL über isQualificationColorKey() -
+// dieselbe Absicherung wie der Check-Constraint qualifications_color_chk in
+// der Datenbank, hier zusätzlich als Fachfehler statt eines rohen
+// Datenbankfehlers).
+//
+// setTechnicianQualifications ersetzt die GESAMTE Zuordnungsmenge eines
+// Monteurs (Mehrfachauswahl auf der Monteure-Seite) durch delete + insert in
+// EINER Transaktion - dasselbe Muster wie saveContact/saveTeam
+// (Kopfkommentar dieser Datei): ohne gemeinsame Transaktion bliebe bei einem
+// Fehler im zweiten Schritt ein Teilstand zurück.
+// =====================================================================
+export async function saveQualification(_prev: FormState, fd: FormData): Promise<FormState> {
+  const session = await requireStaff();
+  if (!session) return { ok: false, error: STAFF_ONLY };
+  const id = strOrNull(fd, "id");
+  const label = str(fd, "label");
+  if (!label) return { ok: false, error: "Bezeichnung ist erforderlich." };
+  if (id && !isUuid(id)) return { ok: false, error: SAVE_FAILED };
+  const rank = intOrZero(fd, "rank");
+  const color = str(fd, "color");
+  if (!isQualificationColorKey(color)) {
+    return { ok: false, error: "Ungültige Farbe: bitte einen Wert aus der Palette wählen." };
+  }
+  const payload = { label, rank, color, is_active: str(fd, "is_active") !== "false" };
+  try {
+    await withUserTransaction(session.userId, async (client) => {
+      if (id) {
+        await client.query(
+          `update public.qualifications set label = $1, rank = $2, color = $3, is_active = $4 where id = $5::uuid`,
+          [payload.label, payload.rank, payload.color, payload.is_active, id],
+        );
+      } else {
+        await client.query(
+          `insert into public.qualifications (label, rank, color, is_active) values ($1, $2, $3, $4)`,
+          [payload.label, payload.rank, payload.color, payload.is_active],
+        );
+      }
+    });
+  } catch (error) {
+    if (isPgError(error, PG_UNIQUE_VIOLATION))
+      return { ok: false, error: "Diese Qualifikation ist bereits vergeben." };
+    return saveErr(error);
+  }
+  revalidateMaster();
+  return { ok: true, error: null };
+}
+
+export async function setQualificationActive(fd: FormData): Promise<void> {
+  await setActive(fd, `update public.qualifications set is_active = $1 where id = $2::uuid`);
+}
+
+/** Lokaler Ergebnistyp, unabhängig von FormState (kein useActionState-Formular). */
+type SimpleActionResult = { ok: boolean; error: string | null };
+
+/**
+ * Ersetzt die gesamte Qualifikations-Zuordnung eines Monteurs. `qualificationIds`
+ * kommt aus einer Mehrfachauswahl (checkbox-Liste); nicht-kanonische Werte
+ * werden VOR dem SQL verworfen statt dort einen Typfehler auszulösen.
+ */
+export async function setTechnicianQualifications(
+  technicianId: string,
+  qualificationIds: string[],
+): Promise<SimpleActionResult> {
+  const session = await requireStaff();
+  if (!session) return { ok: false, error: STAFF_ONLY };
+  if (!isUuid(technicianId)) return { ok: false, error: SAVE_FAILED };
+  const ids = qualificationIds.filter((id) => isUuid(id));
+  try {
+    await withUserTransaction(session.userId, async (client) => {
+      await client.query(`delete from public.technician_qualifications where technician_id = $1::uuid`, [
+        technicianId,
+      ]);
+      for (const qualificationId of ids) {
+        await client.query(
+          `insert into public.technician_qualifications (technician_id, qualification_id)
+           values ($1::uuid, $2::uuid)`,
+          [technicianId, qualificationId],
+        );
+      }
     });
   } catch (error) {
     return saveErr(error);

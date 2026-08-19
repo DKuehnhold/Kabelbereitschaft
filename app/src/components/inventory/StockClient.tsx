@@ -7,9 +7,9 @@ import { MOVEMENT_TYPE_LABELS, type MovementType } from "@/lib/status";
 import type { StockRow, MaterialRow, LocationRow } from "@/lib/inventory";
 import type { FormState } from "@/lib/incidents";
 
-const field = "rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 w-full";
+const field = "rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-ring w-full";
 const label = "mb-1 block text-sm font-medium text-slate-700";
-const btn = "rounded-md bg-blue-900 px-4 py-2 text-sm font-medium text-white hover:bg-blue-800 disabled:opacity-60";
+const btn = "rounded-md bg-brand px-4 py-2 text-sm font-medium text-brand-fg hover:bg-brand-hover disabled:opacity-60";
 
 const ADMIN_TYPES: MovementType[] = ["wareneingang", "umbuchung", "korrektur", "verlust", "beschaedigung"];
 

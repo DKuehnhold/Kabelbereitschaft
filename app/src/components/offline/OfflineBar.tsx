@@ -36,7 +36,7 @@ export function OfflineBar({ userId }: { userId?: string }) {
         <div className="mb-2 max-h-[70vh] overflow-auto rounded-lg border border-slate-200 bg-white p-3 shadow-lg" role="region" aria-label="Offline und Synchronisation">
           <div className="mb-2 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-slate-800">Offline &amp; Synchronisation</h3>
-            <button type="button" onClick={() => setOpen(false)} className="rounded text-xs text-slate-500 hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500">schließen</button>
+            <button type="button" onClick={() => setOpen(false)} className="rounded text-xs text-slate-500 hover:underline focus:outline-none focus:ring-2 focus:ring-ring">schließen</button>
           </div>
           <dl className="mb-3 grid grid-cols-2 gap-1 text-xs text-slate-600">
             <dt>Status</dt><dd className="text-right">{state.online ? "Online" : "Offline"}{state.syncing ? " · sync…" : ""}</dd>
@@ -52,7 +52,7 @@ export function OfflineBar({ userId }: { userId?: string }) {
             type="button"
             onClick={() => offlineManager.retry()}
             disabled={!state.online || state.syncing}
-            className="mb-3 rounded-md bg-blue-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+            className="mb-3 rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-brand-fg hover:bg-brand-hover focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
           >
             Jetzt synchronisieren
           </button>
@@ -68,7 +68,7 @@ export function OfflineBar({ userId }: { userId?: string }) {
                       <button type="button" onClick={() => void offlineManager.cancelUpload(u.id)} className="ml-2 rounded text-red-700 hover:underline focus:outline-none focus:ring-2 focus:ring-red-400" aria-label={`Upload ${u.fileName} abbrechen`}>abbrechen</button>
                     </div>
                     <div className="mt-1 h-1.5 w-full overflow-hidden rounded bg-slate-100" role="progressbar" aria-valuenow={u.progress} aria-valuemin={0} aria-valuemax={100}>
-                      <div className="h-full bg-blue-600" style={{ width: `${u.progress}%` }} />
+                      <div className="h-full bg-brand" style={{ width: `${u.progress}%` }} />
                     </div>
                     <div className="mt-0.5 text-[11px] text-slate-500">
                       {u.status === "uploading" ? `${u.progress}%` : u.status === "error" ? `Fehler: ${u.error ?? ""} (Versuch ${u.attempts})` : "wartet"}
@@ -119,7 +119,7 @@ export function OfflineBar({ userId }: { userId?: string }) {
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-label={`Offline-Status: ${state.online ? "online" : "offline"}, ${queued} ausstehende Aktionen, ${state.conflicts} Konflikte`}
-        className={`flex w-full items-center justify-between rounded-full px-4 py-2 text-sm font-medium shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
+        className={`flex w-full items-center justify-between rounded-full px-4 py-2 text-sm font-medium shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ring ${
           attention ? "bg-amber-500 text-white" : "bg-slate-800 text-white"
         }`}
       >

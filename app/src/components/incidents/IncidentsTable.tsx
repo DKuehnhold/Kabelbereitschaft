@@ -135,7 +135,7 @@ export function IncidentsTable({
   };
 
   const inputCls =
-    "rounded-md border border-slate-300 px-2 py-1.5 text-sm outline-none focus:border-blue-500";
+    "rounded-md border border-slate-300 px-2 py-1.5 text-sm outline-none focus:border-ring";
 
   return (
     <div className="space-y-3">
@@ -213,7 +213,7 @@ export function IncidentsTable({
                 <td className="px-3 py-2"><PriorityBadge priority={r.priority} /></td>
                 <td className="px-3 py-2 text-slate-500">{fmt(r.updated_at)}</td>
                 <td className="px-3 py-2">
-                  <Link href={`/vorgaenge/${r.id}`} className="font-medium text-blue-800 hover:underline">Öffnen</Link>
+                  <Link href={`/vorgaenge/${r.id}`} className="font-medium text-brand hover:underline">Öffnen</Link>
                 </td>
               </tr>
             ))}

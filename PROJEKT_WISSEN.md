@@ -1300,10 +1300,464 @@ entscheidungsfrei lt. Entscheidung Dennis).
   war in AUFTRAG_4 nicht enthalten. Außerdem gehört bei package.json-Skriptänderungen künftig
   `npm run test:unit` (nicht nur `node --test` direkt) in die Prüfkette, damit Node-Versions-
   abhängige Optionen auffallen.
+- **Nachweis 2026-08-17 (schließt eine Hauptauflage):** Dennis hat die Migrationen
+  **0019, 0020, 0021 und 0022** lokal gegen seine echte PostgreSQL-18-Instanz (Datenbank
+  `kb_dev`) mit `ON_ERROR_STOP=1` eingespielt — **alle vier ohne Fehler**. Damit ist die in
+  REVIEW_6/7/10/14 festgehaltene Auflage „nur Code-Review, kein DB-Lauf" für die
+  Migrationsanwendung erledigt. **Weiterhin offen:** die SQL-Smokes 26–29 und der CI-Job
+  `database` (fail-closed Rollen-/Rechteprüfungen gegen eine frische Datenbank).
+- **Arbeitsmodell geändert (2026-08-17):** der zweite Cowork-Chat („Worker") ist stillgelegt;
+  der Orchestrator/Review-Chat startet Sonnet-Ausführungsagenten und prüft deren Ergebnisse
+  selbst nach. Tagesstand, gebaute Scheiben (AUFTRAG 5–14) und offene Punkte:
+  `00-Projektsteuerung/UEBERGABE_STAND_2026-08-17.md`.
 - **Neues Anforderungsthema:** Pflegeformular für die Disposition zur **Metadaten-Pflege**.
   Fachliche Grundlage ist eine Excel-Datei von Dennis, die **noch nicht im Vault liegt**
   (Stand 2026-08-16 keine xlsx/csv im Vault gefunden); Anforderungsaufnahme startet, sobald die
   Datei vorliegt (Ablage vorgesehen unter `99-Anlagen/` oder `01-Anforderungen/`).
+
+**Nachtrag 2026-08-18 — erster CI-Lauf der Smokes 26 ff.: Ursache geklärt, Testdefekt (AUFTRAG_15).**
+Der von Dennis gelieferte CI-Lauf des Jobs `database` (temporäre Datenbank
+`kabelbereitschaft_test_20260817_142941_3237`) bricht in `28_hlk_bereitschaftsplan.sql` in Fall
+**Z7** ab: `SMOKE Z7 FAIL SQLSTATE kein Fehler … statt 42501 beim Loeschversuch des Monteurs`,
+Prozess-Exit 1. Alle Smokes davor bis einschließlich Z6 sind grün; Z8 ff. und
+`29_hlk_dispo_board.sql` sind wegen des Abbruchs **nie gelaufen**.
+**Ursache ist die Erwartung im Testfall, nicht Migration 0021:** `42501` entsteht bei
+fehlendem Tabellenrecht oder verletzter `with check` (insert/update); die `using`-Bedingung
+einer RLS-Policy **filtert** beim `delete` dagegen nur die Treffermenge. `app_user` besitzt
+`delete` auf `public.on_call_plan` (0021, Abschnitt 3, dort begründet), die Policy
+`on_call_plan_delete` trägt `using (public.is_staff())` — ein Monteur löscht damit **0 Zeilen
+ohne Fehler**. Genau deshalb ist Z6 (`insert`) grün und Z7 (`delete`) rot. Die Schutzwirkung
+selbst besteht: der Monteur entfernt keine Planzeile. Korrektur in AUFTRAG_15/REVIEW_15: Z7
+prüft jetzt kein SQLSTATE mehr, sondern kein Fehler + `row_count = 0` + unveränderte
+Gesamtzeilenzahl + Fortbestand der Zeile, letzteren bewusst im **Administrator-Kontext**
+gelesen. Vom Review-Chat selbst nachgemessen: Diff **1 Datei / 31+ / 6−**, Änderungen
+ausschließlich im Z7-Block, kein `'42501'`-Vergleich mehr in Z7, `node --test test/*.test.mjs`
+**177/177, Exit 0**. Migration 0021 unverändert. **Auflage:** der eigentliche Nachweis ist ein
+grüner SQL-Lauf (kein PostgreSQL in der Sandbox) — CI-Job `database` oder Dennis lokal; danach
+läuft erstmals Smoke 29, dort sind weitere Erstbefunde möglich. Kein Commit, kein Push.
+Gegengeprüft: kein weiterer Fall in 26/28/29 erwartet `42501` aus einem `using`-Zeilenfilter
+(Z8, AA5 und AA9 stützen sich auf ein fehlendes Tabellenrecht, X4 nur auf `insert`).
+
+**Nachtrag 2026-08-18 — Commit-Blocker im Arbeitsbaum: 152 Dateien auf CRLF umgestellt.**
+Bei derselben Nachmessung gefunden: `git status --porcelain` nennt **207** geänderte Dateien,
+davon sind nur **43** echte Inhaltsänderungen (`git diff --stat -w`: 1547+/443−). **152** Dateien
+tragen im Arbeitsbaum CRLF, in HEAD LF; **141** davon sind inhaltlich byteweise identisch zu
+HEAD (reine Zeilenendeänderung), **11** tragen zusätzlich echte Änderungen. Eine
+`.gitattributes` existiert nicht, `core.autocrlf` und `core.eol` sind nicht gesetzt — Git
+normalisiert also nicht. Betroffen sind **alle sieben Shell-Skripte** sowie `app/Dockerfile`,
+`deploy/compose*.yml`, beide Workflows und `run_ap14b_local.ps1`; belegt an
+`app/supabase/test/run_db_tests.sh` (HEAD `#!/usr/bin/env bash$`, Arbeitsbaum
+`#!/usr/bin/env bash^M$`, 655 CR). Folge: würde der Arbeitsbaum so committet, scheiterte der
+CI-Job `database` **vor der ersten SQL-Anweisung** (`env: 'bash\r'`), ebenso der Containerstart
+über `entrypoint.sh` — also **unabhängig von AUFTRAG_15**. Der bisherige rote Lauf zu `3c1343f`
+ist nicht betroffen, weil dort die LF-Fassung im Commit steht. Vorgehen, Messwerte, Dateiliste
+und ein kopierfertiger PowerShell-Block: `00-Projektsteuerung/BEFUND_CRLF_ARBEITSBAUM.md`.
+**Nicht ausgeführt** — Arbeitsbaum-Wiederherstellung ist destruktiv und `.claude/**` ist für
+Claude gesperrt; Entscheidung und Ausführung bei Dennis. Ursache der Umstellung ist **offen**
+(Editor-/Werkzeuglauf oder OneDrive); eine `.gitattributes` (`* text=auto eol=lf`,
+`*.ps1 text eol=crlf`) ist als Wiederholungsschutz vorgeschlagen, aber als repo-weiter Eingriff
+Dennis' Entscheidung.
+
+**Entscheidung Dennis vom 2026-08-18 (Stammdaten-Akkordeon, verbindlich):**
+(a) **Eine neue Übersichtsseite `/stammdaten`** mit Akkordeon; das Aufklappen zeigt die
+Pflege **inline**, kein Seitenwechsel. Die 13 bestehenden Einzelrouten bleiben erhalten und
+direkt aufrufbar. (b) **Flache Reihenfolge ohne Obergruppen:** VzG-Strecken → Bauabschnitte →
+Ansprechpartner → Rest, wobei „Rest" die bestehende Reihenfolge aus `lib/roles.ts` behält
+(Kunden, Monteure, Teams, Kabelarten, Gewerke, Funktionen, Objektarten, Qualifikationen,
+Bereitschaftsnummern, Einstellungen).
+
+**AUFTRAG_16 umgesetzt und freigegeben mit Auflagen (2026-08-18, `REVIEW_16.md`):** neue
+Seite `app/src/app/(app)/stammdaten/page.tsx` mit 13 Akkordeon-Abschnitten in der
+entschiedenen Reihenfolge, alle beim Aufruf zugeklappt, `type="multiple"`, je Abschnitt ein
+Link „Einzelseite öffnen" außerhalb des Triggers (kein verschachteltes interaktives Element);
+neuer Copy-in `app/src/components/ui/shadcn/accordion.tsx` über das **bereits vorhandene**
+`radix-ui`-Meta-Paket — **keine neue Abhängigkeit**, `package.json`/`package-lock.json`
+unberührt; `lib/roles.ts` um **genau einen** Eintrag `/stammdaten` als erstes Element der
+Stammdaten-Gruppe ergänzt. Die 13 Client-Komponenten unter `components/masterdata/` und die
+13 Einzelseiten sind **unverändert**; ihre 13 `subtitle`-Texte sind zeichengleich übernommen
+(gegengeprüft). Rollengate `admin`/`disponent` steht vor der Datenladung. Vom Review-Chat
+selbst nachgemessen: `npx tsc --noEmit` **Exit 0**, `node --test test/*.test.mjs`
+**181/181, fail 0, Exit 0** (Baseline 177 + 4 Wächterfälle: Vollständigkeit der 13
+Komponenten, Positionsvergleich der Reihenfolge, Gate vor Ladung, `roles.ts`-Eintrag), alle
+drei neuen Dateien mit **LF** (0 CR). Umfangsprüfung über Dateizeitstempel statt `git status`,
+weil der Arbeitsbaum 200+ fremde Änderungen aus AUFTRAG 11–14 und die offene CRLF-Umstellung
+trägt. Die Animationsnamen `animate-accordion-up`/`-down` sind belegt: `tw-animate-css`
+(in `globals.css` importiert) liefert `--animate-accordion-*` samt Keyframes.
+**Auflagen:** (1) **Sichtprüfung durch Dennis** — sichtbare Oberfläche, in der Sandbox nicht
+darstellbar; (2) `npm run build` und ESLint lokal.
+**Merkposten:** die Seite lädt 20 Listen in einem `Promise.all` und rendert das Markup aller
+13 Abschnitte auch im zugeklappten Zustand (bei heutigen Datenmengen unkritisch; Ausweg wäre
+Laden je Abschnitt über `Suspense` als eigene Scheibe); `listContacts()`/`listTechnicians()`
+haben unverändert **keine Obergrenze** — kein neu eingeführtes Risiko, gehört aber in die
+CSV-Import-/Kontakte-Scheibe. Beim Testlauf entstand `app/testout.log` (0 Byte, nicht
+gitignoriert, aus der Sandbox nicht löschbar) — **lokal entfernen**, sonst kommt es bei
+`git add -A` mit. Kein Commit, kein Push.
+
+**Entscheidungen Dennis vom 2026-08-18 (Disposition der Monteure, verbindlich):** Block D aus
+`ANFORDERUNG_GUI_RUNDE_2.md` ist mit AUFTRAG_14 im Kern gebaut (belegt gegengeprüft: D11, D12,
+D14, D15 umgesetzt; D13 teilweise). Dennis hat dazu ergänzt und entschieden:
+(a) **Mehrfach-Tageszuweisung über einen Dialog „von–bis"** (gewählt gegen „Auswahl bleibt
+haften" und „Zeitraum ziehen") — Gegenstand von AUFTRAG_18.
+(b) **Soll-Besetzung: zwei Monteure je angelegtem Bauabschnitt und Tag** — ausdrücklich
+„Standard", also **Anzeige ohne harte Grenze**; weder Über- noch Unterbesetzung wird
+blockiert. Die Dispo-Zeile hat keinen Sollwert.
+(c) **Doppelbelegung ist erlaubt, aber nicht unbemerkt:** derselbe Monteur am selben Tag ein
+zweites Mal (anderer Bauabschnitt oder Dispo) → **Hinweis mit Rückfrage**; bestätigt der
+Disponent, ist es zulässig. Deshalb **kein** Datenbank-Constraint.
+(d) **Die Monteurliste rechts bleibt vollständig:** eingeplante Monteure werden **markiert**,
+verschwinden aber nicht und bleiben bedienbar.
+(e) Der **Disponent wird aus derselben Personalliste** geplant wie die Bereitschaft (im
+Bestand schon so).
+(f) **Keine Umbenennung** — Route `/bereitschaftsplan`, Menüpunkt und Titel bleiben
+„Bereitschaftsplan"; eine Umbenennung hat Dennis nicht verlangt.
+
+**AUFTRAG_17 umgesetzt und freigegeben mit Auflage (2026-08-18, `REVIEW_17.md`):** in
+`OnCallPlanClient.tsx` umgesetzt: (1) **Bugfix** — das „×" der Wochenmatrix rief `onRemove`
+ohne `stopPropagation`, das Klickereignis blubberte auf `<td onClick={onCellClick}>`; bei
+ausgewähltem Monteur entfernte ein Klick die Zuweisung **und legte gleichzeitig eine neue an**
+(in der Monatsansicht war es korrekt gelöst). (2) Sollwert-Konstante
+`SOLL_BESETZUNG_BEREITSCHAFT = 2` mit Anzeige „n/2" je Bereitschaftszelle über die bestehenden
+AP8-Badge-Utilities (`badge-success` bei genau 2, `badge-warning` bei Unterbesetzung,
+`badge-info` bei Überbesetzung — bewusst nicht `danger`, es ist kein Fehler); reine Anzeige.
+(3) Doppelbelegungsprüfung in **einem** gemeinsamen Prüfpunkt `handleDropOrClickAssign()`,
+durch den nachgemessen **alle drei** Schreibeinstiege laufen (Drop, Klick Woche, Klickpfad
+Monat); Rückfrage über `window.confirm` mit konkretem Ort, Abbruch führt zu keinem
+Serveraufruf und erhält die Monteurauswahl. (4) Markierung der eingeplanten Monteure als
+Tagesanzahl, Liste nachgemessen **ohne** Filter. Kein Constraint, keine Migration.
+**Grenze ausdrücklich offengelegt:** die Prüfung arbeitet gegen den **geladenen** Zeitraum —
+eine Dublette außerhalb der sichtbaren Woche/des Monats und ein gleichzeitiger zweiter
+Bearbeiter werden nicht erkannt; es ist eine Bedienhilfe, keine Zusicherung. Vom Review-Chat
+selbst nachgemessen: `npx tsc --noEmit` **Exit 0**, `node --test test/*.test.mjs`
+**192/192, fail 0, Exit 0** (Baseline 181 + 11 Wächterfälle), neue Testdatei mit LF,
+Badge-Utilities in `globals.css` als vorhanden nachgezählt. **Auflage:** Sichtprüfung durch
+Dennis; `npm run build`/ESLint lokal. **Gestaltungsfrage an Dennis (bewusst offen):** eine
+leere Zelle zeigt „0/2" in `badge-warning` — in einem frisch geöffneten künftigen Monat leuchtet
+damit die ganze Matrix gelb. **Danach offen (AUFTRAG_18):** Dialog „von–bis", Verschieben ohne
+Maus bzw. in der Monatsansicht, Drag-Feedback der Zielzelle, Sperrzustand während einer Aktion
+(heute erzeugt ein Doppelklick zwei Aktionen), Tastaturbedienung der Zielzellen, Leerzustände
+der Monatsansicht und die Fehlerbox auf AP8-Tokens (heute hart `bg-red-50`/`text-red-700`).
+Kein Commit, kein Push.
+
+**AUFTRAG_18 bis 22 umgesetzt und freigegeben mit Auflagen (2026-08-18, `REVIEW_18_bis_22.md`):**
+- **18 — „von–bis"-Dialog** (Entscheidung Dennis): der Dialog erscheint **vor** dem Schreiben in
+  allen drei Neuzuweisungspfaden (Drop, Klick Woche, Klickpfad Monat); der Verschiebepfad bleibt
+  einzeltägig und ohne Dialog. „Von" ist der angeklickte Tag und festgesetzt, „Bis" ein
+  Datumsfeld; „Nur diesen Tag" ist vorbelegt. Neue Server-Action `assignOnCallRange()` mit
+  derselben Rollen-Allowlist und denselben Eingabeprüfungen wie die Bestandsactions, **beide**
+  Grenzen (Bis vor Von, 92 Tage) serverseitig wiederholt, **eine** `withUserTransaction` mit je
+  Tag `insert … on conflict … do nothing`. Die `on conflict`-Formulierungen treffen Spaltenliste
+  **und** Prädikat der beiden partiellen Unique-Indizes aus `0022` (vom Review gegen die
+  Indexköpfe abgeglichen) — ein belegter Tag wird übersprungen statt die Transaktion mit `23505`
+  zu sprengen. `MAX_RANGE_DAYS = 92` ist **eine** Quelle (Action definiert, Oberfläche
+  importiert). Doppelbelegungsprüfung läuft über **alle** Tage des Zeitraums, gesammelt in einer
+  Rückfrage; Grenze unverändert: nur gegen den **geladenen** Zeitraum, keine
+  Nebenläufigkeitsgarantie. **Kompromiss, offen benannt:** die Erfolgsmeldung nutzt dieselbe
+  Fläche wie die Fehlermeldung (um keine neue Farbklasse einzuführen) und sieht dadurch wie ein
+  Fehler aus — gehört in die Bedienmängel-Scheibe.
+- **20 — Browser-Schutz der 92-Tage-Grenze** (Befund des Review-Chats, nicht des Agenten):
+  `isoDatesInRange()` baute die Tagesliste unbegrenzt auf, **bevor** die Grenze prüfte; ein
+  Tippfehler im Jahr (`2926-…`, von `<input type="date">` akzeptiert) hätte ~330.000 Durchläufe
+  erzeugt und den Tab eingefroren — genau der Fall, gegen den die Grenze schützen soll. Behoben
+  durch früh abbrechenden Zähler **vor** dem Listenaufbau plus hartes Sicherheitsnetz in
+  `isoDatesInRange()` (nie mehr als `MAX_RANGE_DAYS + 1`). Rechnerisch belegt: 92 statt ~330.000
+  Schritte. Der Serverpfad war nie betroffen.
+- **21 — Logo im Dark Mode weiß** (Anforderung Dennis): Ursache war **nicht** das Logo —
+  `Logo.tsx` trug seit AUFTRAG_12 `dark:invert`. Kaputt war `globals.css:9`: die Variante band
+  `dark:` **ausschließlich** an `[data-theme="dark"]`, während der zweite Dunkelfall
+  („System" + dunkles Betriebssystem) über `@media (prefers-color-scheme: dark)` mit
+  `:root:not([data-theme="light"])` läuft — dort waren **alle** `dark:`-Utilities unwirksam.
+  Neue Blockform mit zwei Zweigen, der zweite **deckungsgleich** zum bestehenden Tokenblock;
+  der Ausschluss `:not([data-theme="light"])` ist zwingend (sonst weißes Logo auf weißem Grund
+  bei ausdrücklich hellem Theme auf dunklem OS). **Kein Tokenwert berührt** (per `/tmp`-Kopie
+  und Diff belegt, drei Farbblöcke unverändert vorhanden). **Nebeneffekt, gewollt:** von den 20
+  `dark:`-Utilities in `app/src/` werden neben den 2 Logo-Stellen auch die **18** übrigen
+  (Ring-/Feldfarben der shadcn-Copy-ins) unter „System = dunkel" erstmals aktiv — sichtbare
+  Veränderung an Formularfeldern und Fokusringen in genau diesem Modus.
+- **19 und 22 — zwei Wächterkorrekturen, kein Produktivcodefehler.** Beide betrafen statische
+  Wächtertests, die eine Momentaufnahme des Quelltextes festschrieben: 19 zählte die
+  Allowlist-Prüfungen gegen die feste Zahl 4 (die fünfte Action aus 18 machte ihn zwangsläufig
+  rot) — jetzt Anzahl gegen Anzahl der **exportierten** Actions plus untere Schranke; 22 suchte
+  die Grenzprüfung als **Zeichenkette**, die 20 ersetzen musste — jetzt als Muster **plus**
+  Reihenfolgeprüfung (Vergleich vor `isoDatesInRange(`), also strenger als vorher. **Beide
+  Wirksamkeiten sind gegengeprobt** (Regel zurückgedreht → rot mit sprechender Meldung →
+  zurückgenommen → grün, mit Hash- bzw. `git diff --stat`-Vergleich als Nachweis der
+  Unverändertheit).
+- **Review-Lehre (in einer Sitzung zweimal aufgetreten):** ein statischer Wächter darf **keine**
+  wörtliche Formulierung des Quelltextes festschreiben, sondern muss die **Absicht** prüfen
+  (Anzahl gegen Anzahl, Muster statt Zeichenkette, Reihenfolge statt Vorkommen). Sonst wird er
+  bei der nächsten sachlich richtigen Änderung rot und erzeugt einen Korrekturauftrag ohne
+  Nutzen. Bei neuen Wächtern von Anfang an so bauen — und ihre Wirksamkeit einmal gegenproben,
+  sonst ist grün wertlos.
+- Vom Review-Chat selbst nachgemessen (Abschlussstand): `node --test test/*.test.mjs`
+  **208/208, fail 0, Exit 0**; `npx tsc --noEmit` **Exit 0**; Umfang über Dateizeitstempel
+  geprüft; neue Testdateien mit LF. Testentwicklung der Sitzung: 177 → 181 → 192 → 204 → 208.
+- **Auflagen:** Sichtprüfung durch Dennis in **allen vier** Theme-Zuständen (Logo und die 18 nun
+  aktiven `dark:`-Stellen); `npm run build` und ESLint lokal (ESLint brach zweimal am Zeitlimit
+  ~178 s ab — kein Befund, aber kein Nachweis); SQL-/CI-Nachweis (Smokes 26–29, Job `database`)
+  weiterhin offen; **CRLF-Bereinigung vor dem Commit** (`BEFUND_CRLF_ARBEITSBAUM.md`).
+  Kein Commit, kein Push.
+
+**Befund 2026-08-18 — scheduled task `kb-review-zyklus` schrieb als zweiter Orchestrator in den
+Vault; deaktiviert.** Der Task aus dem stillgelegten Zwei-Chat-Modell (cron `*/10 * * * *`, war
+`enabled: true`) hat während der laufenden Arbeit eigenständig `REVIEW_18_19_20.md` und
+`AUFTRAG_20K.md` angelegt und den **eigenen** Abschnitt des Orchestrator-Chats in
+`CHAT_STATUS.md` auf `arbeitet` gesetzt. `AUFTRAG_20K` beschreibt **dieselbe** Korrektur an
+**derselben** Testdatei wie `AUFTRAG_22` — zwei Agenten hätten dieselbe Datei bearbeiten können;
+nur die Reihenfolge hat das verhindert. `AUFTRAG_20K.md` ist als **gegenstandslos**
+gekennzeichnet (Inhalt bleibt als Historie). Der Task hält zudem weiterhin einen „Worker-Chat"
+für aktiv und deutet die Arbeit dieses Chats als dessen Arbeit. **Inhaltlich war sein Review
+nicht falsch** (dieselben Befunde, dazu zwei eigene Messwerte: `npm audit --audit-level=high
+--omit=dev` → 0 Schwachstellen, Exit 0; zwei ESLint-Abbrüche am Zeitlimit) — **eine** Aussage
+darin ist richtigzustellen: er notiert den Prozess-Exit eines Testlaufs mit einem roten Fall als
+`0`; eigene Messung ergibt Exit **1**. Der Task wurde auf Grundlage der ausdrücklichen Anweisung
+im Übergabestand vom 2026-08-17 **deaktiviert**, nichts gelöscht, kein Prompt geändert.
+Entscheidung über deaktiviert lassen / Prompt auf reines Gegenlesen umschreiben / löschen liegt
+bei Dennis: `00-Projektsteuerung/BEFUND_SCHEDULED_TASK_DOPPELSCHREIBER.md`.
+
+**AUFTRAG_23 umgesetzt und freigegeben mit Auflage (2026-08-18, `REVIEW_23.md`) — Dispo-Board,
+Bedienmängel Teil 1 (Rückmeldung und Robustheit).** In `OnCallPlanClient.tsx`:
+(M1/M2) aus `error: string|null` wurde `feedback: {kind:"success"|"error"; message}` — die
+Zeitraum-Anlage meldet nur bei `createdCount > 0` Erfolg, der „0 Tage"-Sonderfall behält seinen
+Wortlaut und erscheint als Fehler; die harten Farbklassen (`bg-red-50`, `text-red-700`,
+`border-red-300`, `hover:text-red-600`) sind **restlos** ersetzt (eigener Grep über die ganze
+Datei: keine Treffer), stattdessen `card` + `badge-success`/`badge-danger` und
+`hover:text-destructive`. Die verwendeten Tokens sind als vorhanden nachgezählt
+(`--color-destructive`, `--color-surface-2`, `--color-border`, `--ring`); `globals.css` wurde
+**nicht** angefasst. (M3) Drag-Feedback über `onDragEnter`/`onDragLeave` an Wochenmatrix und den
+beiden Ablageflächen, Rücksetzen auch im `drop`-Pfad. (M4) **`busy` bricht jetzt als erste
+Bedingung** in `onCellDrop`, `onCellClick`, der Entfernen-Ablagefläche und dem Tagesklick der
+Monatsansicht ab — vorher deaktivierte `busy` nur Schaltflächen, während Zellklicks weiterliefen
+und ein Doppelklick zwei Aktionen erzeugte; zusätzlich `aria-busy` und reduzierte Deckkraft.
+(M5) „—"-Platzhalter von `canEdit` entkoppelt, Monatsansicht mit eigenem Leerzustand (für
+Monteure ohne Bedienaufforderung). (M6) `minHeight: "44px"` aus `AssignedChip` entfernt,
+Trefferfläche jetzt über `px-2 py-4 -mx-2 -my-4` (Innenabstand plus gegenläufiger negativer
+Rand) — die Matrix wird nicht mehr von jeder Zuweisung auf ≥44 px aufgezogen; `touchStyle` bleibt
+für Schaltflächen. Der Regressionswächter `stopPropagation` aus AUFTRAG_17 ist erhalten.
+Vom Review-Chat selbst nachgemessen: `npx tsc --noEmit` **Exit 0**, `node --test test/*.test.mjs`
+**226/226, fail 0, Exit 0** (Baseline 208 + 18 neue), keine harte Farbklasse mehr, neue Testdatei
+mit LF, Umfang genau zwei Dateien.
+**Auflage:** Sichtprüfung durch Dennis; besonders (a) die Ring-Hervorhebung auf Tabellenzellen
+mit `border-collapse` (browserabhängig beschnitten) und (b) die vergrößerte, unsichtbare
+Trefferfläche des „×", die sich mit benachbarten Chips überlappen **kann** — falls ein Klick den
+falschen Chip trifft, ist das die Ursache. **Offen als Teil 2 (AUFTRAG_24, noch nicht
+beauftragt):** Tastaturbedienung der Zielzellen und Verschieben in der Monatsansicht.
+Kein Commit, kein Push.
+
+**Arbeitsbaum-Hygiene 2026-08-18 (Abschluss der Sitzung):** die CRLF-Umstellung aus
+`BEFUND_CRLF_ARBEITSBAUM.md` ist **weitgehend bereinigt** — gemessen tragen nur noch **39**
+versionierte Dateien CR, davon **32 unter `.claude/`** (für Claude gesperrt, rein kosmetisch,
+nicht CI-relevant) und **7 Binärdateien** (xlsx, png, jpg, ico), deren CR-Bytes auch in HEAD so
+stehen, also nichts zu tun. **Alle sieben Shell-Skripte, `app/Dockerfile`, `deploy/compose*.yml`
+und beide Workflows sind wieder LF** — der Blocker für den CI-Job `database` und den
+Containerstart ist damit weg. Zusätzlich entfernt: `app/testout.log` (Testartefakt, nicht
+gitignoriert). `git status` nennt jetzt 238 Einträge bei **43** echten Inhaltsänderungen
+(`git diff --stat -w`) — der Rest sind die neuen Dateien aus AUFTRAG 11–23. Verbleibend für
+Dennis: die 32 `.claude/`-Dateien (einzeiliger Befehl in `BEFUND_CRLF_ARBEITSBAUM.md`), dann
+Commit und CI.
+
+**Build-Blocker 2026-08-18 (AUFTRAG_24, `REVIEW_24.md`) — und die daraus folgende Prüflücke.**
+Dennis' lokaler `npm run build` (Next 16.2.12, Turbopack) brach mit **13 Fehlern** ab, alle aus
+**einer** Ursache: `app/src/lib/on-call-plan-actions.ts` trägt `"use server"`, und dort sind
+**ausschließlich `async function`-Exporte** zulässig (Typ-Exporte sind unschädlich). Der in
+AUFTRAG_18 ergänzte Wert-Export `export const MAX_RANGE_DAYS = 92;` verletzt das; Turbopack
+verwirft daraufhin **alle** Exporte des Moduls — daher die zwölf Folgemeldungen „Export … doesn't
+exist" / „The module has no exports at all" für die vier völlig intakten Server-Actions.
+**Behoben:** die Konstante liegt jetzt in dem neuen, seiteneffektfreien Modul
+`app/src/lib/on-call-plan-limits.ts` **ohne** Direktive; Actions-Datei und Client-Komponente
+importieren von dort. Verhalten unverändert (reine Verlagerung). Vom Review-Chat selbst
+nachgemessen: kein Wert-Export mehr in einer `"use server"`-Datei, die Zahl **92** steht genau
+einmal (`on-call-plan-limits.ts:20`), beide Importe belegt, `npx tsc --noEmit` **Exit 0**,
+`node --test test/*.test.mjs` **227/227, fail 0, Exit 0**.
+**Prüflücke, die das offengelegt hat — wichtig für jede künftige Scheibe:** es ist eine
+Next.js-/Turbopack-Regel, **keine** TypeScript-Regel. Dennis' Läufe zeigten ESLint still, `tsc`
+still und **226/226 grün** — und den Build rot. `tsc`, ESLint und die Unit-Tests decken die
+Next-Direktiven **nicht** ab; `npm run build` läuft in den Cowork-Sandboxes umgebungsbedingt
+nicht. Ein grünes Review aus dieser Umgebung ist deshalb ausdrücklich **ein Review ohne Build**
+und in der Abschlussmeldung so zu benennen, nicht als Fußnote.
+**Neuer Wächter gegen genau diese Fehlerklasse** (in `auftrag18-dispo-zeitraum.test.mjs`): über
+**alle** Dateien unter `app/src`, deren erste fünf Zeilen die Direktive tragen, muss jeder
+`export` `export async function` oder ein Typ-Export sein. Gegengeprobt mit einer Wegwerfdatei
+(rot mit sprechender Meldung, danach entfernt, wieder grün). Die zunächst enthaltene feste
+Anzahl (`assert.equal(…, 9)`) wurde durch eine **untere Schranke** `>= 9` ersetzt — dieselbe
+Bruchstelle wie in AUFTRAG_19/22, die Schranke schützt zugleich davor, dass der Dateiscan ins
+Leere läuft und der Test stillschweigend nichts mehr prüft. **Andere Direktiv-Regeln (z. B.
+`"use client"`-Grenzen) bleiben weiterhin nur im Build sichtbar.**
+**Auflage:** Dennis lässt `npm run build` erneut laufen; erst danach ist der Stand
+committierbar.
+
+**Nachweis 2026-08-19 — lokaler Produktions-Build grün, Auflage erledigt.** Dennis hat nach
+AUFTRAG_24 `npm run build` erneut ausgeführt: **Exit 0**. Damit ist die seit AUFTRAG_3 in jedem
+Review mitgeführte Auflage „`npm run build` lokal durch Dennis" für den Stand der Aufträge
+15–24 **erfüllt**; zusammen mit seinen Läufen von `npx eslint .` (still), `npx tsc --noEmit`
+(still) und `npm run test:unit` (**226/226**, inzwischen 227/227) ist die vollständige statische
+Prüfkette einmal grün gelaufen. Dieselben Läufe hatten zuvor den Build-Blocker aus AUFTRAG_24
+aufgedeckt — die Kette wirkt also.
+**Merkposten zur Ausgabe:** der erfolgreiche Lauf schreibt Warnungen (`Couldn't load fs`,
+`Couldn't load zlib`) nach stderr; PowerShell stellt stderr grundsätzlich als roten
+`NativeCommandError` dar, was wie ein Abbruch **aussieht**, aber keiner ist. Der Text steht
+nicht im installierten `next`-JavaScript und stammt daher sehr wahrscheinlich aus dem nativen
+Windows-Binary (`@next/swc-win32-x64-msvc`), das in den Cowork-Sandboxes nicht existiert.
+**Verlässlich ist allein `$LASTEXITCODE`** sowie die Artefakte, die Next erst am Ende eines
+erfolgreichen Builds schreibt (`.next/BUILD_ID`, `routes-manifest.json`,
+`prerender-manifest.json`, `required-server-files.json`, `next-server.js.nft.json`) — beim
+echten Fehlschlag zuvor fehlten sie sämtlich. Künftig `npm run build 2>&1 | Select-Object
+-Last 40` plus `$LASTEXITCODE` verwenden, statt die Rotfärbung zu deuten.
+**Damit noch offen vor dem Commit:** die 32 CRLF-Dateien unter `.claude/`, der lokale
+Datenbanklauf (`run_ap14b_local.ps1 -TemporaryCluster`, dort läuft **Smoke 29 zum ersten Mal**)
+und die Sichtprüfungen (`/stammdaten`, Dispo-Board, Logo in allen vier Theme-Zuständen).
+
+**Datenbanklauf 2026-08-19 (Dennis, `run_ap14b_local.ps1 -TemporaryCluster`) — Z7 durch, neuer
+Defekt in Z12; AUFTRAG_25/`REVIEW_25.md`.** Der Fix aus AUFTRAG_15 **wirkt**: Z7 ist
+durchgelaufen, der Lauf kommt rund 200 Zeilen weiter. Migrationen 0001–0022 und die Fälle Z1–Z11
+sind damit erstmals gegen echtes PostgreSQL 18 gelaufen, Aufräumbilanz sauber. Abbruch dann in
+**Z12** mit `No function matches the given name and argument types` an
+`select count(*), max(detail) …`: `audit_events.detail` ist **`jsonb`** (`0001_init.sql:367`),
+und für `jsonb` existiert **keine** Aggregatfunktion `max()` (keine Ordnungsoperatorklasse). Die
+Anweisung scheiterte an der Funktionsauflösung, war also **grundsätzlich** nie ausführbar —
+erneut **kein Produktcodefehler**, sondern Prüfcode aus AUFTRAG_10, der bis dahin nie erreicht
+wurde. **Behoben** durch zwei Anweisungen statt einer (erst `count(*)` prüfen, dann `detail` der
+einen Zeile lesen); geprüfte Aussage und alle drei Fehlermeldungen **wörtlich erhalten**.
+Vom Review-Chat nachgemessen: keine `max/min/sum(detail)`-Stelle mehr in den Smokes 26–29,
+`$$`-Bilanz in 28 **15/15**, Umfang genau eine Datei (`29_hlk_dispo_board.sql` unberührt),
+Node-Suite 227/227. **Vorabdurchsicht** von 29 (vollständig, 612 Zeilen) und des Rests von 28
+gegen die Migrationen: **kein weiterer nicht ausführbarer Fund**.
+**Auflage:** Dennis lässt den Datenbanklauf erneut laufen; **Smoke 29 ist weiterhin nie
+gelaufen**, dort sind Erstbefunde möglich — auch inhaltliche, nicht nur syntaktische.
+
+**Review-Lehre (drittes Auftreten desselben Musters in zwei Tagen): ungelaufener Prüfcode ist
+kein Nachweis, sondern eine Vermutung.** Erst Z7 (unerreichbare SQLSTATE-Erwartung, weil `using`
+bei `delete` filtert statt abzuweisen), dann zwei zu starre Node-Wächter (feste Anzahl, wörtliche
+Zeichenkette), jetzt `max(detail)` auf `jsonb`. Gemeinsame Ursache: die Migrationen 0019–0022
+waren längst gegen eine echte Datenbank eingespielt, die zugehörigen **Smokes aber nie** — und
+genau dort steckten die Fehler. Konsequenz für kommende Scheiben: ein neu geschriebener Smoke
+gilt erst als Nachweis, wenn er **einmal gelaufen** ist; bis dahin ist er in jeder Meldung und
+jedem Review als „geschrieben, **nicht ausgeführt**" zu führen — nicht als erbrachter Nachweis.
+
+**Datenbanklauf 2026-08-19, zweiter Durchgang — Smoke 28 vollständig grün, Smoke 29 erstmals
+gelaufen (AUFTRAG_26).** Der Lauf erreicht erstmals `29_hlk_dispo_board.sql`; damit sind
+Migrationen 0001–0022 und die **Smokes 15–28 vollständig** gegen echtes PostgreSQL 18 belegt
+(Z7 aus AUFTRAG_15 und Z12 aus AUFTRAG_25 beide erledigt, Aufräumbilanz sauber). Smoke 29 bricht
+sofort in der eigenen Fixture-Prüfung ab: `SMOKE AA-FIXTURES FAIL 6 statt 5 Stammdatenzeilen`.
+**Ursache: Rechenfehler in der Sollzahl**, kein Produktcodefehler und kein Datenproblem — die
+Datei legt 3 Profile, 1 Bauabschnitt und 2 Techniker an (Summe **6**), und die Erfolgsmeldung
+desselben Blocks sagt es selbst („drei Identitaeten, ein Bauabschnitt und zwei Techniker"); der
+zweite Techniker für die FK-Gegenprobe war ergänzt worden, ohne die Zahl mitzuziehen. **Behoben:**
+Sollzahl auf 6, Herleitung (3+1+2) in den Fehlertext aufgenommen, damit sie beim nächsten
+Fixture-Zuwachs nicht wieder auseinanderläuft.
+**Rechenprobe über die gesamte Datei** (beauftragt, damit nicht jeder Zehn-Minuten-Lauf an der
+nächsten falschen Zahl stirbt): **22** Vergleichsstellen geprüft — Policy-Zahlen (2 bzw. 3),
+sichtbare Qualifikationen (2), Zuordnungen (2), Restbestand nach Rollback (0), die
+SQLSTATE-Proben (23514, 42501, 23505, 23503) und die dynamischen Vorher/Nachher-Vergleiche.
+**Genau eine** Korrektur, **keine** unsichere Stelle. Vom Review-Chat nachgemessen: `$$`-Bilanz
+**16/16**, Umfang genau eine Datei, Node-Suite **227/227, Exit 0**.
+**Auflage:** Dennis lässt den Datenbanklauf erneut laufen. Smoke 29 ist damit weiterhin **nicht
+durchgelaufen** — bisher ist nur seine erste Prüfung passiert; die Fälle AA1 ff. sind ungelaufen.
+
+**Arbeitsmodell 2026-08-19 (Entscheidung Dennis): scheduled task `kb-review-zyklus` wieder
+aktiviert, Prompt auf das Ein-Chat-Modell umgestellt.** Der Task läuft weiter alle 10 Minuten,
+sein Auftragstext war aber noch für das stillgelegte Zwei-Chat-Modell geschrieben (er suchte
+„Worker-Meldungen", nannte die überholte Baseline 115/115 und eine längst abgearbeitete
+Reihenfolge) — daraus entstand am 2026-08-18 der Doppelauftrag `AUFTRAG_20K`. Neuer Prompt:
+(a) er versteht sich ausdrücklich als **Automatiklauf**, nicht als der interaktive Chat;
+(b) **Kollisionsregel** — steht „Orchestrator/Review (Chat 1)" in `CHAT_STATUS.md` auf `arbeitet`
+mit Zeitstempel jünger als 30 Minuten, beendet er den Durchgang **ohne zu schreiben**, und er
+ändert niemals den Abschnitt von Chat 1; (c) er legt **keinen** Auftrag an, dessen Gegenstand
+schon in einem vorhandenen `AUFTRAG_*.md` steht; (d) aktuelle Baseline **227/227**, aktuelle
+Umgebungsgrenzen (kein Build, kein ESLint, kein PostgreSQL) und die aktuelle Liste offener
+Themen; (e) die Projektlehren zu Wächtertests und zu ungelaufenem Prüfcode sind aufgenommen.
+`CHAT_STATUS.md`: der zweite Abschnitt heißt jetzt **„Automatiklauf (Chat 2)"** statt „Worker".
+
+**Datenbanklauf 2026-08-19, dritter Durchgang — SQL-Kette vollständig grün (AUFTRAG_27,
+`REVIEW_27.md`).** Der Lauf hat Bootstrap, **Migrationen 0001–0022 und die Smokes 15–29**
+hinter sich und scheitert erst in der Node-Phase; auch `ap14b-platform.int.mjs` lief durch.
+Damit sind die Korrekturen aus AUFTRAG_15 (Z7), 25 (Z12) und 26 (Fixture-Sollzahl) gegen eine
+echte PostgreSQL-18-Instanz **belegt**, und **Smoke 29 ist erstmals vollständig gelaufen**.
+Rot waren zwei Fälle der Suite `ap14b-masterdata-inventory.int.mjs` mit **einer** Ursache:
+**IM6** scheiterte an der exakt verglichenen Feldliste `ContactRow` — die Zeile trägt zusätzlich
+`function_id` und `function_label` aus AUFTRAG_6 / Migration `0019` (belegt: `0019` Abschnitt 4
+legt `contacts.function_id` als FK auf `contact_functions` an, der Spaltenkommentar hält fest,
+dass das Freitextfeld `function` unverändert daneben bestehen bleibt; `masterdata.ts` führt alle
+drei; `REVIEW_6.md` grün). **Die Projektion war richtig, veraltet war der Test** — Erwartung
+ergänzt, Prüfung bleibt exakt (`deepEqual` über sortierte Schlüssel), nicht auf „enthält"
+gelockert. **IM7 war ein Folgefehler**: die Meldung `2 !== 1` betrifft die **Vorbedingung**
+`before.phones.length === 1` (Zeile 1014), weil IM6 abbrach, bevor sein zweiter
+`saveContact`-Aufruf die Nummern von zwei auf eine reduzierte — **kein** Transaktionsproblem.
+**Ausdrücklich offen:** die Zusage „`saveContact` hinterlässt bei einem Fehler im zweiten Schritt
+keinen Teilstand" wurde in diesem Lauf **gar nicht geprüft**; sie ist weder belegt noch
+widerlegt und gilt erst nach einem Lauf, in dem IM7 sie tatsächlich erreicht — **nicht**
+rückwirkend als „war schon in Ordnung" verbuchen. Die übrigen 19 Feldlisten der Suite wurden
+gegen die heutigen Projektionen geprüft, keine weitere Abweichung. Vom Review-Chat nachgemessen:
+Umfang genau eine Datei, **21** `assertKeys`-Aufrufe unverändert, exakte Vergleichsform erhalten,
+`node --check` Exit 0, Node-Suite **227/227, Exit 0**.
+**Noch nie gelaufen (seit 0019–0022):** `ap14b-images`, `ap14b-admin-users`,
+`ap15-dashboard-metrics`, `ap15b-incident-list` — dort sind weitere Befunde derselben Art
+möglich. `assertKeys` gibt es allerdings nur in der Stammdaten-Suite.
+**Einordnung: vierter Befund in Folge, bei dem der PRÜFCODE hinterherhinkte, nicht die
+Anwendung** (Z7, Z12, Fixture-Sollzahl, Feldliste). Alle vier aus Scheiben, deren Migrationen
+längst gegen eine echte Datenbank liefen, deren Prüfcode aber nie. Umgekehrt gelesen: die
+Anwendung selbst hat sich in dieser Prüfrunde bislang **nicht** als fehlerhaft erwiesen.
+
+**Automatiklauf bewährt sich (2026-08-19).** Der wieder aktivierte scheduled task hat
+eigenständig `REVIEW_26.md` geschrieben, dabei die neue **Kollisionsregel eingehalten**
+(eigener Abschnitt „Automatiklauf (Chat 2)", Chat 1 unberührt, danach zurück auf `frei`),
+**keinen** neuen Auftrag angelegt und mit eigenen Messwerten dasselbe Urteil erreicht wie dieser
+Chat. Damit funktioniert das Modell „interaktiver Chat plus unabhängiges automatisches
+Gegenlesen" ohne Schreibkonflikt.
+
+**NACHWEIS 2026-08-19 — vollständiger Datenbanklauf grün. Die größte offene Auflage seit dem
+2026-08-17 ist damit erledigt.** Dennis' Lauf von `run_ap14b_local.ps1 -TemporaryCluster` endet
+mit der Abschlusszeile
+
+> `ERGEBNIS: AP10/AP11/AP12/AP13/AP14B/AP15/AP15-b DATENBANKTESTS ERFOLGREICH.`
+
+Belegt ist damit gegen eine **frische, temporäre PostgreSQL-18-Instanz** (eigenes Cluster auf
+Port 55432, nicht der Windows-Dienst):
+
+- **Bootstrap und Migrationen 0001–0022** in der vorgesehenen Reihenfolge, `ON_ERROR_STOP`;
+- **alle SQL-Smokes 15–29**, einschließlich der drei in dieser Sitzung korrigierten Fälle
+  Z7 (AUFTRAG_15), Z12 (AUFTRAG_25) und der Fixture-Sollzahl von Smoke 29 (AUFTRAG_26);
+- **alle Node-Integrationssuiten**, einschließlich der vier, die seit den Migrationen 0019–0022
+  nie gelaufen waren (`ap14b-images`, `ap14b-admin-users`, `ap15-dashboard-metrics`,
+  `ap15b-incident-list` — letztere mit 13/13);
+- **Aufräumbilanz vollständig**: Port frei, Clusterverzeichnis und Arbeitsverzeichnis entfernt,
+  temporäre Anmelderolle und Testdatenbank gelöscht.
+
+**Damit ist auch die Zusage aus IM7 erstmals wirklich geprüft:** `saveContact` hinterlässt bei
+einem Fehler im zweiten Schritt keinen Teilstand. Im vorherigen Lauf war IM7 nur an seiner
+Vorbedingung gescheitert und die Zusage ungeprüft geblieben (siehe `REVIEW_27.md`) — jetzt ist
+sie belegt, nicht rückwirkend angenommen.
+
+**Stand der Nachweise für die Scheiben AUFTRAG_15–27:** lokaler Produktions-Build **Exit 0**,
+ESLint still, `npx tsc --noEmit` **Exit 0**, Unit-Tests **227/227**, vollständiger
+Datenbanklauf **grün**. Die einzige verbliebene Prüfung ist der **CI-Lauf nach dem Push** —
+er wiederholt die Kette auf einer frischen Umgebung und prüft zusätzlich Container und
+Objektspeicher.
+
+**Vor dem Commit bleibt:** die 32 CRLF-Dateien unter `.claude/` (kosmetisch, nicht CI-relevant,
+Einzeiler in `BEFUND_CRLF_ARBEITSBAUM.md`) und die **Sichtprüfungen im Browser**
+(`/stammdaten`-Akkordeon, Dispo-Board einschließlich „von–bis"-Dialog und Besetzungsanzeige,
+Logo in allen vier Theme-Zuständen) — keine davon ist durch einen Testlauf ersetzbar.
+
+**Befund 2026-08-19 — verwaiste `.git/index.lock` blockiert den Commit und bläht `git status`
+künstlich auf.** `git add -A` und `git commit` scheitern mit
+`fatal: Unable to create '…/.git/index.lock': File exists. Another git process seems to be
+running…`. Gemessen: die Datei ist **0 Byte groß und vom 2026-08-17, 19:09** — also zwei Tage
+alt und kein laufender Vorgang. Sie ist derselbe OneDrive-/FUSE-Effekt, der schon am 2026-07-26
+zur „Lock-Quarantäne" unter `C:\Backup` geführt hat; im `.git`-Verzeichnis liegen bis heute
+**18 weitere** Altlasten dieser Art (`HEAD.lock.*`, `index.lock.*`, `*.lock.stale`,
+`*.lock.trash*`). Nur die exakten Namen `index.lock` und `HEAD.lock` wirken als Sperre, die
+übrigen sind Müll ohne Wirkung.
+**Zweite, unmittelbare Folge — wichtig für die Beurteilung des Stands:** solange die Sperre
+liegt, kann Git den **Index nicht auffrischen**. `git status` meldet dann jede Datei als
+`modified`, deren Zeitstempel sich geändert hat, auch wenn ihr **Inhalt identisch** ist. Genau
+das erklärt Dennis' Liste mit **184** geänderten Dateien: eigene Messung im selben Arbeitsbaum
+ergibt `git diff --numstat` → **44** Dateien mit echter Inhaltsänderung und **0** Dateien mit
+reiner Modusänderung; `git diff --raw` auf Stichproben (`Willkommen.md`,
+`deploy/scripts/db-backup.sh`, `app/src/lib/auth-service.ts`, `.gitignore`) liefert **keine**
+Ausgabe, sie sind also unverändert. `core.fileMode` steht bereits auf `false`.
+**Erwarteter Stand nach dem Entfernen der Sperre:** rund **44** geänderte plus **69** neue
+Dateien statt 184 + 69. **Vorgehen wie 2026-07-26: verschieben, nicht löschen** — die Lock-Datei
+wird zur Seite gelegt, damit sie im Zweifel noch da ist.
 
 ## Definitionen und Begriffe
 - **AP1–AP7:** Arbeitspakete (Grundgerüst → Vorgänge → Material → Bilder → Offline/PWA → E2E/Härtung → Release Readiness).

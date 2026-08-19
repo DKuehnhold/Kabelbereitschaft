@@ -19,8 +19,8 @@ import type { IncidentRow } from "@/lib/incidents";
 import type { UserRole } from "@/lib/roles";
 
 const field =
-  "rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 w-full";
-const btn = "rounded-md bg-blue-900 px-4 py-2 text-sm font-medium text-white hover:bg-blue-800";
+  "rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-ring w-full";
+const btn = "rounded-md bg-brand px-4 py-2 text-sm font-medium text-brand-fg hover:bg-brand-hover";
 const cardH = "mb-3 text-sm font-semibold uppercase text-slate-500";
 
 export function IncidentControls({

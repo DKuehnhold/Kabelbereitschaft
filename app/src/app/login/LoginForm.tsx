@@ -22,14 +22,14 @@ export function LoginForm({
   const [state, formAction, pending] = useActionState(signIn, initialState);
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-100 px-4">
-      <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
+    <main className="flex min-h-screen items-center justify-center bg-background px-4">
+      <div className="w-full max-w-sm rounded-xl border border-border bg-surface p-8 shadow-sm">
         <div className="mb-6 flex flex-col items-center gap-3 text-center">
-          <Logo height={40} />
-          <h1 className="text-lg font-semibold text-slate-900">
+          <Logo height={56} />
+          <h1 className="text-lg font-semibold text-foreground">
             Bereitschaftsapp HLK
           </h1>
-          <p className="text-sm text-slate-500">Bitte anmelden</p>
+          <p className="text-sm text-muted">Bitte anmelden</p>
         </div>
 
         {/* Nach einem Passwortwechsel sind alle Sitzungen widerrufen; die
@@ -53,7 +53,7 @@ export function LoginForm({
           <div>
             <label
               htmlFor="email"
-              className="mb-1 block text-sm font-medium text-slate-700"
+              className="mb-1 block text-sm font-medium text-foreground"
             >
               E-Mail
             </label>
@@ -63,14 +63,14 @@ export function LoginForm({
               type="email"
               autoComplete="email"
               required
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              className="input"
             />
           </div>
 
           <div>
             <label
               htmlFor="password"
-              className="mb-1 block text-sm font-medium text-slate-700"
+              className="mb-1 block text-sm font-medium text-foreground"
             >
               Passwort
             </label>
@@ -80,7 +80,7 @@ export function LoginForm({
               type="password"
               autoComplete="current-password"
               required
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              className="input"
             />
           </div>
 
@@ -93,7 +93,7 @@ export function LoginForm({
           <button
             type="submit"
             disabled={pending}
-            className="w-full rounded-md bg-blue-900 px-4 py-2 text-sm font-medium text-white hover:bg-blue-800 disabled:opacity-60"
+            className="btn btn-primary w-full"
           >
             {pending ? "Anmeldung läuft…" : "Anmelden"}
           </button>

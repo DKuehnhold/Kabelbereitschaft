@@ -24,7 +24,7 @@ export function EinsatzListe({ rows }: { rows: IncidentRow[] }) {
         <Link
           key={r.id}
           href={`/vorgaenge/${r.id}`}
-          className="block rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition hover:border-blue-300 hover:shadow"
+          className="block rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition hover:border-brand hover:shadow"
         >
           <div className="flex items-center justify-between">
             <span className="font-semibold text-slate-900">#{r.incident_no}</span>

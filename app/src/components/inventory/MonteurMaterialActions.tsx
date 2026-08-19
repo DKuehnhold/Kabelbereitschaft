@@ -16,9 +16,9 @@ const LOC_FIELD: Record<Mode, string> = {
 const LABELS: Record<Mode, string> = { entnahme: "Entnahme", rueckgabe: "Rückgabe", verbrauch: "Verbrauch" };
 const LOC_LABEL: Record<Mode, string> = { entnahme: "Quelllager", rueckgabe: "Ziellager", verbrauch: "Quelllager" };
 
-const field = "rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 w-full";
+const field = "rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-ring w-full";
 const label = "mb-1 block text-sm font-medium text-slate-700";
-const btn = "rounded-md bg-blue-900 px-4 py-2 text-sm font-medium text-white hover:bg-blue-800 disabled:opacity-60";
+const btn = "rounded-md bg-brand px-4 py-2 text-sm font-medium text-brand-fg hover:bg-brand-hover disabled:opacity-60";
 
 function ActionForm({
   mode,
@@ -87,7 +87,7 @@ export function MonteurMaterialActions({
             key={t}
             type="button"
             onClick={() => setTab(t)}
-            className={`flex-1 rounded px-3 py-1.5 font-medium ${tab === t ? "bg-white text-blue-900 shadow" : "text-slate-600"}`}
+            className={`flex-1 rounded px-3 py-1.5 font-medium ${tab === t ? "bg-white text-brand shadow" : "text-slate-600"}`}
           >
             {LABELS[t]}
           </button>

@@ -378,36 +378,61 @@ $$;
 -- ---------------------------------------------------------------------
 -- Z7: MONTEUR NEGATIV - kein delete, auch nicht auf eine bestehende, fuer ihn
 -- sichtbare Zeile.
+--
+-- Semantik (siehe 0021_hlk_bereitschaftsplan.sql, Abschnitt 3): `using`
+-- filtert bei delete die Treffermenge, es weist sie nicht ab - 42501 entsteht
+-- nur bei fehlendem Tabellenrecht oder einer verletzten `with check` (insert/
+-- update). app_user besitzt delete auf public.on_call_plan, die Policy
+-- on_call_plan_delete traegt `using (public.is_staff())`; der Monteur loescht
+-- daher 0 Zeilen ohne Fehler. Geprueft wird die Wirkung, nicht ein SQLSTATE.
 -- ---------------------------------------------------------------------
 do $$
 declare
   v_state text;
   v_id uuid;
+  v_deleted integer;
   v_exists boolean;
+  v_count_vorher integer;
+  v_count_nachher integer;
 begin
   perform set_config('app.user_id', '28a00000-0000-0000-0000-000000000003', true);
   v_id := nullif(current_setting('kb28a.plan_a2', true), '')::uuid;
 
+  select count(*) into v_count_vorher from public.on_call_plan;
+
   v_state := null;
+  v_deleted := null;
   begin
     delete from public.on_call_plan where id = v_id;
+    get diagnostics v_deleted = row_count;
   exception
-    when insufficient_privilege then v_state := sqlstate;
     when others then v_state := sqlstate;
   end;
 
-  if v_state is distinct from '42501' then
+  if v_state is not null then
     raise exception
-      'SMOKE Z7 FAIL SQLSTATE % statt 42501 beim Loeschversuch des Monteurs',
-      coalesce(v_state, 'kein Fehler - der Monteur hat die Zuweisung entfernt');
+      'SMOKE Z7 FAIL SQLSTATE % beim Loeschversuch des Monteurs - der Zeilenfilter der Policy on_call_plan_delete darf keinen Fehler auswerfen',
+      v_state;
   end if;
 
+  if v_deleted <> 0 then
+    raise exception 'SMOKE Z7 FAIL der Monteur hat % Zeile(n) statt 0 geloescht', v_deleted;
+  end if;
+
+  select count(*) into v_count_nachher from public.on_call_plan;
+  if v_count_nachher <> v_count_vorher then
+    raise exception 'SMOKE Z7 FAIL die Zeilenzahl hat sich trotz 0 betroffener Zeilen veraendert (% -> %)',
+      v_count_vorher, v_count_nachher;
+  end if;
+
+  perform set_config('app.user_id', '28a00000-0000-0000-0000-000000000001', true);
   select exists(select 1 from public.on_call_plan where id = v_id) into v_exists;
+  perform set_config('app.user_id', '28a00000-0000-0000-0000-000000000003', true);
   if not v_exists then
-    raise exception 'SMOKE Z7 FAIL die Zuweisung besteht nach dem abgewiesenen Loeschversuch nicht mehr';
+    raise exception 'SMOKE Z7 FAIL die Zuweisung besteht nach dem Loeschversuch des Monteurs nicht mehr';
   end if;
 
-  raise notice 'SMOKE Z7 OK der Monteur wird bei delete mit 42501 abgewiesen, die Zeile bleibt bestehen';
+  raise notice 'SMOKE Z7 OK der Zeilenfilter der Policy on_call_plan_delete (using is_staff()) entfernt die Zeile aus der Treffermenge - 0 betroffene Zeilen, kein Fehler, die Zuweisung bleibt bestehen';
 end
 $$;
 
@@ -567,7 +592,7 @@ declare
 begin
   v_id := nullif(current_setting('kb28a.plan_a3', true), '')::uuid;
 
-  select count(*), max(detail) into v_count, v_detail
+  select count(*) into v_count
   from public.audit_events
   where entity = 'on_call_plan' and entity_id = v_id and action = 'DELETE';
 
@@ -575,6 +600,11 @@ begin
     raise exception
       'SMOKE Z12 FAIL % statt 1 Audit-Datensatz fuer das delete der Zuweisung aus Z9 gefunden', v_count;
   end if;
+
+  select detail into v_detail
+  from public.audit_events
+  where entity = 'on_call_plan' and entity_id = v_id and action = 'DELETE';
+
   if v_detail is null or v_detail->'old' is null then
     raise exception 'SMOKE Z12 FAIL der Audit-Datensatz traegt kein detail.old mit der geloeschten Zeile';
   end if;

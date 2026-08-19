@@ -249,3 +249,53 @@ export function mondayOfWeekBerlinIso(reference: Date = new Date()): string {
   const daysSinceMonday = weekday === 0 ? 6 : weekday - 1;
   return addDaysToIsoDate(todayIso, -daysSinceMonday);
 }
+
+// =====================================================================
+// AUFTRAG_14: Monatsansicht des Dispo-Boards. Dieselbe DST-Festigkeit wie
+// bei mondayOfWeekBerlinIso() oben - sobald der Berliner Kalendertag einmal
+// zuverlässig ermittelt ist (berlinCalendarDateIso), ist jede weitere
+// Rechnung reine Kalenderarithmetik auf Jahr/Monat/Tag und damit unabhängig
+// von der Sommer-/Winterzeit.
+// =====================================================================
+
+/** Erster Kalendertag "YYYY-MM-01" des Monats, der `iso` enthält. */
+export function monthStartIso(iso: string): string {
+  const match = ISO_CALENDAR_DATE_PATTERN.exec(iso);
+  if (!match) throw new Error(`monthStartIso: kein gueltiges Kalenderdatum: "${iso}"`);
+  const [, y, mo] = match;
+  return `${y}-${mo}-01`;
+}
+
+/** Erster Kalendertag "YYYY-MM-01" des Berliner Kalendermonats von `reference`. */
+export function startOfMonthBerlinIso(reference: Date = new Date()): string {
+  return monthStartIso(berlinCalendarDateIso(reference));
+}
+
+/**
+ * Ein Kalendermonat "YYYY-MM-01" plus/minus `months` volle Monate - reine
+ * Kalenderarithmetik, `iso` muss KEIN Monatsanfang sein (wird zuerst
+ * normalisiert). `Date.UTC` normalisiert einen Monatsüberlauf automatisch
+ * (Monat 13 wird Januar des Folgejahres), dasselbe überlaufsichere Prinzip
+ * wie bei addDaysToIsoDate() oben.
+ */
+export function addMonthsToIsoDate(iso: string, months: number): string {
+  const match = ISO_CALENDAR_DATE_PATTERN.exec(monthStartIso(iso));
+  if (!match) throw new Error(`addMonthsToIsoDate: kein gueltiges Kalenderdatum: "${iso}"`);
+  const [, y, mo] = match;
+  const asUtc = new Date(Date.UTC(Number(y), Number(mo) - 1 + months, 1));
+  return asUtc.toISOString().slice(0, 10);
+}
+
+/**
+ * Alle Kalendertage "YYYY-MM-DD" des Monats, der `monthStart` (ein
+ * Monatsanfang, siehe monthStartIso()) enthält - für Februar 28 oder 29,
+ * abhängig vom Schaltjahr (Date.UTC(y, m, 0) liefert den letzten Tag des
+ * VORIGEN Monats bei `m` als 1-basiertem Folgemonat, hier bewusst genutzt).
+ */
+export function daysInMonthIso(monthStart: string): string[] {
+  const match = ISO_CALENDAR_DATE_PATTERN.exec(monthStart);
+  if (!match) throw new Error(`daysInMonthIso: kein gueltiges Kalenderdatum: "${monthStart}"`);
+  const [, y, mo] = match;
+  const lastDay = new Date(Date.UTC(Number(y), Number(mo), 0)).getUTCDate();
+  return Array.from({ length: lastDay }, (_, i) => addDaysToIsoDate(`${y}-${mo}-01`, i));
+}

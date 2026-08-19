@@ -164,12 +164,24 @@ test("mondayOfWeekBerlinIso: ohne Argument wird die aktuelle Systemzeit verwende
 });
 
 // ---------------------------------------------------------------------------
-// AUFTRAG_10: Staff-Allowlist in on-call-plan-actions.ts, exaktes Muster von
+// AUFTRAG_10 (Basis) / AUFTRAG_14 (auf vier Aktionen erweitert) /
+// AUFTRAG_19 (selbsttragend gemacht, Stopppunkt aus AUFTRAG_18):
+// Staff-Allowlist in on-call-plan-actions.ts, exaktes Muster von
 // STAFF_ALLOWED_ROLES in incident-list-actions.ts (siehe
 // app/test/ap15b-callers.test.mjs). AUSDRUECKLICH EIN STATISCHER WAECHTER
 // UND KEIN VERHALTENSNACHWEIS.
-// ---------------------------------------------------------------------------
-test("on-call-plan-actions.ts: assignOnCall/removeOnCall pruefen ueber dieselbe benannte Staff-Allowlist", async () => {
+//
+// AUFTRAG_18 hat mit assignOnCallRange() eine fuenfte schreibende Server-
+// Action ergaenzt, die denselben Pruefpfad verwendet - damit wurde der alte,
+// fest eingetragene Zaehler (4) zwangslaeufig rot. Der Waechter pruefte eine
+// Momentaufnahme statt der eigentlichen Absicht ("jede schreibende Action
+// prueft ueber die benannte Allowlist"). AUFTRAG_19 macht ihn selbsttragend:
+// er zaehlt beide Groessen direkt aus dem Quelltext - die Vorkommen von
+// STAFF_ALLOWED_ROLES.includes(session.role) und die Anzahl der exportierten
+// Server-Actions (export async function ...) - und verlangt Gleichheit.
+// Eine neue Action ohne Pruefung wird rot, eine neue Action MIT Pruefung
+// bleibt gruen, ohne dass jemand eine Zahl pflegen muss.
+test("on-call-plan-actions.ts: jede exportierte Server-Action prueft ueber dieselbe benannte Staff-Allowlist", async () => {
   const source = await readSource("../src/lib/on-call-plan-actions.ts");
 
   assert.match(
@@ -191,31 +203,59 @@ test("on-call-plan-actions.ts: assignOnCall/removeOnCall pruefen ueber dieselbe 
     }
   }
 
+  // Selbsttragender Kern (AUFTRAG_19): die Anzahl der Allowlist-Pruefungen
+  // muss der Anzahl der exportierten schreibenden Server-Actions derselben
+  // Datei entsprechen - keine fest eingetragene Zahl mehr.
   const usages = source.match(/STAFF_ALLOWED_ROLES\.includes\(session\.role\)/g) ?? [];
+  const exportedActionMatches = [...source.matchAll(/export\s+async\s+function\s+(\w+)\s*\(/g)];
+  const exportedActionNames = exportedActionMatches.map((match) => match[1]);
+
   assert.equal(
     usages.length,
-    2,
-    `on-call-plan-actions.ts: STAFF_ALLOWED_ROLES.includes(session.role) wird ${usages.length}x statt 2x verwendet (assignOnCall, removeOnCall)`,
+    exportedActionNames.length,
+    `on-call-plan-actions.ts: STAFF_ALLOWED_ROLES.includes(session.role) wird ${usages.length}x verwendet, ` +
+      `aber ${exportedActionNames.length} exportierte Server-Action(en) gefunden (${exportedActionNames.join(", ")}) - ` +
+      "jede exportierte Action muss ueber dieselbe benannte Allowlist pruefen.",
+  );
+
+  // Untere Schranke (kein Momentaufnahme-Wert): seit AUFTRAG_14 sind es
+  // mindestens vier Aktionen (assignOnCall, removeOnCall, assignDispo,
+  // moveOnCallEntry), seit AUFTRAG_18 mindestens fuenf (+ assignOnCallRange).
+  // Diese Schranke schuetzt nur davor, dass bestehende Pruefungen versehentlich
+  // entfernt werden - sie ist bewusst KEINE exakte Zahl, die bei jeder neuen
+  // Action nachgezogen werden muesste.
+  assert.ok(
+    usages.length >= 5,
+    `on-call-plan-actions.ts: STAFF_ALLOWED_ROLES.includes(session.role) wird nur ${usages.length}x verwendet, ` +
+      "erwartet mindestens 5 (untere Schranke gegen versehentliches Entfernen bestehender Pruefungen)",
   );
 
   assert.match(source, /export\s+async\s+function\s+assignOnCall\s*\(/, "assignOnCall wird nicht als async function exportiert");
   assert.match(source, /export\s+async\s+function\s+removeOnCall\s*\(/, "removeOnCall wird nicht als async function exportiert");
 });
 
-test("OnCallPlanClient.tsx: Bedienelemente (Hinzufuegen/Entfernen) werden ausschliesslich bei canEdit gerendert", async () => {
+test("OnCallPlanClient.tsx: Bedienelemente (Zuweisen/Entfernen) werden ausschliesslich bei canEdit gerendert", async () => {
+  // AUFTRAG_14 hat die Komponente auf DnD + Klick-Ebene umgebaut
+  // (AddCellControl/AssignedBadge sind entfallen, siehe
+  // src/components/on-call-plan/OnCallPlanClient.tsx) - dieser Test prueft
+  // dieselbe fachliche Zusage (kein Bedienelement fuer den Monteur, echtes
+  // Weglassen statt CSS-Verstecken) gegen die NEUEN Bauteile: die rechte
+  // Monteurliste samt Drop-Zonen sowie das "×" an einer Zuweisung
+  // (AssignedChip) sind beide durch canEdit bedingt.
   const source = await readSource("../src/components/on-call-plan/OnCallPlanClient.tsx");
 
-  // Der Monteur soll KEIN Bedienelement sehen (kein Verstecken per CSS,
-  // echtes Weglassen) - AddCellControl/der Entfernen-Button werden nur
-  // gerendert, wenn `canEdit` das umschliessende JSX bedingt.
   assert.match(
     source,
-    /\{canEdit \? \(\s*<AddCellControl/,
-    "OnCallPlanClient.tsx: AddCellControl wird nicht sichtbar durch canEdit bedingt",
+    /\{canEdit \? \(\s*<div className="space-y-2">/,
+    "OnCallPlanClient.tsx: die rechte Monteurliste (Drag-Quelle) wird nicht sichtbar durch canEdit bedingt",
   );
   assert.match(
     source,
     /canEdit \? \(\s*<button/,
-    "OnCallPlanClient.tsx: der Entfernen-Button (AssignedBadge) wird nicht sichtbar durch canEdit bedingt",
+    "OnCallPlanClient.tsx: der Entfernen-Button (AssignedChip) wird nicht sichtbar durch canEdit bedingt",
+  );
+  assert.ok(
+    source.includes("draggable={canEdit}"),
+    "OnCallPlanClient.tsx: Drag & Drop (draggable) ist nicht an canEdit gekoppelt - ein Monteur duerfte sonst per Drag schreiben",
   );
 });

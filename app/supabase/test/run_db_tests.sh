@@ -234,6 +234,13 @@ FILES=(
   # 0016/22, 0017/23, 0018/25, 0019/26 und 0020/27.
   "${MIGRATIONS}/0021_hlk_bereitschaftsplan.sql"
   "${TEST_ROOT}/28_hlk_bereitschaftsplan.sql"
+  # AUFTRAG_14: Dispo-Board - Qualifikationen (public.qualifications),
+  # Zuordnung (public.technician_qualifications) und die Erweiterung von
+  # public.on_call_plan um assignment_kind ("Dispo/Bereitschaftstelefon").
+  # Migration 0022 steht unmittelbar VOR ihrem Smoke 29 - dieselbe Konvention
+  # wie bei 0015/21, 0016/22, 0017/23, 0018/25, 0019/26, 0020/27 und 0021/28.
+  "${MIGRATIONS}/0022_hlk_dispo_board.sql"
+  "${TEST_ROOT}/29_hlk_dispo_board.sql"
 )
 
 for f in "${FILES[@]}"; do

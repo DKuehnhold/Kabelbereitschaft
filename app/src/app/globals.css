@@ -5,32 +5,85 @@
 @import "tw-animate-css";
 
 /* Dark-Mode-Variante an data-theme koppeln (zusätzlich zu prefers-color-scheme).
-   Damit funktionieren künftige `dark:`-Utilities auch bei explizitem Theme. */
-@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+   Damit funktionieren künftige `dark:`-Utilities auch bei explizitem Theme.
+   AUFTRAG_21 (Anforderung Dennis 2026-08-18, "Logo im Dark Mode weiß, sonst
+   schwarz"): die Variante deckte bislang NUR das erste Zeilenpaar der
+   Tabelle unten ab - das explizite Theme [data-theme="dark"] (Tokenblock
+   Zeile ~116). Der zweite Dunkelfall "Themewahl System + dunkles
+   Betriebssystem" lief ausschließlich über
+   @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {…} }
+   (Tokenblock Zeile ~169-171): dort greifen die Tokens (Fläche wird dunkel),
+   aber `dark:`-Utilities feuerten dort nicht - das Logo blieb schwarz auf
+   dunklem Grund. Der zweite Zweig unten bildet DIESEN Tokenblock
+   deckungsgleich nach (identischer Selektor :root:not([data-theme="light"])
+   innerhalb derselben @media-Bedingung): der Ausschluss von
+   [data-theme="light"] ist zwingend, sonst würde ein ausdrücklich helles
+   Theme auf einem dunklen Betriebssystem ein weißes Logo auf weißem Grund
+   zeigen. Blockform mit @slot (Tailwind v4, package.json: "tailwindcss":
+   "^4"), weil zwei getrennte Bedingungszweige (einer davon in einer
+   @media-Klammer) kombiniert werden müssen - das ist mit der bisherigen
+   einzeiligen Selektorliste nicht abbildbar. */
+@custom-variant dark {
+  &:where([data-theme="dark"], [data-theme="dark"] *) {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:where(:root:not([data-theme="light"]), :root:not([data-theme="light"]) *) {
+      @slot;
+    }
+  }
+}
 
 /* =====================================================================
    Designsystem – Tokens (AP8). Ein zentraler Satz für die gesamte App.
    ===================================================================== */
 :root {
-  /* Flächen & Text */
-  --background: #eef2f6;
+  /* AUFTRAG_13: sagt dem Browser explizit, welches Farbschema aktiv ist.
+     Ohne diese Angabe rendern manche Browser native Formularfelder
+     (input/select) nach der OS-Einstellung statt nach dem tatsächlichen
+     Seiten-Theme - z. B. helle/weiße Eingabeschrift auf hellem Grund, wenn
+     das Betriebssystem auf Dark Mode steht, die Seite aber (wie hier ohne
+     explizites data-theme) hell rendert. Das deckt sich mit Dennis'
+     Befund ("Farbe ist nicht schwarz, wo Text eingegeben wird"). */
+  color-scheme: light;
+
+  /* Flächen & Text
+     AUFTRAG_11: von blau-stichigem Slate auf neutrales Zinc/Anthrazit
+     umgestellt (Rot+Schwarz-Konzept). Helle Flächen bleiben hell/lesbar,
+     nur der Farbstich wechselt von Blau nach Neutral. */
+  --background: #f4f4f5;
   --surface: #ffffff;
-  --surface-2: #f8fafc;
-  --foreground: #0f172a;
-  --muted: #64748b;
-  --border: #e2e8f0;
+  --surface-2: #e4e4e7;
+  --foreground: #18181b;
+  --muted: #52525b;
+  --border: #d4d4d8;
 
-  /* Marke & Interaktion */
-  --brand: #1e3a8a;
-  --brand-hover: #1d4ed8;
+  /* AUFTRAG_13: eigene, sprechende Tokens für Eingabefelder - bewusst von
+     --surface/--foreground entkoppelt (auch wenn sie hier denselben Wert
+     spiegeln), damit Eingabefelder künftig unabhängig von allgemeinen
+     Flächen-/Textfarben nachgeschärft werden können, ohne den Rest der
+     Oberfläche zu beeinflussen. */
+  --field-bg: var(--surface);
+  --field-fg: var(--foreground);
+  --field-placeholder: var(--muted);
+
+  /* Marke & Interaktion
+     AUFTRAG_11: Marke auf Rot umgestellt. Bewusst dunkler/kühler
+     (Rot-900/800) gewählt, damit es sich klar vom helleren/wärmeren
+     Fehler-Rot (--danger) unterscheidet. */
+  --brand: #7f1d1d;
+  --brand-hover: #991b1b;
   --brand-fg: #ffffff;
-  --ring: #2563eb;
+  --ring: #991b1b;
 
-  /* Statusfarben (Hintergrund/Text) */
+  /* Statusfarben (Hintergrund/Text) - Warnung/Erfolg/Info bewusst
+     unverändert (Auftrag: unabhängig vom Markenwechsel erkennbar halten).
+     Nur --danger leicht aufgehellt/wärmer (Rot-600 statt Rot-700), damit
+     es sich sichtbar von --brand (Rot-900) abhebt. */
   --info: #1d4ed8;      --info-bg: #dbeafe;
   --success: #15803d;   --success-bg: #dcfce7;
   --warning: #b45309;   --warning-bg: #fef3c7;
-  --danger: #b91c1c;    --danger-bg: #fee2e2;
+  --danger: #dc2626;    --danger-bg: #fee2e2;
 
   /* Radius & Elevation */
   --radius: 0.5rem;
@@ -63,20 +116,47 @@
   --destructive: var(--danger);
   --destructive-foreground: #ffffff;
   --input: var(--border);
+
+  /* AUFTRAG_14: additive Farbpalette der Qualifikationen (Dispo-Board,
+     src/lib/qualifications.ts – QUALIFICATION_COLOR_KEYS). Rein additiv,
+     KEIN bestehender Token wird geändert. public.qualifications.color
+     (0022_hlk_dispo_board.sql) speichert nur diese Schlüssel, nie freies
+     Hex – die acht Paare hier sind die einzige Übersetzung Schlüssel->Farbe.
+     'grau' ist zusätzlich die neutrale Standardfarbe eines Monteurs ohne
+     Qualifikation. */
+  --qual-rot-bg: #fecaca;         --qual-rot-fg: #7f1d1d;
+  --qual-blau-bg: #bfdbfe;        --qual-blau-fg: #1e3a8a;
+  --qual-gruen-bg: #bbf7d0;       --qual-gruen-fg: #14532d;
+  --qual-gelb-bg: #fef08a;        --qual-gelb-fg: #713f12;
+  --qual-orange-bg: #fed7aa;      --qual-orange-fg: #7c2d12;
+  --qual-violett-bg: #e9d5ff;     --qual-violett-fg: #581c87;
+  --qual-tuerkis-bg: #a5f3fc;     --qual-tuerkis-fg: #164e63;
+  --qual-grau-bg: #e4e4e7;        --qual-grau-fg: #3f3f46;
 }
 
-/* Explizit dunkles Theme (Toggle) */
+/* Explizit dunkles Theme (Toggle)
+   AUFTRAG_11: Basis von navy-stichigem Slate auf neutrales Zinc/Anthrazit
+   umgestellt, Marke auf Rot. --danger bleibt unverändert (helles,
+   gedämpftes Rosa-Rot) - dadurch weiterhin klar unterscheidbar vom
+   satten Marken-Rot (--brand), das für Buttons/aktive Zustände steht. */
 [data-theme="dark"] {
-  --background: #0b1220;
-  --surface: #111827;
-  --surface-2: #0f172a;
-  --foreground: #e5e7eb;
-  --muted: #94a3b8;
-  --border: #1f2a3a;
-  --brand: #3b82f6;
-  --brand-hover: #60a5fa;
-  --brand-fg: #0b1220;
-  --ring: #60a5fa;
+  /* AUFTRAG_13: siehe Begründung im :root-Block oben. */
+  color-scheme: dark;
+
+  --background: #09090b;
+  --surface: #18181b;
+  --surface-2: #131316;
+  --foreground: #f4f4f5;
+  --muted: #a1a1aa;
+  --border: #27272a;
+  /* AUFTRAG_13: siehe Begründung im :root-Block oben. */
+  --field-bg: var(--surface);
+  --field-fg: var(--foreground);
+  --field-placeholder: var(--muted);
+  --brand: #dc2626;
+  --brand-hover: #ef4444;
+  --brand-fg: #ffffff;
+  --ring: #f87171;
   --info: #93c5fd;      --info-bg: #1e3a5f;
   --success: #86efac;   --success-bg: #14532d;
   --warning: #fcd34d;   --warning-bg: #4d3908;
@@ -97,21 +177,42 @@
   --destructive: var(--danger);
   --destructive-foreground: #0b1220;
   --input: var(--border);
+
+  /* AUFTRAG_14: siehe Begründung im :root-Block oben. Dunklere/gesättigtere
+     Hintergründe, damit die Chips im Dark Mode nicht auf hellem --background
+     stechen; Textfarben bleiben hell genug für ausreichenden Kontrast. */
+  --qual-rot-bg: #7f1d1d;         --qual-rot-fg: #fecaca;
+  --qual-blau-bg: #1e3a8a;        --qual-blau-fg: #bfdbfe;
+  --qual-gruen-bg: #14532d;       --qual-gruen-fg: #bbf7d0;
+  --qual-gelb-bg: #713f12;        --qual-gelb-fg: #fef08a;
+  --qual-orange-bg: #7c2d12;      --qual-orange-fg: #fed7aa;
+  --qual-violett-bg: #581c87;     --qual-violett-fg: #e9d5ff;
+  --qual-tuerkis-bg: #164e63;     --qual-tuerkis-fg: #a5f3fc;
+  --qual-grau-bg: #3f3f46;        --qual-grau-fg: #e4e4e7;
 }
 
 /* Systempräferenz, solange KEIN explizites Theme gesetzt ist */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --background: #0b1220;
-    --surface: #111827;
-    --surface-2: #0f172a;
-    --foreground: #e5e7eb;
-    --muted: #94a3b8;
-    --border: #1f2a3a;
-    --brand: #3b82f6;
-    --brand-hover: #60a5fa;
-    --brand-fg: #0b1220;
-    --ring: #60a5fa;
+    /* AUFTRAG_11: identisch zum [data-theme="dark"]-Block oben gehalten
+       (Systempräferenz ohne explizites Theme). */
+    /* AUFTRAG_13: siehe Begründung im :root-Block oben. */
+    color-scheme: dark;
+
+    --background: #09090b;
+    --surface: #18181b;
+    --surface-2: #131316;
+    --foreground: #f4f4f5;
+    --muted: #a1a1aa;
+    --border: #27272a;
+    /* AUFTRAG_13: siehe Begründung im :root-Block oben. */
+    --field-bg: var(--surface);
+    --field-fg: var(--foreground);
+    --field-placeholder: var(--muted);
+    --brand: #dc2626;
+    --brand-hover: #ef4444;
+    --brand-fg: #ffffff;
+    --ring: #f87171;
     --info: #93c5fd;      --info-bg: #1e3a5f;
     --success: #86efac;   --success-bg: #14532d;
     --warning: #fcd34d;   --warning-bg: #4d3908;
@@ -132,6 +233,16 @@
     --destructive: var(--danger);
     --destructive-foreground: #0b1220;
     --input: var(--border);
+
+    /* AUFTRAG_14: identisch zum [data-theme="dark"]-Block oben gehalten. */
+    --qual-rot-bg: #7f1d1d;         --qual-rot-fg: #fecaca;
+    --qual-blau-bg: #1e3a8a;        --qual-blau-fg: #bfdbfe;
+    --qual-gruen-bg: #14532d;       --qual-gruen-fg: #bbf7d0;
+    --qual-gelb-bg: #713f12;        --qual-gelb-fg: #fef08a;
+    --qual-orange-bg: #7c2d12;      --qual-orange-fg: #fed7aa;
+    --qual-violett-bg: #581c87;     --qual-violett-fg: #e9d5ff;
+    --qual-tuerkis-bg: #164e63;     --qual-tuerkis-fg: #a5f3fc;
+    --qual-grau-bg: #3f3f46;        --qual-grau-fg: #e4e4e7;
   }
 }
 
@@ -144,6 +255,14 @@
   --color-muted: var(--muted);
   --color-border: var(--border);
   --color-brand: var(--brand);
+  /* AUFTRAG_11: zusätzliche Utility für die neue Topbar (aktiver Nav-Link:
+     bg-brand + text-brand-fg statt hartkodiertem text-white), sonst
+     bräuchte der aktive Zustand im Dark Mode eine hartkodierte Farbe. */
+  --color-brand-fg: var(--brand-fg);
+  /* AUFTRAG_13: additive Utility, damit Hover-Zustände auf dem Marken-Rot
+     (z. B. Anmelde-/Primärbuttons) per `hover:bg-brand-hover` token-basiert
+     statt hartkodiert (bisher `hover:bg-blue-800`) gesetzt werden können. */
+  --color-brand-hover: var(--brand-hover);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 
@@ -219,9 +338,43 @@ body {
 .btn-outline { background: var(--surface); color: var(--foreground); border-color: var(--border); }
 .btn-outline:hover:not(:disabled) { background: var(--surface-2); }
 .input {
-  width: 100%; background: var(--surface); color: var(--foreground);
+  width: 100%; background: var(--field-bg); color: var(--field-fg);
   border: 1px solid var(--border); border-radius: var(--radius);
   padding: .5rem .75rem; font-size: .875rem; min-height: 2.5rem;
+}
+.input::placeholder { color: var(--field-placeholder); opacity: 1; }
+.input:disabled { background: var(--surface-2); color: var(--muted); cursor: not-allowed; opacity: .8; }
+
+/* AUFTRAG_13: generische Basis für ALLE Eingabearten, auch solche ohne die
+   `.input`-Klasse (z. B. die shadcn/ui-Copy-in-Komponenten input.tsx/
+   textarea.tsx/select.tsx, die bislang nur `bg-transparent` ohne eigene
+   Textfarbe setzen und sich daher rein auf Vererbung/Browser-Default
+   verlassen). Element-Selektoren haben niedrigere Spezifität als jede
+   Tailwind-Klasse - eine vorhandene `text-*`/`bg-*`-Utility auf dem
+   jeweiligen Element gewinnt weiterhin, das hier ist nur die sichere
+   Grundfarbe, falls keine gesetzt ist. */
+input, textarea, select {
+  color: var(--field-fg);
+}
+input::placeholder, textarea::placeholder { color: var(--field-placeholder); opacity: 1; }
+input:disabled, textarea:disabled, select:disabled { color: var(--muted); cursor: not-allowed; }
+
+/* AUFTRAG_13: Autofill (Chrome/Edge/Safari) überschreibt Hintergrund (und
+   je nach Browser auch mittelbar die wahrgenommene Lesbarkeit) sobald ein
+   Feld vom Browser ausgefüllt wurde - ohne diese Regel bleibt das oft auf
+   unbestimmte Zeit sichtbar und unabhängig vom Theme (typisches
+   Chrome-Gelb), was insbesondere im Dark Mode zu einem hellen/gelben Feld
+   mit kaum lesbarem Text führen kann. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+select:-webkit-autofill {
+  -webkit-text-fill-color: var(--field-fg);
+  -webkit-box-shadow: 0 0 0 1000px var(--field-bg) inset;
+  box-shadow: 0 0 0 1000px var(--field-bg) inset;
+  caret-color: var(--field-fg);
+  transition: background-color 9999s ease-in-out 0s;
 }
 .badge {
   display: inline-flex; align-items: center; gap: .25rem;

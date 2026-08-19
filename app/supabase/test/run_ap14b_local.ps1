@@ -325,7 +325,16 @@ $files = @(
   # Lauf von 0021 eingeschlossen - am Ende vollstaendig per rollback
   # zuruecknimmt.
   (Join-Path $migrationRoot "0021_hlk_bereitschaftsplan.sql"),
-  (Join-Path $testRoot "28_hlk_bereitschaftsplan.sql")
+  (Join-Path $testRoot "28_hlk_bereitschaftsplan.sql"),
+  # AUFTRAG_14: Dispo-Board - Qualifikationen, Zuordnung
+  # technician_qualifications und die Erweiterung von on_call_plan um
+  # assignment_kind (Migration 0022, Smoke 29, Fallkennung AA). Dieselbe
+  # Konvention wie bei 0015/21 ... 0021/28: die Migration steht unmittelbar
+  # vor ihrem Smoke, der seine eigene Wirkungsphase - Fixtures und den per
+  # \ir erneut eingebundenen Lauf von 0022 eingeschlossen - am Ende
+  # vollstaendig per rollback zuruecknimmt.
+  (Join-Path $migrationRoot "0022_hlk_dispo_board.sql"),
+  (Join-Path $testRoot "29_hlk_dispo_board.sql")
 )
 foreach ($file in $files) {
   if (-not (Test-Path -LiteralPath $file)) { throw "Testdatei fehlt: $file" }

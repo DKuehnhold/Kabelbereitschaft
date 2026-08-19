@@ -9,7 +9,7 @@ test.describe("@public PWA & Auth-Guard", () => {
     const m = await res.json();
     expect(m.name).toBe("Bereitschaftsapp HLK");
     expect(m.display).toBe("standalone");
-    expect(m.theme_color).toBe("#1e3a8a");
+    expect(m.theme_color).toBe("#7f1d1d");
     const sizes = (m.icons ?? []).map((i: { sizes: string }) => i.sizes);
     expect(sizes).toContain("192x192");
     expect(sizes).toContain("512x512");

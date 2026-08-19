@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { MOVEMENT_TYPES, MOVEMENT_TYPE_LABELS, type MovementType } from "@/lib/status";
 import type { MovementRow } from "@/lib/inventory";
 
-const field = "rounded-md border border-slate-300 px-2 py-1.5 text-sm outline-none focus:border-blue-500";
+const field = "rounded-md border border-slate-300 px-2 py-1.5 text-sm outline-none focus:border-ring";
 
 function fmt(dt: string): string {
   return new Date(dt).toLocaleString("de-DE", {

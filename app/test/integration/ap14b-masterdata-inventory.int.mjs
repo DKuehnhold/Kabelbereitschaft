@@ -944,6 +944,15 @@ test("IM6 saveContact ersetzt Telefonnummern und Bauabschnittszuordnung vollstae
       "customer_name",
       "name",
       "function",
+      // AUFTRAG_6 / Migration 0019_hlk_katalog_stammdaten.sql: Katalog
+      // public.contact_functions + contacts.function_id. listContacts()
+      // (app/src/lib/masterdata.ts) liefert seither zusaetzlich function_id
+      // und function_label; das alte Freitextfeld "function" bleibt
+      // unveraendert daneben bestehen (0019, Abschnitt 4, Kommentar auf
+      // contacts.function_id). Kommt ein weiteres Katalogfeld hinzu, gehoert
+      // es hier ebenso ergaenzt.
+      "function_id",
+      "function_label",
       "email",
       "is_active",
       "phones",

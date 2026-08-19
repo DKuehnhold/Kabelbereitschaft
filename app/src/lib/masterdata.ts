@@ -1,6 +1,8 @@
 import { getSessionProfile } from "@/lib/auth";
 import { withUserTransaction } from "@/lib/db";
 import type { PhoneType } from "@/lib/status";
+import type { QualificationColorKey, QualificationRow } from "@/lib/qualifications";
+import { technicianColorKey } from "@/lib/qualifications";
 
 // =====================================================================
 // AP9 – Stammdaten: Reads (Sichtmodelle, entkoppelt von Embed-Typen)
@@ -534,6 +536,76 @@ export async function listProfileOptions(): Promise<StageOption[]> {
       id: p.id,
       label: `${p.full_name ?? p.id} (${p.role})`,
     }));
+  });
+}
+
+// ---------------------------------------------------------------------
+// AUFTRAG_14 – Qualifikationen (public.qualifications) und ihre Zuordnung zu
+// Monteuren (public.technician_qualifications, n:m). Tabellenform laut
+// 0022_hlk_dispo_board.sql: id/label/rank/color/is_active - Muster der
+// 0019-Kataloge, ergänzt um rank/color (der Auftrag zählt diese beiden
+// zusätzlichen Spalten ausdrücklich auf).
+// ---------------------------------------------------------------------
+const LIST_QUALIFICATIONS_SQL = `
+  select id, label, rank, color, is_active
+    from public.qualifications
+   order by rank desc, label asc`;
+
+export async function listQualifications(): Promise<QualificationRow[]> {
+  const session = await getSessionProfile();
+  if (!session) return [];
+  return withUserTransaction(session.userId, async (client) => {
+    const result = await client.query<QualificationRow>(LIST_QUALIFICATIONS_SQL);
+    return result.rows;
+  });
+}
+
+export async function getActiveQualifications(): Promise<QualificationRow[]> {
+  return (await listQualifications()).filter((q) => q.is_active);
+}
+
+const LIST_TECHNICIAN_QUALIFICATIONS_SQL = `
+  select technician_id, qualification_id
+    from public.technician_qualifications`;
+
+type TechnicianQualificationLink = { technician_id: string; qualification_id: string };
+
+/** Alle Zuordnungen Monteur<->Qualifikation, flach - Gruppieren macht der Aufrufer. */
+export async function listTechnicianQualificationLinks(): Promise<TechnicianQualificationLink[]> {
+  const session = await getSessionProfile();
+  if (!session) return [];
+  return withUserTransaction(session.userId, async (client) => {
+    const result = await client.query<TechnicianQualificationLink>(LIST_TECHNICIAN_QUALIFICATIONS_SQL);
+    return result.rows;
+  });
+}
+
+/** Qualifikations-Kennungen eines EINZELNEN Monteurs (Pflegeseite Monteure). */
+export async function getQualificationIdsForTechnician(technicianId: string): Promise<string[]> {
+  const links = await listTechnicianQualificationLinks();
+  return links.filter((l) => l.technician_id === technicianId).map((l) => l.qualification_id);
+}
+
+export type TechnicianWithColor = TechnicianRow & {
+  qualification_ids: string[];
+  color: QualificationColorKey;
+};
+
+/**
+ * Aktive Monteure für das Dispo-Board, je Monteur ergänzt um seine
+ * Qualifikations-Kennungen und die daraus abgeleitete Farbe (höchster rank
+ * einer AKTIVEN Qualifikation, sonst die neutrale Standardfarbe) - Punkt 3
+ * des Auftrags ("höchste Qualifikation bestimmt die Hintergrundfarbe").
+ */
+export async function getActiveTechniciansWithColor(): Promise<TechnicianWithColor[]> {
+  const [technicians, links, catalog] = await Promise.all([
+    getActiveTechnicians(),
+    listTechnicianQualificationLinks(),
+    getActiveQualifications(),
+  ]);
+  return technicians.map((t) => {
+    const qualification_ids = links.filter((l) => l.technician_id === t.id).map((l) => l.qualification_id);
+    return { ...t, qualification_ids, color: technicianColorKey(qualification_ids, catalog) };
   });
 }
 
